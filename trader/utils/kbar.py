@@ -54,22 +54,22 @@ class KBarTool(TechnicalSignals, TimeTool):
                 @self.on_add_KDay_feature()
                 def _add_KDay_feature(df):
                     return featureScript.add_KDay_feature(df)
-                
+
             if hasattr(featureScript, 'add_K15min_feature'):
                 @self.on_add_K15min_feature()
                 def _add_K15min_feature(df):
                     return featureScript.add_K15min_feature(df)
-            
+
             if hasattr(featureScript, 'add_K30min_feature'):
                 @self.on_add_K30min_feature()
                 def _add_K30min_feature(df):
                     return featureScript.add_K30min_feature(df)
-            
+
             if hasattr(featureScript, 'add_K60min_feature'):
                 @self.on_add_K60min_feature()
                 def _add_K60min_feature(df):
                     return featureScript.add_K60min_feature(df)
-                     
+
     def load_kbar_file(self, filename: str):
         '''讀取k棒歷史資料csv'''
 
@@ -93,9 +93,8 @@ class KBarTool(TechnicalSignals, TimeTool):
         tb = pd.DataFrame({**kbars})
         tb.ts = pd.to_datetime(tb.ts)
         tb.insert(0, 'name', stockid)
-        tb.name = tb.name.replace('OTC101', '101').replace('TSE001', '001')
-
         tb.insert(1, 'date', tb.ts.apply(self.datetime_to_str))
+        tb.name = tb.name.replace('OTC101', '101').replace('TSE001', '001')
         tb['hour'] = tb.ts.dt.hour
         tb['minute'] = tb.ts.dt.minute
         tb = tb.rename(columns={'ts': 'Time'})
@@ -126,7 +125,7 @@ class KBarTool(TechnicalSignals, TimeTool):
         def wrapper(func):
             self.add_KDay_feature = func
         return wrapper
-    
+
     def add_K60min_feature(self, df: pd.DataFrame):
         return df
 
@@ -134,7 +133,7 @@ class KBarTool(TechnicalSignals, TimeTool):
         def wrapper(func):
             self.add_K60min_feature = func
         return wrapper
-    
+
     def add_K30min_feature(self, df: pd.DataFrame):
         return df
 
@@ -142,7 +141,7 @@ class KBarTool(TechnicalSignals, TimeTool):
         def wrapper(func):
             self.add_K30min_feature = func
         return wrapper
-    
+
     def add_K15min_feature(self, df: pd.DataFrame):
         return df
 
@@ -173,7 +172,8 @@ class KBarTool(TechnicalSignals, TimeTool):
             K60min = self.add_K60min_feature(K60min)
 
             now = datetime.now()
-            current_time = pd.to_datetime(TODAY_STR) + timedelta(hours=now.hour)
+            current_time = pd.to_datetime(
+                TODAY_STR) + timedelta(hours=now.hour)
             K60min = K60min[(K60min.Time < current_time)]
             self.KBars['60T'] = K60min
 
@@ -235,7 +235,8 @@ class KBarTool(TechnicalSignals, TimeTool):
         tb['Close'] = tb.price.apply(lambda x: x[-1])
         tb.volume = tb.volume.apply(sum)
         tb['Amount'] = tb.amount.apply(lambda x: x[-1])
-        tb = tb.reset_index().rename(columns={'index': 'name', 'volume': 'Volume'})
+        tb = tb.reset_index().rename(
+            columns={'index': 'name', 'volume': 'Volume'})
         return tb[self.kbar_columns]
 
     def index_tick_stream_2_df(self, quote_data: list):
@@ -287,7 +288,8 @@ class KBarTool(TechnicalSignals, TimeTool):
                     [self.KBars['1T'], df]).sort_values(['name', 'date']).reset_index(drop=True)
 
         if TimeStartStock <= datetime.now() <= TimeEndStock:
-            stocks = self.stock_tick_stream_2_df(quotes['all_s'], quotes['now_s'])
+            stocks = self.stock_tick_stream_2_df(
+                quotes['all_s'], quotes['now_s'])
             stocks = self.revert_dividend_price(stocks, dividends)
             concat_df(stocks)
 
@@ -421,7 +423,8 @@ class TickDataProcesser(TimeTool):
                 try:
                     temp = pd.read_csv(filename, low_memory=False)
                 except:
-                    temp = pd.read_csv(filename, low_memory=False, encoding='big5')
+                    temp = pd.read_csv(
+                        filename, low_memory=False, encoding='big5')
                 df.append(temp)
                 progress_bar(N, i, status=f'[{f}]')
 
@@ -436,7 +439,8 @@ class TickDataProcesser(TimeTool):
         if underlying != 'all':
             df = df[df.商品代號 == underlying].reset_index()
 
-        df['Time'] = pd.to_datetime(df.成交日期.astype(str) + df.成交時間.astype(str).str.zfill(6))
+        df['Time'] = pd.to_datetime(df.成交日期.astype(
+            str) + df.成交時間.astype(str).str.zfill(6))
         df['date'] = pd.to_datetime(df.Time.dt.date)
         df['hour'] = df.Time.dt.hour
         df['minute'] = df.Time.dt.minute

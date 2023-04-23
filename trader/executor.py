@@ -86,6 +86,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
         # 股票可進場籌碼 (進場時判斷用)
         self.simulate_amount = np.iinfo(np.int64).max
+        self.stocks = pd.DataFrame()
         self.desposal_money = 0
         self.stock_bought = []
         self.stock_sold = []
@@ -500,7 +501,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
         # 庫存的處理
         self.stocks = self.stocks.merge(
-            self.watchlist, how='left', on=['code', 'cost_price'])
+            self.watchlist.drop('cost_price', axis=1), how='left', on='code')
         self.stocks.position.fillna(100, inplace=True)
         strategies = self.find_strategy(stocks_pool, 'Stocks')
 
@@ -512,18 +513,21 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                                           'Sell'].shape[0]
 
         # 新增歷史K棒資料
-        all_stocks = self.merge_buy_sell_lists(stocks_pool, 'Stocks')
-        self.history_kbars(['TSE001', 'OTC101'] + all_stocks.tolist())
+        self.update_stocks_to_monitor(stocks_pool)
+        all_targets = list(self.stocks_to_monitor)
+        self.history_kbars(['TSE001', 'OTC101'] + all_targets)
+        # all_stocks = self.merge_buy_sell_lists(stocks_pool, 'Stocks')
+        # self.history_kbars(['TSE001', 'OTC101'] + all_stocks.tolist())
 
         # 交易風險控制
         self.N_LIMIT_LS = self.strategy_l.setNStockLimitLong(KBars=self.KBars)
         self.N_LIMIT_SS = self.strategy_s.setNStockLimitShort(KBars=self.KBars)
-        self._set_leverage(all_stocks)
+        self._set_leverage(all_targets)
         self._set_trade_risks()
         # self.strategy_l.yLows = self.KBars['1D'].groupby(
         #     'name').tail(1).set_index('name').Low.to_dict()
-        self.update_stocks_to_monitor(stocks_pool)
-        return strategies, all_stocks
+        # self.update_stocks_to_monitor(stocks_pool)
+        return strategies, all_targets
 
     def init_futures(self):
         '''
@@ -574,15 +578,19 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         # 剔除不堅控的股票
         self._filter_out_targets(market='Futures')
 
-        # 新增歷史K棒資料
-        all_futures = self.merge_buy_sell_lists(futures_pool, 'Futures')
-        self.history_kbars(all_futures)
+        # # 新增歷史K棒資料
+        # all_futures = self.merge_buy_sell_lists(futures_pool, 'Futures')
+        # self.history_kbars(all_futures)
 
         # update_futures_to_monitor
         self.futures.index = self.futures.Code
         self.futures_to_monitor.update(self.futures.to_dict('index'))
         self.futures_to_monitor.update({
             s: None for ids in futures_pool.values() for s in ids if s not in self.futures_to_monitor})
+
+        # 新增歷史K棒資料
+        all_futures = list(self.futures_to_monitor)
+        self.history_kbars(all_futures)
 
         # 交易風險控制 TODO: add setNFuturesLimitLong
         self.N_FUTURES_LIMIT = self.strategy_s.setNFuturesLimitShort(
@@ -905,6 +913,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             # 下單
             logging.debug(log_msg)
             if self.simulation and market == 'Stocks':
+                # TODO: needs to be same as watchlist
                 price = self.quotes_now_s[target]['price']
                 quantity *= 1000
                 leverage = self.check_leverage(target, content.order_cond)
@@ -1033,11 +1042,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
             df['account_id'] = 'simulate'
 
-        if market == 'Stocks':
-            df = self.securityInfo()
-            return df[df.code.apply(len) == 4]
+        else:
+            if market == 'Stocks':
+                df = self.securityInfo()
+                return df[df.code.apply(len) == 4]
 
-        df = self.get_openpositions()
+            df = self.get_openpositions()
         return df
 
     def _get_day_filter_out(self):
