@@ -127,3 +127,25 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# projec-related files
+.vscode/
+test.py
+sinopac_dev.py
+python_practice.py
+trader/strategies/long.py
+trader/strategies/short.py
+trader/strategies/conditions.py
+trader/strategies/features.py
+trader/indicators/indexes.py
+__TestScripts__.py
+*.ipynb
+*.cmd
+*.bat
+*.pem
+.pub
+data/
+documents/
+logs/
+*.properties.*
+*.DS_Store

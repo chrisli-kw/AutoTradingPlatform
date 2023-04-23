@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title> AutoTradingPlatform </title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/css/bootstrap.min.css"
+        integrity="sha384-TX8t27EcRE3e/ihU7zmQxVncDAy5uIKz4rEkgIXeMed4M0jlfIDPvg6uqKI2xXr2" crossorigin="anonymous">
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+        integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-ho+j7jyWK8fNQe+A12Hb8AhRq26LrZ/JpcUGGOn+Y7RsweNrtN/tE3MoK7ZeZDyx" crossorigin="anonymous">
+    </script>
+</head>
+
+<body>
+    <div class="container">
+        <br></br>
+
+        <center>
+            <h1>建立使用者設定</h1>
+        </center>
+        <h4>操作方法:</h4>
+        <div>1. 依序輸入以下交易相關設定</div>
+        <div>2. 點選送出</div>
+        <br></br>
+
+        {% block content %}{% endblock %}
+
+        <form method='post' action='/account-result'>
+
+
+            <table class="table  table-bordered">
+                <thead class="table-info">
+                    <tr>
+                        <th scope="col" colspan="4" style="text-align: center; width:50%">使用者交易設定</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th scope="row">使用者代號（英文）</th>
+                        <td>
+                            <input required name='ACCOUNT_NAME' type="text" placeholder="EX: user"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%'>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">永豐證券登入API KEY</th>
+                        <td>
+                            <input required name='API_KEY' type="text"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%'>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">永豐證券登入SECRET KEY</th>
+                        <td>
+                            <input required name='SECRET_KEY' type="text"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%'>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">使用者ID</th>
+                        <td>
+                            <input required name='ACCOUNT_ID' type="text" placeholder="EX: A123456789"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%'>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">股票交易模式設定</th>
+                        <td>
+                            <select id="inputState" class="form-control" name="MODE">
+                                <option></option>
+                                <option>作多只賣出</option>
+                                <option>作多只買進</option>
+                                <option selected>作多買進&賣出</option>
+                                <option>作空只賣出</option>
+                                <option>作空只買進</option>
+                                <option>作空買進&賣出</option>
+                                <option>作多且做空, 且可買進也可賣出</option>
+                                <option>模擬</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">監控的市場</th>
+                        <td>
+                            <select id="inputState" class="form-control" name="MARKET">
+                                <option></option>
+                                <option selected>只有股票</option>
+                                <option>只有期貨</option>
+                                <option>股票 & 期貨</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">過濾掉不監控股票的清單(沒有就空白)</th>
+                        <td>
+                            <input name='FILTER_OUT' type="text"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%'>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">要執行的策略</th>
+                        <td>
+                            <input name='STRATEGY_STOCK' type="text" placeholder="EX: 策略1, 策略2"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%'>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">部位上限/可委託金額上限</th>
+                        <td>
+                            <input name='POSITION_LIMIT_LONG' type="number"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=100000 min=0>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">信用交易上限(放空上限)</th>
+                        <td>
+                            <input name='POSITION_LIMIT_SHORT' type="number"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=100000 min=0>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">投資組合股票數上限(做多)</th>
+                        <td>
+                            <input name='N_LIMIT_LS' type="number"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=4 min=0>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">投資組合股票數上限(做空)</th>
+                        <td>
+                            <input name='N_LIMIT_SS' type="number"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=4 min=0>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">投資組合股票數上限類型</th>
+                        <td>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="N_STOCK_LIMIT_TYPE"
+                                    id="N_STOCK_LIMIT_TYPE1" value='constant' checked='checked'>
+                                <label class="form-check-label" for="N_STOCK_LIMIT_TYPE1">固定</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="N_STOCK_LIMIT_TYPE"
+                                    id="N_STOCK_LIMIT_TYPE2" value='float'>
+                                <label class="form-check-label" for="N_STOCK_LIMIT_TYPE2">隨大盤環境波動</label>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">每次買進的單位(張)</th>
+                        <td>
+                            <input name='BUY_UNIT' type="number"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=1 min=0>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">買進的單位數類型</th>
+                        <td>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="BUY_UNIT_TYPE" id="BUY_UNIT_TYPE1"
+                                    value='constant' checked='checked'>
+                                <label class="form-check-label" for="BUY_UNIT_TYPE1">固定</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="BUY_UNIT_TYPE" id="BUY_UNIT_TYPE2"
+                                    value='float'>
+                                <label class="form-check-label" for="BUY_UNIT_TYPE2">隨淨值等比例增加</label>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">委託條件：現股/融資(做多)</th>
+                        <td>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="ORDER_COND1" id="ORDER_COND11"
+                                    value='Cash' checked='checked'>
+                                <label class="form-check-label" for="ORDER_COND11">現股</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="ORDER_COND1" id="ORDER_COND12"
+                                    value='MarginTrading'>
+                                <label class="form-check-label" for="ORDER_COND12">融資</label>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">委託條件：現股/融券(做空)</th>
+                        <td>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="ORDER_COND2" id="ORDER_COND21"
+                                    value='Cash' checked='checked'>
+                                <label class="form-check-label" for="ORDER_COND11">現股</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="ORDER_COND2" id="ORDER_COND22"
+                                    value='ShortSelling'>
+                                <label class="form-check-label" for="ORDER_COND12">融券</label>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">最長持有天數(含六日)</th>
+                        <td>
+                            <input name='HOLD_DAY' type="number"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=4 min=0>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">期貨交易模式設定</th>
+                        <td>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="MODE_FUTURES" id="MODE_FUTURES1"
+                                    value='long'>
+                                <label class="form-check-label" for="MODE_FUTURES1">做多</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="MODE_FUTURES" id="MODE_FUTURES2"
+                                    value='short' checked='checked'>
+                                <label class="form-check-label" for="MODE_FUTURES2">做空</label>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">期貨要執行的策略</th>
+                        <td>
+                            <input name='STRATEGY_FUTURES' type="text" placeholder="EX: 策略1, 策略2"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%'>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">可下單的保證金額上限</th>
+                        <td>
+                            <input name='MARGIN_LIMIT' type="number"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=100000 min=0>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">投資組合期權數上限</th>
+                        <td>
+                            <input name='N_FUTURES_LIMIT' type="number"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=0 min=0>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">期權投資組合期權數上限類型</th>
+                        <td>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="N_FUTURES_LIMIT_TYPE"
+                                    id="N_FUTURES_LIMIT_TYPE1" value='constant' checked='checked'>
+                                <label class="form-check-label" for="N_FUTURES_LIMIT_TYPE1">固定</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="N_FUTURES_LIMIT_TYPE"
+                                    id="N_FUTURES_LIMIT_TYPE2" value='float'>
+                                <label class="form-check-label" for="N_FUTURES_LIMIT_TYPE2">隨大盤環境波動</label>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">每次期權建倉的單位(口)</th>
+                        <td>
+                            <input name='N_SLOT' type="number"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=0 min=0>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">建倉的口數類型</th>
+                        <td>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="N_SLOT_TYPE" id="N_SLOT_TYPE1"
+                                    value='constant' checked='checked'>
+                                <label class="form-check-label" for="N_SLOT_TYPE1">固定</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="N_SLOT_TYPE" id="N_SLOT_TYPE2"
+                                    value='float'>
+                                <label class="form-check-label" for="N_SLOT_TYPE2">隨淨值等比例增加</label>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>
+
+                <center><button type="submit" class="btn btn-primary">送出</button></center>
+                <br></br>
+        </form>
+
+    </div>
+</body>
+
+</html>
