@@ -499,8 +499,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         self.init_watchlist(self.stocks, strategy_w)
 
         # 庫存的處理
-        self.stocks = self.stocks.merge(
-            self.watchlist.drop('cost_price', axis=1), how='left', on='code')
+        self.stocks = self.stocks.merge(self.watchlist, how='left', on='code')
         self.stocks.position.fillna(100, inplace=True)
         strategies = self.find_strategy(stocks_pool, 'Stocks')
 
@@ -598,12 +597,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         is_day_trade = strategies[target] in StrategyShortDT + StrategyLongDT
 
         # udpate watchlist
+        condition = self.watchlist.code == target
         if action in ['Buy', 'New']:
-            self.watchlist.loc[self.watchlist.code ==
-                               target, 'position'] += position
+            self.watchlist.loc[condition, 'position'] += position
         else:
-            self.watchlist.loc[self.watchlist.code ==
-                               target, 'position'] -= position
+            self.watchlist.loc[condition, 'position'] -= position
         self.watchlist = self.watchlist[self.watchlist.position > 0]
 
         # append watchlist or update monitor list
@@ -901,7 +899,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             # 下單
             logging.debug(log_msg)
             if self.simulation and market == 'Stocks':
-                # TODO: needs to be same as watchlist
                 price = self.quotes_now_s[target]['price']
                 quantity *= 1000
                 leverage = self.check_leverage(target, content.order_cond)
@@ -1206,6 +1203,17 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             return 100*round(dj[0]/dj[1] - 1, 4)
         return 0
 
+    def get_cost_price(self, target: str, price: float, order_cond: str):
+        '''取得股票的進場價'''
+
+        if order_cond == 'ShortSelling':
+            return price
+
+        cost_price = self.stocks.set_index('code').cost_price.to_dict()
+        if target in cost_price:
+            return cost_price[target]
+        return 0
+    
     def check_leverage(self, target: str, mode='long'):
         '''取得個股的融資/融券成數'''
         if mode in ['long', 'MarginTrading'] and target in self.LEVERAGE_LONG:

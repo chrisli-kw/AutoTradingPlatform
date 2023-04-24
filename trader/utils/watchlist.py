@@ -17,7 +17,7 @@ class WatchListTool(TimeTool):
         try:
             df = pd.read_csv(f'{PATH}/stock_pool/{self.watchlist_file}.csv')
         except:
-            columns = ['market', 'code', 'buyday', 'cost_price', 'bsh', 'position', 'strategy']
+            columns = ['market', 'code', 'buyday', 'bsh', 'position', 'strategy']
             df = pd.DataFrame(columns=columns)
             self.save_watchlist(df)
 
@@ -47,7 +47,6 @@ class WatchListTool(TimeTool):
                 'market': market,
                 'code': target,
                 'buyday': pd.to_datetime(self.now_str()),
-                'cost_price': cost_price,
                 'bsh': cost_price,
                 'position': position,
                 'strategy': strategy_pool[target] if strategy_pool and target in strategy_pool else '手操'
@@ -66,16 +65,16 @@ class WatchListTool(TimeTool):
                 cost_price = get_contract(stock).reference
                 self._append_watchlist('Stocks', stock, cost_price, strategy_pool)
 
-    def get_cost_price(self, target: str, price: float, order_cond: str):
-        '''取得股票的進場價'''
+    # def get_cost_price(self, target: str, price: float, order_cond: str):
+    #     '''取得股票的進場價'''
 
-        if order_cond == 'ShortSelling':
-            return price
+    #     if order_cond == 'ShortSelling':
+    #         return price
 
-        cost_price = self.watchlist.set_index('code').cost_price.to_dict()
-        if target in cost_price:
-            return cost_price[target]
-        return 0
+    #     cost_price = self.watchlist.set_index('code').cost_price.to_dict()
+    #     if target in cost_price:
+    #         return cost_price[target]
+    #     return 0
 
     def update_watchlist(self, df_stocks: pd.DataFrame):
         '''程式結束時，更新本地庫存表'''
@@ -88,11 +87,11 @@ class WatchListTool(TimeTool):
         condi2 = ~df_stocks.code.isin(df1.code)
         _stocks = df_stocks[condi1 | condi2]
 
-        for stock, cost_price in zip(_stocks.code, _stocks.cost_price):
+        for stock in _stocks.code.values:
             if stock in df1.code.values:
                 # 新增手動買進的股票，自動買進不需更新
                 condition = (df1.code == stock) & (df1.strategy.isnull())
-                df1.loc[condition, ['buyday', 'cost_price', 'position']] = [TODAY, cost_price, 100]
+                df1.loc[condition, ['buyday', 'position']] = [TODAY, 100]
 
         # 更新部位 (已全出 or 持有部位 <= 0 的股票)
         condi1 = df1.code.isin(df_stocks.code)
