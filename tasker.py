@@ -196,6 +196,8 @@ def runSelectStock():
                     tb2.insert(11+i, f'{TODAY_STR}-{c}',  tb2.name.map(tb[c].to_dict()))
             tb2.to_csv(filename, index=False, encoding='utf-8-sig')
 
+    except FileNotFoundError as e:
+        logging.warning(f'{e} No stock is selected.')
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【選股程式】已手動關閉", msgType='Tasker')
     except:
@@ -229,12 +231,13 @@ def runCrawlFromHTML():
         crawler2.get_FuturesTickData(TODAY_STR)
 
         # 轉換&更新期貨逐筆成交資料
-        tick_old = pd.read_pickle(f'{PATH}/期貨日夜盤1T.pkl')
-        tick_new = tdp.convert_daily_tick(TODAY_STR, '1T')
-
-        if isinstance(tick_new, pd.DataFrame):
-            df = pd.concat([tick_old, tick_new])
-            df.to_pickle(f'{PATH}/期貨日夜盤1T.pkl')
+        df = tdp.convert_daily_tick(TODAY_STR, '1T')
+        if isinstance(df, pd.DataFrame):
+            filename = f'{PATH}/期貨日夜盤1T.pkl'
+            if os.path.exists(filename):
+                tick_old = pd.read_pickle(filename)
+                df = pd.concat([tick_old, df])
+            df.to_pickle(filename)
 
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
@@ -314,13 +317,14 @@ def runShioajiSubscriber():
 
 def runSimulationChecker():
     try:
+        filepath = f'{PATH}/stock_pool'
         for account in ACCOUNTS:
             config = dotenv_values(f'./lib/envs/{account}.env')
 
             if config['MODE'] == 'Simulation':
                 # check stock pool size
-                watchlist = pd.read_csv(f'{PATH}/stock_pool/watchlist_{account}.csv')
-                stocks = pd.read_pickle(f'{PATH}/stock_pool/simulation_stocks_{account}.pkl')
+                watchlist = pd.read_csv(f'{filepath}/watchlist_{account}.csv')
+                stocks = pd.read_pickle(f'{filepath}/simulation_stocks_{account}.pkl')
 
                 watchlist.buyday = pd.to_datetime(watchlist.buyday).dt.date
                 watchlist.code = watchlist.code.astype(str)
@@ -341,11 +345,12 @@ def runSimulationChecker():
                     notifier.post(text, msgType='Monitor')
 
                 # update performance statement
-                filepath = f'{PATH}/stock_pool'
                 df = pd.read_csv(f'{filepath}/statement_stocks_{account}.csv')
                 df = convert_statement(df)
-                df = df[df.BuyTime > '2023-04-01']
                 save_excel(df, f'{filepath}/simulation_performance_{account}.xlsx', saveEmpty=True)
+    except FileNotFoundError as e:
+        logging.warning(e)
+        notifier.post(f'\n{e}', msgType='Tasker')
     except:
         logging.exception('Catch an exception:')
         notifier.post('\n【Error】【模擬帳戶檢查】發生異常', msgType='Tasker')

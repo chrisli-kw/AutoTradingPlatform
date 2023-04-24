@@ -138,6 +138,7 @@ trader/strategies/short.py
 trader/strategies/conditions.py
 trader/strategies/features.py
 trader/indicators/indexes.py
+trader/backtest/
 __TestScripts__.py
 *.ipynb
 *.cmd

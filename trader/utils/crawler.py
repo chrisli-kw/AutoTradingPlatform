@@ -88,9 +88,11 @@ class CrawlStockData:
 
         if not start:
             if update:
-                old = pd.read_pickle(f'{PATH}/Kbars/{self.filename}_{self.scale}.pkl')
-
-                last_end = old.date.max()
+                filename = f'{PATH}/Kbars/{self.filename}_{self.scale}.pkl'
+                if os.path.exists(filename):
+                    last_end = pd.read_pickle(filename).date.max()
+                else:
+                    last_end = self.timetool.last_business_day()
                 start = self.timetool._strf_timedelta(last_end, -1)
 
                 del old
@@ -180,8 +182,6 @@ class CrawlStockData:
     def add_new_data(self, scale: str, save=True, start=None, end=None):
         '''加入新資料到舊K棒資料中'''
 
-        df = pd.read_pickle(f'{PATH}/Kbars/{self.filename}_{scale}.pkl')
-
         folders = os.listdir(f'{PATH}/Kbars/1min')
         folders = [fd for fd in folders if '.' not in fd]
 
@@ -213,10 +213,15 @@ class CrawlStockData:
             logging.info(f'Converting data scale to {scale}...')
             temp = self.kbartool.convert_kbar(temp, scale=scale).dropna()
 
-        df = pd.concat([df, temp]).reset_index(drop=True)
+        filename = f'{PATH}/Kbars/{self.filename}_{scale}.pkl'
+        if os.path.exists(filename):
+            df = pd.read_pickle(filename)
+        else:
+            df = pd.DataFrame()
 
+        df = pd.concat([df, temp]).reset_index(drop=True)
         if save:
-            df.to_pickle(f'{PATH}/Kbars/{self.filename}_{scale}.pkl')
+            df.to_pickle(filename)
 
         return df
 
