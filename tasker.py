@@ -210,7 +210,10 @@ def runCrawlFromHTML():
     try:
         # update PutCallRatio
         step = 'PutCallRatio'
-        df_pcr = pd.read_csv(f'{PATH}/put_call_ratio.csv')
+        try:
+            df_pcr = pd.read_csv(f'{PATH}/put_call_ratio.csv')
+        except FileNotFoundError:
+            df_pcr = pd.DataFrame()
         df_pcr_new = crawler2.put_call_ratio()
         df_pcr = pd.concat([df_pcr, df_pcr_new])
         save_csv(df_pcr, f'{PATH}/put_call_ratio.csv')

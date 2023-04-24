@@ -58,7 +58,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         self.BUY_UNIT_TYPE = self.getENV('BUY_UNIT_TYPE')
         self.ORDER_COND1 = self.getENV('ORDER_COND1')
         self.ORDER_COND2 = self.getENV('ORDER_COND2')
-        # self.HOLD_DAY = self.getENV('HOLD_DAY', 'int')
         self.LEVERAGE_LONG = {}
         self.LEVERAGE_SHORT = {}
         self.day_trade_cond = {
@@ -508,25 +507,18 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         # 剔除不堅控的股票
         self._filter_out_targets(market='Stocks')
 
-        self.n_stocks_long = self.stocks[self.stocks.action == 'Buy'].shape[0]
-        self.n_stocks_short = self.stocks[self.stocks.action ==
-                                          'Sell'].shape[0]
-
         # 新增歷史K棒資料
         self.update_stocks_to_monitor(stocks_pool)
         all_targets = list(self.stocks_to_monitor)
         self.history_kbars(['TSE001', 'OTC101'] + all_targets)
-        # all_stocks = self.merge_buy_sell_lists(stocks_pool, 'Stocks')
-        # self.history_kbars(['TSE001', 'OTC101'] + all_stocks.tolist())
 
         # 交易風險控制
+        self.n_stocks_long = self.stocks[self.stocks.action == 'Buy'].shape[0]
+        self.n_stocks_short = self.stocks[self.stocks.action == 'Sell'].shape[0]
         self.N_LIMIT_LS = self.strategy_l.setNStockLimitLong(KBars=self.KBars)
         self.N_LIMIT_SS = self.strategy_s.setNStockLimitShort(KBars=self.KBars)
         self._set_leverage(all_targets)
         self._set_trade_risks()
-        # self.strategy_l.yLows = self.KBars['1D'].groupby(
-        #     'name').tail(1).set_index('name').Low.to_dict()
-        # self.update_stocks_to_monitor(stocks_pool)
         return strategies, all_targets
 
     def init_futures(self):
@@ -577,10 +569,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
         # 剔除不堅控的股票
         self._filter_out_targets(market='Futures')
-
-        # # 新增歷史K棒資料
-        # all_futures = self.merge_buy_sell_lists(futures_pool, 'Futures')
-        # self.history_kbars(all_futures)
 
         # update_futures_to_monitor
         self.futures.index = self.futures.Code
@@ -1087,14 +1075,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
     def get_margin_table(self):
         '''取得保證金清單'''
-        df = pd.read_csv(f'{PATH}/indexMarging.csv',
-                         encoding='big5').reset_index()
+        df = pd.read_csv('./lib/indexMarging.csv', encoding='big5').reset_index()
         df.columns = list(df.iloc[0, :])
         df = df.iloc[1:, :-2]
         df.原始保證金 = df.原始保證金.astype(int)
 
-        codes = [[f.code, f.symbol, f.name]
-                 for m in API.Contracts.Futures for f in m]
+        codes = [[f.code, f.symbol, f.name] for m in API.Contracts.Futures for f in m]
         codes = pd.DataFrame(codes, columns=['code', 'symbol', 'name'])
         codes = codes.set_index('name').symbol.to_dict()
 
@@ -1460,7 +1446,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                     if order.pos_target:
                         self._place_order(order, market='Futures')
                         self._update_position(order, strategy_f)
-                        # return
 
             time.sleep(max(5 - (datetime.now() - now).total_seconds(), 0))
 
