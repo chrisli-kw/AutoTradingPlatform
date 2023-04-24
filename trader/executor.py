@@ -513,11 +513,13 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
         # 交易風險控制
         self.n_stocks_long = self.stocks[self.stocks.action == 'Buy'].shape[0]
-        self.n_stocks_short = self.stocks[self.stocks.action == 'Sell'].shape[0]
+        self.n_stocks_short = self.stocks[self.stocks.action ==
+                                          'Sell'].shape[0]
         self.N_LIMIT_LS = self.strategy_l.setNStockLimitLong(KBars=self.KBars)
         self.N_LIMIT_SS = self.strategy_s.setNStockLimitShort(KBars=self.KBars)
         self._set_leverage(all_targets)
         self._set_trade_risks()
+        logging.debug(f'stocks_to_monitor: {self.stocks_to_monitor}')
         return strategies, all_targets
 
     def init_futures(self):
@@ -1072,12 +1074,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
     def get_margin_table(self):
         '''取得保證金清單'''
-        df = pd.read_csv('./lib/indexMarging.csv', encoding='big5').reset_index()
+        df = pd.read_csv('./lib/indexMarging.csv',
+                         encoding='big5').reset_index()
         df.columns = list(df.iloc[0, :])
         df = df.iloc[1:, :-2]
         df.原始保證金 = df.原始保證金.astype(int)
 
-        codes = [[f.code, f.symbol, f.name] for m in API.Contracts.Futures for f in m]
+        codes = [[f.code, f.symbol, f.name]
+                 for m in API.Contracts.Futures for f in m]
         codes = pd.DataFrame(codes, columns=['code', 'symbol', 'name'])
         codes = codes.set_index('name').symbol.to_dict()
 
@@ -1213,7 +1217,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         if target in cost_price:
             return cost_price[target]
         return 0
-    
+
     def check_leverage(self, target: str, mode='long'):
         '''取得個股的融資/融券成數'''
         if mode in ['long', 'MarginTrading'] and target in self.LEVERAGE_LONG:
