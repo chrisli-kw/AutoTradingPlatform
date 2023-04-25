@@ -94,8 +94,6 @@ class CrawlStockData:
                 else:
                     last_end = self.timetool.last_business_day()
                 start = self.timetool._strf_timedelta(last_end, -1)
-
-                del old
             else:
                 start = '2017-01-01'
 
