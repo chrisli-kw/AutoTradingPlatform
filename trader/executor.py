@@ -542,6 +542,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
         # 取得遠端庫存
         self.futures = self.get_securityInfo('Futures')
+        self._set_futures_code_list()
 
         # 庫存的處理
         if self.futures.shape[0]:
@@ -587,7 +588,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         self._set_margin_limit()
         self.margin_table = self.get_margin_table(
         ).dropna().set_index('code').原始保證金.to_dict()
-        self._set_futures_code_list()
         return strategies, all_futures
 
     def _update_position(self, order: namedtuple, strategies: Dict[str, str]):
@@ -1532,6 +1532,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                     if c not in df.columns:
                         df[c] = 0 if c in ['ContractAverPrice',
                                            'SettlePrice', 'RealPrice'] else ''
+                df = df[self.df_futuresInfo.columns]
             else:
                 df = self.df_futuresInfo
 
