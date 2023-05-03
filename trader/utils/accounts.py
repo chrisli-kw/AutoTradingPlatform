@@ -110,7 +110,7 @@ class AccountInfo(CrawlFromHTML, TimeTool):
                 if mode == 'info':
                     logging.debug(f'Account balance = {balance}')
             except:
-                logging.exception('Catch an exception:')
+                logging.exception('Catch an exception (balance):')
                 balance = None
 
             if balance != None:
@@ -219,7 +219,7 @@ class AccountInfo(CrawlFromHTML, TimeTool):
                 return df
 
             except:
-                logging.exception('Catch an exception:')
+                logging.exception('Catch an exception (settle_info):')
 
             time.sleep(1)
             n += 1
@@ -323,7 +323,7 @@ class AccountInfo(CrawlFromHTML, TimeTool):
             try:
                 margin = API.margin(API.futopt_account)
             except:
-                logging.exception('Catch an exception:')
+                logging.exception('Catch an exception (get_account_margin):')
                 margin = None
 
             if margin:
