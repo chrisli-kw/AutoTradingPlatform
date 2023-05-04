@@ -92,7 +92,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         self.n_stocks_long = 0
         self.n_stocks_short = 0
         self.total_market_value = 0
-        self.punish_list = self.get_punish_list().證券代號.to_list()
+        self.punish_list = []
         self.pct_chg_DowJones = self.get_pct_chg_DowJones()
         self.n_categories = None
 
@@ -334,7 +334,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             msg.update({
                 'symbol': symbol,
                 'cost_price': self.quotes_now_f[symbol]['price'] if symbol in self.quotes_now_f else 0,
-                'bsh': max(self.quotes_all_f[symbol]['price']) if symbol in self.quotes_all_f else 0,
+                'bsh': max(self.quotes_all_f[symbol]['price']) if self.quotes_all_f[symbol]['price'] else 0,
                 'bst': datetime.now(),
                 'position': 100
             })
@@ -474,16 +474,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 self.FILTER_OUT)]
 
     def init_stocks(self):
-        '''
-        初始化股票資訊，包含:
-        1. 讀取選股清單
-        2. 取得遠端庫存
-        3. 取得策略清單
-        4. 庫存的處理
-        5. 剔除不堅控的股票
-        6. 新增歷史K棒資料
-        7. 交易風險控制
-        '''
+        '''初始化股票資訊'''
 
         if not self.can_stock:
             return None, []
@@ -517,22 +508,34 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                                           'Sell'].shape[0]
         self.N_LIMIT_LS = self.strategy_l.setNStockLimitLong(KBars=self.KBars)
         self.N_LIMIT_SS = self.strategy_s.setNStockLimitShort(KBars=self.KBars)
+        self.punish_list = self.get_punish_list().證券代號.to_list()
         self._set_leverage(all_targets)
         self._set_trade_risks()
         logging.debug(f'stocks_to_monitor: {self.stocks_to_monitor}')
         return strategies, all_targets
 
     def init_futures(self):
-        '''
-        初始化期貨資訊，包含:
-        1. 讀取選股清單
-        2. 取得遠端庫存
-        3. 取得策略清單
-        4. 庫存的處理
-        5. 剔除不堅控的股票
-        6. 新增歷史K棒資料
-        7. 交易風險控制
-        '''
+        '''初始化期貨資訊'''
+
+        def preprocess_(df):
+            if df.shape[0]:
+                for c in ['Volume', 'ContractAverPrice', 'SettlePrice', 'RealPrice']:
+                    df[c] = df[c].astype(float)
+                    if c in ['ContractAverPrice', 'SettlePrice', 'RealPrice']:
+                        df[c] = df.groupby('Code')[c].transform('mean')
+                    else:
+                        df[c] = df.groupby('Code')[c].transform(sum)
+
+                df = df.drop_duplicates('Code')
+                df.Code = df.Code.astype(str).map(self.Futures_Code_List)
+                df.OrderBS = df.OrderBS.apply(
+                    lambda x:'Buy' if x == 'B' else ('Sell' if x == 'S' else x))
+                
+                orders = df[['Volume', 'OrderBS']]
+                orders = orders.rename(
+                    columns={'Volume':'quantity', 'OrderBS':'action'})
+                df['order'] = orders.to_dict('records')
+            return df
 
         if not self.can_futures:
             return None, []
@@ -545,26 +548,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         self._set_futures_code_list()
 
         # 庫存的處理
-        if self.futures.shape[0]:
-            for c in ['Volume', 'ContractAverPrice', 'SettlePrice', 'RealPrice']:
-                self.futures[c] = self.futures[c].astype(float)
-                if c in ['ContractAverPrice', 'SettlePrice', 'RealPrice']:
-                    self.futures[c] = self.futures.groupby(
-                        'Code')[c].transform('mean')
-                else:
-                    self.futures[c] = self.futures.groupby('Code')[
-                        c].transform(sum)
-
-            self.futures = self.futures.drop_duplicates('Code')
-            self.futures.Code = self.futures.Code.astype(
-                str).map(self.Futures_Code_List)
-            self.futures.OrderBS = self.futures.OrderBS.map(
-                {'B': 'Buy', 'S': 'Sell'})
-            self.n_futures = self.futures.shape[0]
-
-            self.futures = self.futures.merge(
-                self.watchlist, how='left', left_on='Code', right_on='code')
-            self.futures.position.fillna(100, inplace=True)
+        self.futures = preprocess_(self.futures)
+        self.futures = self.futures.merge(
+            self.watchlist, how='left', left_on='Code', right_on='code')
+        self.futures.position.fillna(100, inplace=True)
+        
+        self.n_futures = self.futures.shape[0]
 
         # 取得策略清單
         strategies = self.find_strategy(futures_pool, 'Futures')
@@ -583,11 +572,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         self.history_kbars(all_futures)
 
         # 交易風險控制 TODO: add setNFuturesLimitLong
-        self.N_FUTURES_LIMIT = self.strategy_s.setNFuturesLimitShort(
-            KBars=self.KBars)
+        self.N_FUTURES_LIMIT = self.strategy_s.setNFuturesLimitShort(KBars=self.KBars)
         self._set_margin_limit()
-        self.margin_table = self.get_margin_table(
-        ).dropna().set_index('code').原始保證金.to_dict()
+        self.margin_table = self.get_margin_table().原始保證金.to_dict()
         return strategies, all_futures
 
     def _update_position(self, order: namedtuple, strategies: Dict[str, str]):
@@ -646,8 +633,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
         for stra, stocks_ in stocks_pool.items():
             if (
-                (self.can_buy and (stra in StrategyLong or stra in StrategyLongDT)) or
-                (self.can_sell and (stra in StrategyShort or stra in StrategyShortDT))
+                (self.can_buy and (stra in StrategyLong + StrategyLongDT)) or
+                (self.can_sell and (stra in StrategyShort + StrategyShortDT))
             ):
                 self.stocks_to_monitor.update(
                     {s: None for s in stocks_ if not_in_stocks(s)})
@@ -753,12 +740,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                     StrategyLongDT and (c1 or c4)
                 tradeType = '當沖' if is_day_trade else '非當沖'
 
-                if is_long_strategy:
-                    func = self.strategy_l.mapFunction(
-                        actionType, tradeType, strategy)
-                else:
-                    func = self.strategy_s.mapFunction(
-                        actionType, tradeType, strategy)
+                func = self.strategy_l if is_long_strategy else self.strategy_s
+                func = func.mapFunction(actionType, tradeType, strategy)
 
                 if data:
                     inputs.update(data)
@@ -832,12 +815,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             if c3 or c4:
                 is_day_trade = strategy in StrategyShortDT + StrategyLongDT
                 tradeType = '當沖' if is_day_trade else '非當沖'
-                if is_long_strategy:
-                    func = self.strategy_l.mapFunction(
-                        actionType, tradeType, strategy)
-                else:
-                    func = self.strategy_s.mapFunction(
-                        actionType, tradeType, strategy)
+                func = self.strategy_l if is_long_strategy else self.strategy_s
+                func = func.mapFunction(actionType, tradeType, strategy)
 
                 if data:
                     inputs.update(data)
@@ -962,10 +941,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 self._update_futures_deal_list(target, content.octype)
 
                 # 更新監控庫存
+                bsh = max(self.quotes_all_f[target]['price']) if self.quotes_all_f[target]['price'] else price
                 order_data.update({
                     'symbol': target,
                     'cost_price': abs(price),
-                    'bsh': max(self.quotes_all_f[target]['price']),
+                    'bsh': bsh,
                     'bst': datetime.now(),
                     'position': 100,
                     'order': {
@@ -1087,7 +1067,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
         month = str((datetime.now() + timedelta(days=30)).month).zfill(2)
         df['code'] = (df.商品別 + month).map(codes)
-        return df
+        return df.dropna().set_index('code')
 
     def get_stock_pool(self):
         '''取得股票選股池'''
