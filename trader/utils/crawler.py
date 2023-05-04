@@ -151,7 +151,7 @@ class CrawlStockData:
                 try:
                     tb = pd.read_csv(f'{self.folder_path}/{f}').sort_values('date')
                 except:
-                    logging.exception('Catch an exception:')
+                    logging.exception('Catch an exception (merge_stockinfo):')
                     self.notifier.post(f"\n【Error】讀取檔案發生異常:{f}", msgType='Crawler')
                     tb = pd.DataFrame()
 
@@ -318,11 +318,12 @@ class CrawlFromHTML(TimeTool):
             n = 0
             while n < 10:
                 try:
-                    df = pd.read_html(url)[0]
+                    df = requests.get(url, headers=self.headers).text
+                    df = pd.read_html(df)[0]
                     df = df.dropna().rename(columns={period: 'period'}).iloc[:-1, :]
                     return df
                 except:
-                    logging.exception('Catch an exception:')
+                    logging.exception('Catch an exception (get_punish_list):')
                     n += 1
                     time.sleep(1)
             return df_default
@@ -480,4 +481,4 @@ class CrawlFromHTML(TimeTool):
         except zipfile.BadZipFile:
             logging.error('輸入的日期非交易日')
         except:
-            logging.exception('Catch an exception:')
+            logging.exception('Catch an exception (get_FuturesTickData):')
