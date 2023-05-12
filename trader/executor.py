@@ -527,6 +527,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                         df[c] = df.groupby('Code')[c].transform(sum)
 
                 df = df.drop_duplicates('Code')
+                df = df.rename(columns={'ContractAverPrice': 'cost_price'})
                 df.Code = df.Code.astype(str).map(self.Futures_Code_List)
                 df.OrderBS = df.OrderBS.apply(
                     lambda x:'Buy' if x == 'B' else ('Sell' if x == 'S' else x))
