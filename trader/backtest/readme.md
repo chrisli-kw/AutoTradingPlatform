@@ -22,11 +22,11 @@ The backtest scripts that the framework supports are as follows:
 ## Data Prepareation
 Default data names: 
 1. stock data: ```company_stock_data_{kbar_scale}```
-2. futures data: ```期貨日夜盤1T```
+2. futures data: ```futures_data_1T```
 
 Default path to the datasets:
 1. stock data: ```./data/Kbars/company_stock_data_{kbar_scale}.pkl```
-2. futures data: ```./data/期貨日夜盤1T.pkl```
+2. futures data: ```./data/Kbars/futures_data_1T.pkl```
 
 ## Backtest Results
 After running the backtest module, you can get the following results:

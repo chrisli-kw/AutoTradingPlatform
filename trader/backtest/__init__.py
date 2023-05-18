@@ -785,7 +785,7 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
                 df = merge_pc_ratio(df)
         else:
             kbt = KBarTool()
-            df = pd.read_pickle(f'{PATH}/期貨日夜盤1T.pkl')
+            df = pd.read_pickle(f'{PATH}/Kbars/futures_data_1T.pkl')
             df = kbt.convert_kbar(df, backtestScript.scale)
             df = merge_pc_ratio(df)
 

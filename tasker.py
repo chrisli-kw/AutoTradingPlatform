@@ -233,7 +233,7 @@ def runCrawlFromHTML():
         # 轉換&更新期貨逐筆成交資料
         df = tdp.convert_daily_tick(TODAY_STR, '1T')
         if isinstance(df, pd.DataFrame):
-            filename = f'{PATH}/期貨日夜盤1T.pkl'
+            filename = f'{PATH}/Kbars/futures_data_1T.pkl'
             if os.path.exists(filename):
                 tick_old = pd.read_pickle(filename)
                 df = pd.concat([tick_old, df])
