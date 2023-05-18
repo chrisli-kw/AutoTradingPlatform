@@ -51,4 +51,4 @@ Once you have a basic strategy concept, you can write the strategy framework in 
     |-- backtest
       |-- __BacktestScripts__.py   <---
 ```
-Create a python file named ```__BacktestScripts__.py``` and then add scripts to it. For detailed script writing instructions, please refer to the [sample backtesting script](backtest_sample.py).
+Create a python file named ```__BacktestScripts__.py``` and then add scripts to it. For detailed script writing instructions, please refer to the [sample backtesting script](../../docs/script%20samples/backtest_sample.py)
