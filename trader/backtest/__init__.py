@@ -508,7 +508,7 @@ class BacktestPerformance:
         profit = df.groupby('CloseDate').profit.sum().to_dict()
         nOpen = df.groupby('OpenDate').stock.count().to_dict()
 
-        daily_info = result['daily_info']
+        daily_info = result['daily_info'].copy()
         profit = pd.Series(daily_info.index).map(profit).fillna(0).cumsum()
         daily_info['balance'] = result['init_position'] + profit.values
         daily_info['nOpen'] = daily_info.index.map(nOpen).fillna(0)
@@ -772,8 +772,8 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
         self.market_value = 0
         self.Action = namedtuple(
             typename="Action", 
-            field_names=['price', 'position', 'reason'], 
-            defaults=[0, 0, None]
+            field_names=['position', 'reason', 'msg', 'price'], 
+            defaults=[0, '', '', 0]
         )
         
     def load_data(self, backtestScript: object):
@@ -813,8 +813,7 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
 
     def examineOpen(self, inputs: dict, **kwargs):
         '''檢查進場條件'''
-        openPrice = inputs['Open']
-        return self.Action(openPrice, 100, '進場')
+        return self.Action(100, '進場', 'msg', inputs['Open'])
 
     def on_examineOpen(self):
         def wrapper(func):
@@ -825,7 +824,7 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
         '''檢查出場條件'''
         if inputs['Low'] < inputs['yLow']:
             closePrice = inputs['yLow']
-            return self.Action(closePrice, 100, '出場')
+            return self.Action(100, '出場', 'msg', closePrice)
         return self.Action()
 
     def on_examineClose(self):

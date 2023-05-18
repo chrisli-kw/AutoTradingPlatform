@@ -6,7 +6,11 @@ from .. import PATH, TODAY_STR
 
 class StrategyTool:
     def __init__(self):
-        self.Action = namedtuple("Action", ['position', 'reason', 'msg'], defaults=[0, '', ''])
+        self.Action = namedtuple(
+            typename="Action", 
+            field_names=['position', 'reason', 'msg', 'price'], 
+            defaults=[0, '', '', 0]
+        )
         self.pc_ratio = self.get_put_call_ratio()
         self.dividends = self.get_ex_dividends_list()
         self.Funcs = {

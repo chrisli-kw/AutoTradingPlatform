@@ -30,8 +30,8 @@ def kbar_1D_processor(df1d, df):
 
 Action = namedtuple(
     typename="Action",
-    field_names=['price', 'position', 'reason'],
-    defaults=[0, 0, None]
+    field_names=['position', 'reason', 'msg', 'price'],
+    defaults=[0, '', '', 0]
 )
 
 
@@ -157,7 +157,7 @@ class SampleScript:
         '''
         open_condition = inputs['Close'] > inputs['Open']
         if open_condition:
-            return Action(inputs['Close'], 100, 'reason')
+            return Action(100, 'reason', 'reason', inputs['Close'])
         return Action()
 
     def examineClose(self, stocks: dict, inputs: dict, **kwargs):
@@ -168,7 +168,7 @@ class SampleScript:
         '''
         sell_condition = inputs['Close'] < inputs['Open']
         if sell_condition:
-            return Action(inputs['Close'], 100, 'reason')
+            return Action(100, 'reason', 'reason', inputs['Close'])
         return Action()
 
 
