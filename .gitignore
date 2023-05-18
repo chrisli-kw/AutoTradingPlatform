@@ -130,16 +130,6 @@ dmypy.json
 
 # projec-related files
 .vscode/
-test.py
-sinopac_dev.py
-python_practice.py
-trader/strategies/long.py
-trader/strategies/short.py
-trader/strategies/conditions.py
-trader/strategies/features.py
-trader/indicators/indexes.py
-trader/backtest/
-__TestScripts__.py
 *.ipynb
 *.cmd
 *.bat
@@ -150,3 +140,13 @@ documents/
 logs/
 *.properties.*
 *.DS_Store
+test.py
+dev.py
+python_practice.py
+trader/strategies/long.py
+trader/strategies/short.py
+trader/strategies/conditions.py
+trader/strategies/features.py
+trader/indicators/indexes.py
+trader/backtest/__BacktestScripts__.py
+
