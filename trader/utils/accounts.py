@@ -52,7 +52,7 @@ class AccountInfo(CrawlFromHTML, TimeTool):
         )
 
     def _login(self, API_KEY, SECRET_KEY, account_name):
-        API.login(api_key=API_KEY, secret_key=SECRET_KEY)
+        API.login(api_key=API_KEY, secret_key=SECRET_KEY, contracts_timeout=10000)
 
         nth_account = int(account_name[-1])
         if nth_account > 1:

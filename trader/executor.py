@@ -709,8 +709,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 actionType = 'Open'
                 pos_balance = 0
                 order_cond = self.check_order_cond(target, mode)
-                quantity = self.get_quantity(
-                    target, strategy, order_cond, mode)
+                quantity = self.get_quantity(target, strategy, order_cond, mode)
                 enoughOpen = self.check_enough(target, quantity, mode)
 
             # 庫存
@@ -728,17 +727,15 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             # 非當沖做多賣出(庫存賣出)
             c3 = isSell and self.can_sell and isInStocks and strategy in StrategyLong
             # 當沖做空回補
-            c4 = (
-                not isSell) and strategy in StrategyShortDT and target in self.stock_sold
+            c4 = (not isSell) and strategy in StrategyShortDT and target in self.stock_sold
             # 非當沖做多買進
             c5 = (not isSell) and enoughOpen and strategy in StrategyLong
             # 非當沖做空回補
             c6 = (not isSell) and enoughOpen and isInStocks and strategy in StrategyShort
             # TODO 當沖做多買進
             # TODO 當沖做空賣出
-            if c1 or c2 or c3 or c4 or c5 or c6:
-                is_day_trade = strategy in StrategyShortDT + \
-                    StrategyLongDT and (c1 or c4)
+            if quantity and (c1 or c2 or c3 or c4 or c5 or c6):
+                is_day_trade = strategy in StrategyShortDT + StrategyLongDT and (c1 or c4)
                 tradeType = '當沖' if is_day_trade else '非當沖'
 
                 func = self.strategy_l if is_long_strategy else self.strategy_s

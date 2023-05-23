@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 import numpy as np
 import pandas as pd
 from typing import List, Dict
@@ -88,7 +89,11 @@ class KBarTool(TechnicalSignals, TimeTool):
             end = TODAY_STR
 
         contract = get_contract(stockid)
-        kbars = API.kbars(contract, start=start, end=end)
+        # TODO: fix AttributeError
+        try:
+            kbars = API.kbars(contract, start=start, end=end, timeout=60000)
+        except AttributeError:
+            logging.exception(f'tbKBar({stockid}) Catch an Exception:')
 
         tb = pd.DataFrame({**kbars})
         tb.ts = pd.to_datetime(tb.ts)
