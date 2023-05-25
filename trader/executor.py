@@ -21,7 +21,7 @@ from .utils.watchlist import WatchListTool
 from .utils.cipher import CipherTool
 from .utils.notify import Notification
 from .utils.orders import OrderTool
-from .utils.database import RedisTools
+from .utils.database.redis import RedisTools
 from .utils.subscribe import Subscriber
 from .strategies.long import LongStrategy
 from .strategies.short import ShortStrategy

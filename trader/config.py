@@ -6,39 +6,49 @@ config = configparser.ConfigParser()
 config.read('./lib/config.ini', encoding='utf8')
 
 
-def getlist(section, option):
+def getList(section, option):
     content = config.get(section, option)
     if len(content) > 0:
         return content.replace(' ', '').split(',')
     return []
 
+def get_settings(section, option, dataType='str'):
+    funcs = {
+        'str': config.get,
+        'int': config.getint,
+        'float': config.getfloat,
+        'bool': config.getboolean,
+        'list':getList
+    }
+    if section in config.sections():
+        options = config.options(section)
+        if options and option.lower() in options:
+            return funcs[dataType](section, option)
+    return ''
+
 
 # 使用者相關
-ACCOUNTS = getlist("ACCOUNT", "USERS")
+ACCOUNTS = get_settings("ACCOUNT", "USERS", dataType='list')
 
 # 資料庫相關
-if 'DB' in config.sections() and config.options('DB'):
-    REDIS_HOST = config.get('DB', 'REDIS_HOST')
-    REDIS_PORT = config.getint('DB', 'REDIS_PORT')
-    REDIS_PWD = config.get('DB', 'REDIS_PWD')
-else:
-    REDIS_HOST = ''
-    REDIS_PORT = ''
-    REDIS_PWD = ''
+REDIS_HOST = get_settings('DB', 'REDIS_HOST')
+REDIS_PORT = get_settings('DB', 'REDIS_PORT', dataType='int')
+REDIS_PWD = get_settings('DB', 'REDIS_PWD')
+DB_HOST = get_settings('DB', 'DB_HOST')
+DB_PORT = get_settings('DB', 'DB_PORT', dataType='int')
+DB_USER = get_settings('DB', 'DB_USER')
+DB_PWD = get_settings('DB', 'DB_PWD')
+DB_NAME = get_settings('DB', 'DB_NAME')
 
 # LINE notify
-if 'LINENOTIFY' in config.sections() and config.options('LINENOTIFY'):
-    TOKEN_MONITOR = config.get('LINENOTIFY', 'TOKEN_MONITOR')
-    TOKEN_INFO = config.get('LINENOTIFY', 'TOKEN_INFO')
-else:
-    TOKEN_MONITOR = ''
-    TOKEN_INFO = ''
+TOKEN_MONITOR = get_settings('LINENOTIFY', 'TOKEN_MONITOR')
+TOKEN_INFO = get_settings('LINENOTIFY', 'TOKEN_INFO')
 
 # 策略相關
-StrategyLong = getlist('STRATEGY', 'Long')
-StrategyShort = getlist('STRATEGY', 'Short')
-StrategyLongDT = getlist('STRATEGY', 'LongDT')
-StrategyShortDT = getlist('STRATEGY', 'ShortDT')
+StrategyLong = get_settings('STRATEGY', 'Long', dataType='list')
+StrategyShort = get_settings('STRATEGY', 'Short', dataType='list')
+StrategyLongDT = get_settings('STRATEGY', 'LongDT', dataType='list')
+StrategyShortDT = get_settings('STRATEGY', 'ShortDT', dataType='list')
 
 # 交易相關
 FEE_RATE = .01
@@ -60,12 +70,12 @@ TimeStartFuturesNight = pd.to_datetime('15:00:00')
 TimeEndFuturesNight = pd.to_datetime('05:00:00') + timedelta(days=1)
 
 # 選股相關
-SelectMethods = getlist('SELECT', 'methods')
+SelectMethods = get_settings('SELECT', 'methods', dataType='list')
 
 # 爬蟲相關
-ConvertScales = getlist('CRAWLER', 'SCALES')
+ConvertScales = get_settings('CRAWLER', 'SCALES', dataType='list')
 
 # K棒特徵
-K60min_feature = getlist('KBARFEATURE', 'K60min')
-K30min_feature = getlist('KBARFEATURE', 'K30min')
-K15min_feature = getlist('KBARFEATURE', 'K15min')
+K60min_feature = get_settings('KBARFEATURE', 'K60min', dataType='list')
+K30min_feature = get_settings('KBARFEATURE', 'K30min', dataType='list')
+K15min_feature = get_settings('KBARFEATURE', 'K15min', dataType='list')

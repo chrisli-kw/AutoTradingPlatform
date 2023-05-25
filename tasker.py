@@ -14,7 +14,7 @@ from trader.config import ACCOUNTS, TEnd, SelectMethods, ConvertScales
 from trader.strategies.select import SelectStock
 from trader.utils import save_csv, save_excel
 from trader.utils.notify import Notification
-from trader.utils.database import RedisTools
+from trader.utils.database.redis import RedisTools
 from trader.utils.subscribe import Subscriber
 from trader.utils.kbar import TickDataProcesser
 from trader.utils.crawler import CrawlStockData, CrawlFromHTML
