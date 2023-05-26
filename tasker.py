@@ -388,8 +388,6 @@ if __name__ == "__main__":
             runAutoTrader()
         elif task == 'subscribe':
             runShioajiSubscriber()
-        elif task == 'export':
-            runExportData()
         else:
             logging.warning(f"The input task 【{task}】 does not exist.")
 
