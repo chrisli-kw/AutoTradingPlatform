@@ -118,7 +118,7 @@ class Notification:
         '''發送推播-Put/Call Ratio'''
 
         if df_pcr.shape[0]:
-            put_call_ratio = df_pcr.買賣權未平倉量比率.values[0]
+            put_call_ratio = df_pcr.PutCallRatio.values[0]
         else:
             put_call_ratio = '查無資料'
 

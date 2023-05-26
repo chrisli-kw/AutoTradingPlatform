@@ -17,6 +17,16 @@ from .notify import Notification
 from .kbar import KBarTool
 from .time import TimeTool
 from .. import API, PATH, TODAY_STR, TODAY
+from . import db
+from .database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T
+from .database.tables import SecurityList, PutCallRatioList, ExDividendTable
+
+if db.has_db:
+    for table in [
+        SecurityList, KBarData1D, KBarData1T, KBarData30T, KBarData60T,
+        PutCallRatioList, ExDividendTable
+    ]:
+        db.create_table(table)
 
 
 class CrawlStockData:
@@ -35,8 +45,14 @@ class CrawlStockData:
         self.filename = 'company_stock_data'
         self.scale = scale
         self.StockData = []
+        self.tables = {
+            '1D':KBarData1D, 
+            '1T':KBarData1T,
+            '30T':KBarData30T,
+            '60T':KBarData60T
+        }
 
-    def get_stock_list(self, stock_only: bool = True):
+    def get_security_list(self, stock_only: bool = True):
         '''
         自 Shioaji 取得股票清單
         只保留普通股股票且不需要權證: stock_only = True 
@@ -50,6 +66,42 @@ class CrawlStockData:
             df = df[~(df.category.isin(['00', '  '])) & (df.code.apply(len) == 4)]
 
         return df
+    
+    def export_security_list(self, df: pd.DataFrame):
+        '''Export security data either to local or to DB'''
+
+        if db.has_db:
+            codes = db.query(SecurityList.code).code.values
+            
+            # add new data
+            tb = df[~df.code.isin(codes)].copy()
+            db.dataframe_to_DB(tb, SecurityList)
+
+            # delete old data
+            code1 = list(set(codes) - set(df.code))
+            condition = SecurityList.code.in_(code1)
+            db.delete(SecurityList, condition)
+        else:
+            df.to_excel(f'{PATH}/selections/stock_list.xlsx', index=False)
+    
+    def export_kbar_data(self, df: pd.DataFrame, scale: str):
+        '''Export kbar data either to local or to DB'''
+
+        if db.has_db:
+            db.dataframe_to_DB(df, self.tables[scale])
+        elif scale == '1T':
+            day = self.folder_path.split('/')[-1]
+            save_csv(df, f'{self.folder_path}/{day}-stock_data_1T.csv')
+        else:
+            filename = f'{PATH}/Kbars/{self.filename}_{scale}.pkl'
+            if os.path.exists(filename):
+                temp = pd.read_pickle(filename)
+            else:
+                temp = pd.DataFrame()
+
+            temp = pd.concat([temp, df]).reset_index(drop=True)
+            temp.to_pickle(filename)
+            return temp
 
     def _load_data_into_queue(self, stockids: list):
         '''創建股票待爬清單(queue)'''
@@ -174,8 +226,7 @@ class CrawlStockData:
             delete_selection_files(self.folder_path, files=files)
 
         df = df.sort_values(['name', 'date', 'Time']).reset_index(drop=True)
-        day = self.folder_path.split('/')[-1]
-        save_csv(df, f'{self.folder_path}/{day}-stock_data_1T.csv')
+        self.export_kbar_data(df, '1T')
 
     def add_new_data(self, scale: str, save=True, start=None, end=None):
         '''加入新資料到舊K棒資料中'''
@@ -190,7 +241,7 @@ class CrawlStockData:
             folders = [fd for fd in folders if fd <= end]
 
         N = len(folders)
-        temp = np.array([None]*N)
+        df = np.array([None]*N)
         for i, fd in enumerate(folders):
             tb = pd.read_csv(
                 f'{PATH}/Kbars/1min/{fd}/{fd}-stock_data_1T.csv').sort_values('date')
@@ -202,24 +253,17 @@ class CrawlStockData:
 
                 tb.name = tb.name.astype(int)
 
-            temp[i] = tb
+            df[i] = tb
 
-        temp = pd.concat(temp).sort_values(['name', 'date', 'Time']).reset_index(drop=True)
-        temp.name = temp.name.astype(int).astype(str)
+        df = pd.concat(df).sort_values(['name', 'date', 'Time']).reset_index(drop=True)
+        df.name = df.name.astype(int).astype(str)
 
         if scale != '1T':
             logging.info(f'Converting data scale to {scale}...')
-            temp = self.kbartool.convert_kbar(temp, scale=scale).dropna()
+            df = self.kbartool.convert_kbar(df, scale=scale).dropna()
 
-        filename = f'{PATH}/Kbars/{self.filename}_{scale}.pkl'
-        if os.path.exists(filename):
-            df = pd.read_pickle(filename)
-        else:
-            df = pd.DataFrame()
-
-        df = pd.concat([df, temp]).reset_index(drop=True)
         if save:
-            df.to_pickle(filename)
+            df = self.export_kbar_data(df, scale)
 
         return df
 
@@ -378,24 +422,77 @@ class CrawlFromHTML(TimeTool):
             s = str((pd.to_datetime(e) + timedelta(days=1)).date()).replace('-', '/')
             time.sleep(10)
 
-        df = df.rename(
-            columns={'買賣權成交量比率%': '買賣權成交量比率', '買賣權未平倉量比率%': '買賣權未平倉量比率'}
-        )
-        df.日期 = pd.to_datetime(df.日期)
+        df = df.rename(columns={
+            '日期': 'Date',
+            '賣權成交量': 'PutVolume',
+            '買權成交量': 'CallVolume',
+            '買賣權成交量比率%': 'PutCallVolumeRatio', 
+            '賣權未平倉': 'PutOpenInterest', 
+            '買權未平倉': 'CallOpenInterest',
+            '買賣權未平倉量比率%': 'PutCallRatio'
+        })
+        df.Date = pd.to_datetime(df.Date)
 
-        return df.sort_values('日期').reset_index(drop=True)
+        return df.sort_values('Date').reset_index(drop=True)
+    
+    def export_put_call_ratio(self, df: pd.DataFrame):
+        if db.has_db:
+            db.dataframe_to_DB(df, PutCallRatioList)
+        else:
+            filename = f'{PATH}/put_call_ratio.csv'
+            if os.path.exists(filename):
+                df_pcr = pd.read_pickle(filename)
+            else:
+                df_pcr = pd.DataFrame()
+            
+            df_pcr = pd.concat([df_pcr, df])
+            save_csv(df_pcr, f'{PATH}/put_call_ratio.csv')
+    
+    def export_futures_kbar(self, df: pd.DataFrame):
+        if db.has_db:
+            db.dataframe_to_DB(df, KBarData1T)
+        else:
+            filename = f'{PATH}/Kbars/futures_data_1T.pkl'
+            if os.path.exists(filename):
+                tick_old = pd.read_pickle(filename)
+            else:
+                tick_old = pd.DataFrame()
+
+            df = pd.concat([tick_old, df])
+            df.to_pickle(filename)
+    
+    def export_ex_dividend_list(self, df: pd.DataFrame):
+        if db.has_db:
+            db.dataframe_to_DB(df, ExDividendTable)
+        else:
+            save_csv(df, f'{PATH}/exdividends.csv')
 
     def ex_dividend_list(self):
         '''爬蟲:證交所除權息公告表'''
 
         df = pd.read_csv(self.url_ex_dividend, encoding='big5', error_bad_lines=False).reset_index()
         df.columns = df.iloc[0, :]
-        df = df.iloc[1:, :8]
-        df = df[df.股票代號.notnull()]
-        df = df[(df.股票代號.apply(len) == 4)]
-        df.除權除息日期 = df.除權除息日期.apply(self.convert_date_format)
-        df.現金股利 = df.現金股利.astype(float)
-        return df.sort_values('除權除息日期')
+        df = df.rename(columns={
+            '除權除息日期': 'Date',
+            '股票代號': 'Code',
+            '名稱': 'Name',
+            '除權息': 'DividendType',
+            '無償配股率': 'DividendRate',
+            '現金增資配股率': 'CashCapitalRate',
+            '現金增資認購價': 'CashCapitalPrice',
+            '現金股利': 'CashDividend',
+            '詳細資料': 'Details',
+            '參考價試算': 'Reference',
+            '最近一次申報資料 季別/日期': 'Quarter',
+            '最近一次申報每股 (單位)淨值': 'NetValue', 
+            '最近一次申報每股 (單位)盈餘': 'EPS'
+        })
+        df = df[df.Code.notnull()]
+        df = df[(df.Code.apply(len) == 4)]
+        df.Date = df.Date.apply(self.convert_date_format)
+        df.CashDividend = df.CashDividend.astype(float)
+        df.CashCapitalPrice = df.CashCapitalPrice.replace('尚未公告', -1)
+        return df.sort_values('Date')
 
     def DowJones(self, start: datetime, end: datetime):
         '''鉅亨網道瓊報價'''

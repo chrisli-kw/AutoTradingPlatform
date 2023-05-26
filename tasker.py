@@ -12,9 +12,10 @@ from trader import __version__ as ver
 from trader import API, PATH, TODAY_STR, holidays
 from trader.config import ACCOUNTS, TEnd, SelectMethods, ConvertScales
 from trader.strategies.select import SelectStock
-from trader.utils import save_csv, save_excel
+from trader.utils import save_excel, db
 from trader.utils.notify import Notification
 from trader.utils.database.redis import RedisTools
+from trader.utils.database.tables import *
 from trader.utils.subscribe import Subscriber
 from trader.utils.kbar import TickDataProcesser
 from trader.utils.crawler import CrawlStockData, CrawlFromHTML
@@ -147,8 +148,8 @@ def runCrawlStockData():
 
         # 更新股票清單
         logging.info('Updating stock list')
-        stock_list = crawler.get_stock_list(stock_only=True)
-        stock_list.to_excel(f'{PATH}/selections/stock_list.xlsx', index=False)
+        stock_list = crawler.get_security_list(stock_only=True)
+        crawler.export_security_list(stock_list)
 
         # 爬當天股價資料
         crawler.crawl_from_sinopac(stockids='all', update=True)
@@ -212,19 +213,14 @@ def runCrawlFromHTML():
     try:
         # update PutCallRatio
         step = 'PutCallRatio'
-        try:
-            df_pcr = pd.read_csv(f'{PATH}/put_call_ratio.csv')
-        except FileNotFoundError:
-            df_pcr = pd.DataFrame()
         df_pcr_new = crawler2.put_call_ratio()
-        df_pcr = pd.concat([df_pcr, df_pcr_new])
-        save_csv(df_pcr, f'{PATH}/put_call_ratio.csv')
+        crawler2.export_put_call_ratio(df_pcr_new)
         notifier.post_put_call_ratio(df_pcr_new)
 
         # 爬除權息資料
         step = '爬除權息資料'
         dividends = crawler2.ex_dividend_list()
-        save_csv(dividends, f'{PATH}/exdividends.csv')
+        crawler2.export_ex_dividend_list(dividends)
 
         # 期貨逐筆成交資料
         step = '期貨逐筆成交資料'
@@ -232,12 +228,7 @@ def runCrawlFromHTML():
 
         # 轉換&更新期貨逐筆成交資料
         df = tdp.convert_daily_tick(TODAY_STR, '1T')
-        if isinstance(df, pd.DataFrame):
-            filename = f'{PATH}/Kbars/futures_data_1T.pkl'
-            if os.path.exists(filename):
-                tick_old = pd.read_pickle(filename)
-                df = pd.concat([tick_old, df])
-            df.to_pickle(filename)
+        crawler2.export_futures_kbar(df)
 
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
@@ -301,7 +292,7 @@ def thread_subscribe(user, targets):
 
 def runShioajiSubscriber():
     #TODO: 讀取要盤中選股的股票池
-    df = pd.read_excel('./data/selections/stock_list.xlsx')
+    df = pd.read_excel(f'{PATH}/selections/stock_list.xlsx')
     codes = df[df.exchange.isin(['TSE', 'OTC'])].code.astype(str).values
 
     N = 200
@@ -397,6 +388,8 @@ if __name__ == "__main__":
             runAutoTrader()
         elif task == 'subscribe':
             runShioajiSubscriber()
+        elif task == 'export':
+            runExportData()
         else:
             logging.warning(f"The input task 【{task}】 does not exist.")
 

@@ -12,7 +12,7 @@ from ...config import DB_HOST, DB_NAME, DB_PORT, DB_PWD, DB_USER
 Base = declarative_base()
 
 has_db = all(x for x in [DB_HOST, DB_NAME, DB_PORT, DB_PWD, DB_USER])
-DB_URL = f'{DB_USER}:{DB_PWD}@{DB_HOST}:{DB_PORT}' if has_db else None
+DB_URL = f'{DB_USER}:{DB_PWD}@{DB_HOST}:{DB_PORT}' if has_db else ''
 
 
 def create_schema(schemaName):
@@ -130,7 +130,7 @@ class SQLDatabase:
 
         # 補空值
         if df.isnull().sum().sum():
-            df = df.where(pd.notnull(df), None)
+            df = df.where(pd.notnull(df), '')
 
         datarows = df.to_dict('records')
         alldata = [table(**row) for row in datarows]

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, FLOAT, String, text, DateTime, Numeric, JSON, BOOLEAN, Text
+from sqlalchemy import Column, Integer, FLOAT, String, text
 from sqlalchemy.dialects.mysql import TIMESTAMP
 
 from .sql import Base
@@ -15,6 +15,191 @@ class Watchlist(Base):
     bsh = Column(FLOAT(2), nullable=False)
     position = Column(Integer, nullable=False)
     strategy = Column(String(50, 'utf8mb4_unicode_ci'), server_default='unknown')
+    create_time = Column(
+        TIMESTAMP(fsp=6), nullable=False, server_default=text("CURRENT_TIMESTAMP(6)"))
+
+    def __init__(self, **kwargs):
+        for property, value in kwargs.items():
+            setattr(self, property, value)
+
+
+class SecurityList(Base):
+    __tablename__ = 'security_list'
+
+    pk_id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+
+    underlying_kind = Column(String(50, 'utf8mb4_unicode_ci'))
+    update_date = Column(TIMESTAMP(fsp=6), server_default=text("CURRENT_TIMESTAMP(6)"))
+    target_code = Column(String(10, 'utf8mb4_unicode_ci'))
+    reference = Column(FLOAT(2), nullable=False)
+    delivery_date = Column(String(10, 'utf8mb4_unicode_ci'))
+    exchange = Column(String(3, 'utf8mb4_unicode_ci'))
+    delivery_month = Column(String(6, 'utf8mb4_unicode_ci'))
+    name = Column(String(50, 'utf8mb4_unicode_ci'), default='unknown')
+    short_selling_balance = Column(Integer)
+    option_right = Column(String(50, 'utf8mb4_unicode_ci'))
+    strike_price = Column(FLOAT(2))
+    underlying_code = Column(String(10, 'utf8mb4_unicode_ci'))
+    margin_trading_balance = Column(Integer)
+    limit_up = Column(FLOAT(2), nullable=False)
+    limit_down = Column(FLOAT(2), nullable=False)
+    symbol = Column(String(10, 'utf8mb4_unicode_ci'))
+    category = Column(String(3, 'utf8mb4_unicode_ci'))
+    multiplier = Column(FLOAT(2), default=0)
+    currency = Column(String(3, 'utf8mb4_unicode_ci'), default='TWD')
+    day_trade = Column(String(7, 'utf8mb4_unicode_ci'), default='No')
+    code = Column(String(10, 'utf8mb4_unicode_ci'), nullable=False)
+    unit = Column(Integer)
+    security_type = Column(String(3, 'utf8mb4_unicode_ci'))
+
+    create_time = Column(
+        TIMESTAMP(fsp=6), nullable=False, server_default=text("CURRENT_TIMESTAMP(6)"))
+
+    def __init__(self, **kwargs):
+        for property, value in kwargs.items():
+            setattr(self, property, value)
+
+
+class KBarData1T(Base):
+    __tablename__ = 'kbar_data_1T'
+
+    pk_id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+
+    name = Column(String(10, 'utf8mb4_unicode_ci'), nullable=False)
+    date = Column(TIMESTAMP(fsp=6), server_default=text("CURRENT_TIMESTAMP(6)"))
+    Time = Column(TIMESTAMP(fsp=6), server_default=text("CURRENT_TIMESTAMP(6)"))
+    hour = Column(Integer)
+    minute = Column(Integer)
+    Open = Column(FLOAT(2), default=0)
+    High = Column(FLOAT(2), default=0)
+    Low = Column(FLOAT(2), default=0)
+    Close = Column(FLOAT(2), default=0)
+    Volume = Column(FLOAT(2), default=0)
+    Amount = Column(FLOAT(2), default=0)
+
+    create_time = Column(
+        TIMESTAMP(fsp=6), nullable=False, server_default=text("CURRENT_TIMESTAMP(6)"))
+
+    def __init__(self, **kwargs):
+        for property, value in kwargs.items():
+            setattr(self, property, value)
+
+
+class KBarData30T(Base):
+    __tablename__ = 'kbar_data_30T'
+
+    pk_id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+
+    name = Column(String(10, 'utf8mb4_unicode_ci'), nullable=False)
+    date = Column(TIMESTAMP(fsp=6), server_default=text("CURRENT_TIMESTAMP(6)"))
+    Time = Column(TIMESTAMP(fsp=6), server_default=text("CURRENT_TIMESTAMP(6)"))
+    hour = Column(Integer)
+    minute = Column(Integer)
+    Open = Column(FLOAT(2), default=0)
+    High = Column(FLOAT(2), default=0)
+    Low = Column(FLOAT(2), default=0)
+    Close = Column(FLOAT(2), default=0)
+    Volume = Column(FLOAT(2), default=0)
+    Amount = Column(FLOAT(2), default=0)
+
+    create_time = Column(
+        TIMESTAMP(fsp=6), nullable=False, server_default=text("CURRENT_TIMESTAMP(6)"))
+
+    def __init__(self, **kwargs):
+        for property, value in kwargs.items():
+            setattr(self, property, value)
+
+
+class KBarData60T(Base):
+    __tablename__ = 'kbar_data_60T'
+
+    pk_id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+
+    name = Column(String(10, 'utf8mb4_unicode_ci'), nullable=False)
+    date = Column(TIMESTAMP(fsp=6), server_default=text("CURRENT_TIMESTAMP(6)"))
+    Time = Column(TIMESTAMP(fsp=6), server_default=text("CURRENT_TIMESTAMP(6)"))
+    hour = Column(Integer)
+    minute = Column(Integer)
+    Open = Column(FLOAT(2), default=0)
+    High = Column(FLOAT(2), default=0)
+    Low = Column(FLOAT(2), default=0)
+    Close = Column(FLOAT(2), default=0)
+    Volume = Column(FLOAT(2), default=0)
+    Amount = Column(FLOAT(2), default=0)
+
+    create_time = Column(
+        TIMESTAMP(fsp=6), nullable=False, server_default=text("CURRENT_TIMESTAMP(6)"))
+
+    def __init__(self, **kwargs):
+        for property, value in kwargs.items():
+            setattr(self, property, value)
+
+
+class KBarData1D(Base):
+    __tablename__ = 'kbar_data_1D'
+
+    pk_id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+
+    name = Column(String(10, 'utf8mb4_unicode_ci'), nullable=False)
+    date = Column(TIMESTAMP(fsp=6), server_default=text("CURRENT_TIMESTAMP(6)"))
+    Time = Column(TIMESTAMP(fsp=6), server_default=text("CURRENT_TIMESTAMP(6)"))
+    hour = Column(Integer)
+    minute = Column(Integer)
+    Open = Column(FLOAT(2), default=0)
+    High = Column(FLOAT(2), default=0)
+    Low = Column(FLOAT(2), default=0)
+    Close = Column(FLOAT(2), default=0)
+    Volume = Column(FLOAT(2), default=0)
+    Amount = Column(FLOAT(2), default=0)
+
+    create_time = Column(
+        TIMESTAMP(fsp=6), nullable=False, server_default=text("CURRENT_TIMESTAMP(6)"))
+
+    def __init__(self, **kwargs):
+        for property, value in kwargs.items():
+            setattr(self, property, value)
+
+
+class PutCallRatioList(Base):
+    __tablename__ = 'put_call_ratio'
+
+    pk_id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+
+    Date = Column(TIMESTAMP(fsp=6), server_default=text("CURRENT_TIMESTAMP(6)"), comment='日期')
+    PutVolume = Column(FLOAT(2), default=0, comment='賣權成交量')
+    CallVolume = Column(FLOAT(2), default=0, comment='買權成交量')
+    PutCallVolumeRatio = Column(FLOAT(2), default=0, comment='買賣權成交量比率%')
+    PutOpenInterest = Column(FLOAT(2), default=0, comment='賣權未平倉')
+    CallOpenInterest = Column(FLOAT(2), default=0, comment='買權未平倉')
+    PutCallRatio = Column(FLOAT(2), default=0, comment='買賣權未平倉量比率%')
+
+    create_time = Column(
+        TIMESTAMP(fsp=6), nullable=False, server_default=text("CURRENT_TIMESTAMP(6)"))
+
+    def __init__(self, **kwargs):
+        for property, value in kwargs.items():
+            setattr(self, property, value)
+
+
+class ExDividendTable(Base):
+    __tablename__ = 'ex_dividend_table'
+
+    pk_id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+
+    Date = Column(TIMESTAMP(fsp=6), server_default=text("CURRENT_TIMESTAMP(6)"), comment='除權除息日期')
+    Code = Column(String(10, 'utf8mb4_unicode_ci'), nullable=False, comment='股票代號')
+    Name = Column(String(50, 'utf8mb4_unicode_ci'), default='unknown', comment='名稱')
+    DividendType = Column(String(5, 'utf8mb4_unicode_ci'), comment='除權息')
+    DividendRate = Column(FLOAT(2), default=0, comment='無償配股率')
+    CashCapitalRate = Column(FLOAT(2), default=0, comment='現金增資配股率')
+    CashCapitalPrice = Column(FLOAT(2), default=0, comment='現金增資認購價')
+    CashDividend = Column(FLOAT(2), default=0, comment='現金股利')
+    Details = Column(String(10, 'utf8mb4_unicode_ci'), comment='詳細資料')
+    Reference = Column(String(10, 'utf8mb4_unicode_ci'), comment='參考價試算')
+    Quarter = Column(String(10, 'utf8mb4_unicode_ci'), comment='最近一次申報資料 季別/日期')
+    NetValue = Column(FLOAT(2), default=0, comment='最近一次申報每股 (單位)淨值')
+    EPS = Column(FLOAT(2), default=0, comment='最近一次申報每股 (單位)盈餘')
+
     create_time = Column(
         TIMESTAMP(fsp=6), nullable=False, server_default=text("CURRENT_TIMESTAMP(6)"))
 
