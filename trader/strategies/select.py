@@ -69,7 +69,7 @@ class SelectStock(SelectConditions):
 
     def load_and_merge(self):
         if db.has_db:
-            df = db.query(df, self.tables[self.scale])
+            df = db.query(self.tables[self.scale])
         else:
             df = pd.read_pickle(f'{PATH}/Kbars/company_stock_data_{self.scale}.pkl')
 

@@ -4,6 +4,62 @@ from sqlalchemy.dialects.mysql import TIMESTAMP
 from .sql import Base
 
 
+class SecurityInfoStocks(Base):
+    __tablename__ = 'security_info_stocks'
+
+    pk_id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    account = Column(String(50, 'utf8mb4_unicode_ci'), nullable=False, comment='帳戶代號')
+    market = Column(String(10, 'utf8mb4_unicode_ci'), nullable=False, comment='市場別')
+    code = Column(String(10, 'utf8mb4_unicode_ci'), nullable=False, comment='證券代號')
+    order_cond = Column(String(10, 'utf8mb4_unicode_ci'), nullable=False, comment='委託類型')
+    action = Column(String(10, 'utf8mb4_unicode_ci'), nullable=False, comment='買賣別')
+    pnl = Column(Integer, comment='未實現損益')
+    cost_price = Column(FLOAT(2), nullable=False, comment='成本價')
+    quantity = Column(Integer, nullable=False, comment='今日庫存量')
+    yd_quantity = Column(Integer, comment='昨日庫存量')
+    last_price = Column(FLOAT(2), nullable=False, comment='前一日收盤價')
+
+    create_time = Column(
+        TIMESTAMP(fsp=6), nullable=False, server_default=text("CURRENT_TIMESTAMP(6)"))
+
+    def __init__(self, **kwargs):
+        for property, value in kwargs.items():
+            setattr(self, property, value)
+
+
+class SecurityInfoFutures(Base):
+    __tablename__ = 'security_info_futures'
+
+    pk_id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    Account = Column(String(50, 'utf8mb4_unicode_ci'), nullable=False, comment='帳戶代號')
+    Market = Column(String(10, 'utf8mb4_unicode_ci'), nullable=False, comment='市場別')
+    Date = Column(TIMESTAMP(fsp=6), server_default=text("CURRENT_TIMESTAMP(6)"), nullable=False, comment='日期')
+    Code = Column(String(10, 'utf8mb4_unicode_ci'), nullable=False, comment='證券代號')
+    CodeName = Column(String(50, 'utf8mb4_unicode_ci'), comment='標的名稱')
+    OrderNum = Column(String(50, 'utf8mb4_unicode_ci'), comment='委託編號')
+    OrderBS = Column(String(50, 'utf8mb4_unicode_ci'), comment='買賣別')
+    OrderType = Column(String(50, 'utf8mb4_unicode_ci'), comment='委託類型')
+    Currency = Column(String(50, 'utf8mb4_unicode_ci'), comment='幣別')
+    paddingByte = Column(String(50, 'utf8mb4_unicode_ci'), comment='unknown')
+    Volume = Column(FLOAT(2), comment='成交量')
+    ContractAverPrice = Column(FLOAT(2), comment='平均合約價')
+    SettlePrice = Column(FLOAT(2), comment='履約價')
+    RealPrice = Column(FLOAT(2), comment='unknown')
+    FlowProfitLoss = Column(FLOAT(2), comment='unknown')
+    SettleProfitLoss = Column(FLOAT(2), comment='unknown')
+    StartSecurity = Column(String(50, 'utf8mb4_unicode_ci'), comment='unknown')
+    UpKeepSecurity = Column(String(50, 'utf8mb4_unicode_ci'), comment='unknown')
+    OTAMT = Column(FLOAT(2), comment='unknown')
+    MTAMT = Column(FLOAT(2), comment='unknown')
+
+    create_time = Column(
+        TIMESTAMP(fsp=6), nullable=False, server_default=text("CURRENT_TIMESTAMP(6)"))
+
+    def __init__(self, **kwargs):
+        for property, value in kwargs.items():
+            setattr(self, property, value)
+
+
 class Watchlist(Base):
     __tablename__ = 'watchlist'
 

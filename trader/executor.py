@@ -14,7 +14,7 @@ from . import API, PATH, TODAY, TODAY_STR, __version__
 from .config import StrategyLong, StrategyShort, StrategyLongDT, StrategyShortDT
 from .config import FEE_RATE, TStart, TEnd, TTry, TimeStartStock, TimeStartFuturesDay
 from .config import TimeEndFuturesDay, TimeStartFuturesNight, TimeEndFuturesNight
-from .utils import get_contract, save_csv
+from .utils import get_contract, save_csv, db
 from .utils.kbar import KBarTool
 from .utils.accounts import AccountInfo
 from .utils.watchlist import WatchListTool
@@ -22,9 +22,15 @@ from .utils.cipher import CipherTool
 from .utils.notify import Notification
 from .utils.orders import OrderTool
 from .utils.database.redis import RedisTools
+from .utils.database.tables import SecurityInfoStocks, SecurityInfoFutures
 from .utils.subscribe import Subscriber
 from .strategies.long import LongStrategy
 from .strategies.short import ShortStrategy
+
+
+if db.has_db:
+    db.create_table(SecurityInfoStocks)
+    db.create_table(SecurityInfoFutures)
 
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -997,8 +1003,19 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
         if self.simulation:
             try:
-                df = pd.read_pickle(
-                    f'{PATH}/stock_pool/simulation_{market.lower()}_{self.ACCOUNT_NAME}.pkl')
+                if db.has_db and market == 'Stocks':
+                    df = db.query(
+                        SecurityInfoStocks, 
+                        SecurityInfoStocks.account == self.ACCOUNT_NAME
+                    )
+                elif db.has_db and market == 'Futures':
+                    df = db.query(
+                        SecurityInfoFutures, 
+                        SecurityInfoFutures.Account == self.ACCOUNT_NAME
+                    )
+                else:
+                    df = pd.read_pickle(
+                        f'{PATH}/stock_pool/simulation_{market.lower()}_{self.ACCOUNT_NAME}.pkl')
             except:
                 if market == 'Stocks':
                     df = self.df_securityInfo
@@ -1323,6 +1340,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         if target in self.stocks.code.values:
             logging.debug(f'Remove【{target}】from self.stocks.')
             self.stocks = self.stocks[self.stocks.code != target]
+            if db.has_db:
+                db.delete(
+                    SecurityInfoStocks, 
+                    SecurityInfoStocks.code == target, 
+                    SecurityInfoStocks.account == self.ACCOUNT_NAME
+                )
 
     def remove_futures_monitor_list(self, target: str):
         '''Remove futures from futures_to_monitor'''
@@ -1332,6 +1355,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         if target in self.futures.Code.values:
             logging.debug(f'Remove【{target}】from self.futures.')
             self.futures = self.futures[self.futures.Code != target]
+            if db.has_db:
+                db.delete(
+                    SecurityInfoFutures, 
+                    SecurityInfoFutures.Code == target, 
+                    SecurityInfoFutures.Account == self.ACCOUNT_NAME
+                )
 
     def run(self):
         '''執行自動交易'''
@@ -1479,8 +1508,16 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 df = self.df_securityInfo
             logging.debug(
                 f'stocks shape: {df.shape}; watchlist shape: {self.watchlist.shape}')
-            df.to_pickle(
-                f'{PATH}/stock_pool/simulation_stocks_{self.ACCOUNT_NAME}.pkl')
+            
+            if db.has_db:
+                db.delete(
+                    SecurityInfoStocks, 
+                    SecurityInfoStocks.account == self.ACCOUNT_NAME
+                )
+                db.dataframe_to_DB(df, SecurityInfoStocks)
+            else:
+                df.to_pickle(
+                    f'{PATH}/stock_pool/simulation_stocks_{self.ACCOUNT_NAME}.pkl')
 
     def __save_simulate_futuresInfo(self):
         '''儲存模擬交易模式下的期貨庫存表'''
@@ -1504,7 +1541,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                     'price': 'RealPrice',
                 })
                 df['Code'] = df.CodeName.apply(lambda x: get_contract(x).code)
-                # df['Currency'] = 'NTD'
 
                 for c in self.df_futuresInfo.columns:
                     if c not in df.columns:
@@ -1514,8 +1550,15 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             else:
                 df = self.df_futuresInfo
 
-            df.to_pickle(
-                f'{PATH}/stock_pool/simulation_futures_{self.ACCOUNT_NAME}.pkl')
+            if db.has_db:
+                db.delete(
+                    SecurityInfoFutures, 
+                    SecurityInfoFutures.Account == self.ACCOUNT_NAME
+                )
+                db.dataframe_to_DB(df, SecurityInfoStocks)
+            else:
+                df.to_pickle(
+                    f'{PATH}/stock_pool/simulation_futures_{self.ACCOUNT_NAME}.pkl')
 
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''

@@ -8,9 +8,10 @@ import zipfile
 import requests
 import numpy as np
 import pandas as pd
+from typing import Union
+from sqlalchemy import text
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
-from typing import Union
 
 from . import progress_bar, create_queue, delete_selection_files, save_csv
 from .notify import Notification
@@ -231,32 +232,40 @@ class CrawlStockData:
     def add_new_data(self, scale: str, save=True, start=None, end=None):
         '''加入新資料到舊K棒資料中'''
 
-        folders = os.listdir(f'{PATH}/Kbars/1min')
-        folders = [fd for fd in folders if '.' not in fd]
+        if db.has_db:
+            condition1 = KBarData1T.date >= text(start) if start else text('1901-01-01')
+            condition2 = KBarData1T.date <= text(end) if end else text(TODAY_STR)
+            df = db.query(KBarData1T, condition1, condition2)
+        else:
+            folders = os.listdir(f'{PATH}/Kbars/1min')
+            folders = [fd for fd in folders if '.' not in fd]
 
-        if start:
-            folders = [fd for fd in folders if fd >= start]
+            if start:
+                folders = [fd for fd in folders if fd >= start]
 
-        if end:
-            folders = [fd for fd in folders if fd <= end]
+            if end:
+                folders = [fd for fd in folders if fd <= end]
 
-        N = len(folders)
-        df = np.array([None]*N)
-        for i, fd in enumerate(folders):
-            tb = pd.read_csv(
-                f'{PATH}/Kbars/1min/{fd}/{fd}-stock_data_1T.csv').sort_values('date')
+            N = len(folders)
+            df = np.array([None]*N)
+            for i, fd in enumerate(folders):
+                tb = pd.read_csv(
+                    f'{PATH}/Kbars/1min/{fd}/{fd}-stock_data_1T.csv')
+                tb = tb.sort_values('date')
 
-            if tb.shape[0]:
-                for col in ['date', 'Time']:
-                    if col in tb.columns:
-                        tb[col] = pd.to_datetime(tb[col])
+                if tb.shape[0]:
+                    for col in ['date', 'Time']:
+                        if col in tb.columns:
+                            tb[col] = pd.to_datetime(tb[col])
 
-                tb.name = tb.name.astype(int)
+                    tb.name = tb.name.astype(int)
 
-            df[i] = tb
+                df[i] = tb
 
-        df = pd.concat(df).sort_values(['name', 'date', 'Time']).reset_index(drop=True)
-        df.name = df.name.astype(int).astype(str)
+            df = pd.concat(df)
+            df = df.sort_values(['name', 'date', 'Time'])
+            df = df.reset_index(drop=True)
+            df.name = df.name.astype(int).astype(str)
 
         if scale != '1T':
             logging.info(f'Converting data scale to {scale}...')
@@ -437,7 +446,8 @@ class CrawlFromHTML(TimeTool):
     
     def export_put_call_ratio(self, df: pd.DataFrame):
         if db.has_db:
-            db.dataframe_to_DB(df, PutCallRatioList)
+            dates = db.query(PutCallRatioList.Date).Date
+            db.dataframe_to_DB(df[~df.Date.isin(dates)], PutCallRatioList)
         else:
             filename = f'{PATH}/put_call_ratio.csv'
             if os.path.exists(filename):
@@ -487,6 +497,7 @@ class CrawlFromHTML(TimeTool):
             '最近一次申報每股 (單位)淨值': 'NetValue', 
             '最近一次申報每股 (單位)盈餘': 'EPS'
         })
+        df = df.iloc[1:, :-1]
         df = df[df.Code.notnull()]
         df = df[(df.Code.apply(len) == 4)]
         df.Date = df.Date.apply(self.convert_date_format)

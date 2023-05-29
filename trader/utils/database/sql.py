@@ -1,4 +1,5 @@
 import logging
+import numpy as np
 import pandas as pd
 from sqlalchemy import update
 from sqlalchemy.pool import QueuePool
@@ -132,8 +133,8 @@ class SQLDatabase:
         if df.isnull().sum().sum():
             df = df.where(pd.notnull(df), '')
 
-        datarows = df.to_dict('records')
-        alldata = [table(**row) for row in datarows]
+        datarows = np.array(df.to_dict('records'))
+        alldata = np.array([table(**row) for row in datarows])
 
         # upload data
         session = self.get_session()

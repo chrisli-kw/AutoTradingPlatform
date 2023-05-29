@@ -5,6 +5,7 @@ import pandas as pd
 import shioaji as sj
 from datetime import datetime
 from shioaji.account import StockAccount
+
 from .. import API, PATH, TODAY, TODAY_STR
 from .time import TimeTool
 from .crawler import CrawlFromHTML
