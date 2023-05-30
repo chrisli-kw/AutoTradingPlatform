@@ -10,9 +10,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from .. import TODAY_STR, PATH, create_folder
-from ..utils import progress_bar, db
+from ..utils import progress_bar
 from ..utils.kbar import KBarTool
 from ..utils.time import TimeTool
+from ..utils.database import db
 from ..utils.database.tables import PutCallRatioList
 from ..strategies.select import SelectStock
 
@@ -22,7 +23,7 @@ create_folder(f'{PATH}/backtest')
 
 def merge_pc_ratio(df):
     # merge put call ratio data
-    if db.has_db:
+    if db.HAS_DB:
         df_pcr = db.queryAll(PutCallRatioList)
     else:
         df_pcr = pd.read_csv(f'{PATH}/put_call_ratio.csv')

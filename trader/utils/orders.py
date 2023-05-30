@@ -5,11 +5,9 @@ import pandas as pd
 from collections import namedtuple
 
 from .. import API
-from . import save_csv, db
+from . import save_csv
+from .database import db
 from .database.tables import TradingStatement
-
-if db.has_db:
-    db.create_table(TradingStatement)
 
 
 class OrderTool:
@@ -80,7 +78,7 @@ class OrderTool:
     def output_statement(self, filename: str=''):
         '''儲存對帳單'''
 
-        if db.has_db:
+        if db.HAS_DB:
             db.dataframe_to_DB(self.OrderTable, TradingStatement)
         else:
             if os.path.exists(filename):

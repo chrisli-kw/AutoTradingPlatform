@@ -3,12 +3,10 @@ from datetime import datetime
 from collections import namedtuple
 
 from .. import PATH, TODAY
-from . import save_csv, get_contract, db
+from . import save_csv, get_contract
 from .time import TimeTool
+from .database import db
 from .database.tables import Watchlist
-
-if db.has_db:
-    db.create_table(Watchlist)
 
 
 class WatchListTool(TimeTool):
@@ -21,7 +19,7 @@ class WatchListTool(TimeTool):
 
     def _open_watchlist(self):
         """Load watchlist data"""
-        if db.has_db:
+        if db.HAS_DB:
             df = db.query(Watchlist, Watchlist.account == self.account_name)
             df = df.drop(['pk_id', 'create_time'], axis=1)
             return df
@@ -66,7 +64,7 @@ class WatchListTool(TimeTool):
             }
             self.watchlist = pd.concat([self.watchlist, pd.DataFrame([data])])
 
-            if db.has_db:
+            if db.HAS_DB:
                 db.add_data(Watchlist, **data)
 
     def init_watchlist(self, stocks: pd.DataFrame, strategy_pool: dict):
@@ -105,7 +103,7 @@ class WatchListTool(TimeTool):
         self.watchlist = pd.concat([df1, df2])
         self.remove_from_watchlist()
 
-        if db.has_db:
+        if db.HAS_DB:
             code1 = df1[~condi1 | condi2].code.values
             condition = Watchlist.code.in_(code1), self.MatchAccount
             db.update(Watchlist, {'position': 0}, *condition)
@@ -118,7 +116,7 @@ class WatchListTool(TimeTool):
         '''Delete Watchlist data where position <= 0.'''
 
         self.watchlist = self.watchlist[self.watchlist.position > 0]
-        if db.has_db:
+        if db.HAS_DB:
             db.delete(Watchlist, Watchlist.position <= 0, self.MatchAccount)
 
     def update_watchlist_position(self, target: str, action: str, position: float):
@@ -130,7 +128,7 @@ class WatchListTool(TimeTool):
 
         self.remove_from_watchlist()
 
-        if db.has_db and condition.sum():
+        if db.HAS_DB and condition.sum():
             position = self.watchlist.loc[condition, 'position'].values[0]
             condition = Watchlist.code.in_([target]), self.MatchAccount
             db.update(Watchlist, {'position': position}, *condition)
@@ -138,7 +136,7 @@ class WatchListTool(TimeTool):
     def save_watchlist(self, df: pd.DataFrame):
         # TODO either save_csv or dataframe_to_DB
         save_csv(df, f'{PATH}/stock_pool/{self.watchlist_file}.csv', saveEmpty=True)
-        if db.has_db:
+        if db.HAS_DB:
             codes = db.query(Watchlist.code, self.MatchAccount).code.values
             tb = df[~df.code.isin(codes)]
             db.dataframe_to_DB(tb, Watchlist)

@@ -12,10 +12,9 @@ from trader import __version__ as ver
 from trader import API, PATH, TODAY_STR, holidays
 from trader.config import ACCOUNTS, TEnd, SelectMethods, ConvertScales
 from trader.strategies.select import SelectStock
-from trader.utils import save_excel, db
+from trader.utils import save_excel
 from trader.utils.notify import Notification
 from trader.utils.database.redis import RedisTools
-from trader.utils.database.tables import *
 from trader.utils.subscribe import Subscriber
 from trader.utils.kbar import TickDataProcesser
 from trader.utils.crawler import CrawlStockData, CrawlFromHTML

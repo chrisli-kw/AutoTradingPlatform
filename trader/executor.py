@@ -14,23 +14,19 @@ from . import API, PATH, TODAY, TODAY_STR, __version__
 from .config import StrategyLong, StrategyShort, StrategyLongDT, StrategyShortDT
 from .config import FEE_RATE, TStart, TEnd, TTry, TimeStartStock, TimeStartFuturesDay
 from .config import TimeEndFuturesDay, TimeStartFuturesNight, TimeEndFuturesNight
-from .utils import get_contract, save_csv, db
+from .utils import get_contract, save_csv
 from .utils.kbar import KBarTool
 from .utils.accounts import AccountInfo
 from .utils.watchlist import WatchListTool
 from .utils.cipher import CipherTool
 from .utils.notify import Notification
 from .utils.orders import OrderTool
+from .utils.database import db
 from .utils.database.redis import RedisTools
 from .utils.database.tables import SecurityInfoStocks, SecurityInfoFutures
 from .utils.subscribe import Subscriber
 from .strategies.long import LongStrategy
 from .strategies.short import ShortStrategy
-
-
-if db.has_db:
-    db.create_table(SecurityInfoStocks)
-    db.create_table(SecurityInfoFutures)
 
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -1009,12 +1005,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
         if self.simulation:
             try:
-                if db.has_db and market == 'Stocks':
+                if db.HAS_DB and market == 'Stocks':
                     df = db.query(
                         SecurityInfoStocks, 
                         SecurityInfoStocks.account == self.ACCOUNT_NAME
                     ).drop(['pk_id', 'create_time'], axis=1)
-                elif db.has_db and market == 'Futures':
+                elif db.HAS_DB and market == 'Futures':
                     df = db.query(
                         SecurityInfoFutures, 
                         SecurityInfoFutures.Account == self.ACCOUNT_NAME
@@ -1346,7 +1342,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         if target in self.stocks.code.values:
             logging.debug(f'Remove【{target}】from self.stocks.')
             self.stocks = self.stocks[self.stocks.code != target]
-            if db.has_db:
+            if db.HAS_DB:
                 db.delete(
                     SecurityInfoStocks, 
                     SecurityInfoStocks.code == target, 
@@ -1361,7 +1357,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         if target in self.futures.Code.values:
             logging.debug(f'Remove【{target}】from self.futures.')
             self.futures = self.futures[self.futures.Code != target]
-            if db.has_db:
+            if db.HAS_DB:
                 db.delete(
                     SecurityInfoFutures, 
                     SecurityInfoFutures.Code == target, 
@@ -1501,7 +1497,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             logging.debug(
                 f'stocks shape: {df.shape}; watchlist shape: {self.watchlist.shape}')
             
-            if db.has_db:
+            if db.HAS_DB:
                 db.delete(
                     SecurityInfoStocks, 
                     SecurityInfoStocks.account == self.ACCOUNT_NAME
@@ -1540,7 +1536,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             else:
                 df = self.df_futuresInfo
 
-            if db.has_db:
+            if db.HAS_DB:
                 db.delete(
                     SecurityInfoFutures, 
                     SecurityInfoFutures.Account == self.ACCOUNT_NAME

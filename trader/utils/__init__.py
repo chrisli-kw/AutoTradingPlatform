@@ -1,7 +1,6 @@
 import os
 import sys
 import queue
-import logging
 import traceback
 import numpy as np
 import pandas as pd
@@ -9,9 +8,6 @@ from io import BytesIO
 from zipfile import ZipFile
 
 from .. import API, create_folder
-from .database.sql import SQLDatabase
-
-db = SQLDatabase()
 
 
 def print_error_msg(excp, time_str=None):

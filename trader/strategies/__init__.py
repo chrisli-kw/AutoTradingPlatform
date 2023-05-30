@@ -2,7 +2,7 @@ import pandas as pd
 import logging
 from collections import namedtuple
 from .. import PATH, TODAY_STR
-from ..utils import db
+from ..utils.database import db
 from ..utils.database.tables import PutCallRatioList, ExDividendTable
 
 
@@ -59,7 +59,7 @@ class StrategyTool:
     def get_ex_dividends_list(self):
         '''取得當日除權息股票清單'''
 
-        if db.has_db:
+        if db.HAS_DB:
             df = db.query(ExDividendTable)
             return df[df.Date == TODAY_STR].set_index('Code').CashDividend.to_dict()
 
@@ -73,7 +73,7 @@ class StrategyTool:
 
     def get_put_call_ratio(self):
         '''取得前一個交易日收盤後的Put-Call ratio'''
-        if db.has_db:
+        if db.HAS_DB:
             pc_ratio = db.query(PutCallRatioList.PutCallRatio)
             if pc_ratio.shape[0]:
                 return pc_ratio.PutCallRatio.values[-1] 

@@ -7,35 +7,16 @@ from sqlalchemy import asc, desc, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, scoped_session, load_only
 
-from ...config import DB_HOST, DB_NAME, DB_PORT, DB_PWD, DB_USER
+from ...config import HAS_DB, DB_NAME, DB_URL
 
 
 Base = declarative_base()
 
-HAS_DB = all(x for x in [DB_HOST, DB_NAME, DB_PORT, DB_PWD, DB_USER])
-DB_URL = f'{DB_USER}:{DB_PWD}@{DB_HOST}:{DB_PORT}' if HAS_DB else ''
-
-
-def create_schema(schemaName):
-    if HAS_DB:
-        engine = create_engine(f'mysql+pymysql://{DB_URL}')
-        
-        conn = engine.connect()
-        if schemaName.lower() not in conn.dialect.get_schema_names(conn):
-            print(f'Schema {schemaName} not exist, create {schemaName}.')
-            engine.execute(f"CREATE SCHEMA {schemaName}")
-            conn.close()
-            print(f'Done creating schema {schemaName}')
-
-        # disconnect database
-        engine.dispose()
-    
 
 class SQLDatabase:
     def __init__(self):
         self.HAS_DB = HAS_DB
         if self.HAS_DB:
-            create_schema(DB_NAME)
             self.sql_connect = f"mysql+pymysql://{DB_URL}/{DB_NAME}?charset=utf8mb4&binary_prefix=true"
             self.engine = create_engine(
                 self.sql_connect,
@@ -50,7 +31,6 @@ class SQLDatabase:
             )
             self.sessionmaker_ = sessionmaker(bind=self.engine)
         
-
     def get_session(self):
         return scoped_session(self.sessionmaker_)
 

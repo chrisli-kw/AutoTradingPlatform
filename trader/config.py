@@ -39,6 +39,8 @@ DB_PORT = get_settings('DB', 'DB_PORT', dataType='int')
 DB_USER = get_settings('DB', 'DB_USER')
 DB_PWD = get_settings('DB', 'DB_PWD')
 DB_NAME = get_settings('DB', 'DB_NAME')
+HAS_DB = all(x for x in [DB_HOST, DB_NAME, DB_PORT, DB_PWD, DB_USER])
+DB_URL = f'{DB_USER}:{DB_PWD}@{DB_HOST}:{DB_PORT}' if HAS_DB else ''
 
 # LINE notify
 TOKEN_MONITOR = get_settings('LINENOTIFY', 'TOKEN_MONITOR')

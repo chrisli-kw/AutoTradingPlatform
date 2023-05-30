@@ -2,8 +2,9 @@ import numpy as np
 import pandas as pd
 
 from .. import PATH, TODAY_STR
-from ..utils import save_csv, db
+from ..utils import save_csv
 from .conditions import SelectConditions
+from ..utils.database import db
 from ..utils.database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T
 
 
@@ -68,7 +69,7 @@ class SelectStock(SelectConditions):
         self.METHODS = {m: getattr(self, f'condition_{m}') for m in methods}
 
     def load_and_merge(self):
-        if db.has_db:
+        if db.HAS_DB:
             df = db.query(self.tables[self.scale])
         else:
             df = pd.read_pickle(f'{PATH}/Kbars/company_stock_data_{self.scale}.pkl')

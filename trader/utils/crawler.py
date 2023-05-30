@@ -18,16 +18,21 @@ from .notify import Notification
 from .kbar import KBarTool
 from .time import TimeTool
 from .. import API, PATH, TODAY_STR, TODAY
-from . import db
+from .database import db
 from .database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T
 from .database.tables import SecurityList, PutCallRatioList, ExDividendTable
 
-if db.has_db:
-    for table in [
-        SecurityList, KBarData1D, KBarData1T, KBarData30T, KBarData60T,
-        PutCallRatioList, ExDividendTable
-    ]:
-        db.create_table(table)
+
+def read_and_concat(filename: str, df: pd.DataFrame):
+    if os.path.exists(filename):
+        if '.pkl' in filename:
+            tb = pd.read_pickle(filename)
+        else:
+            tb = pd.read_csv(filename)
+    else:
+        tb = pd.DataFrame()
+    tb = pd.concat([tb, df]).reset_index(drop=True)
+    return tb
 
 
 class CrawlStockData:
@@ -71,7 +76,7 @@ class CrawlStockData:
     def export_security_list(self, df: pd.DataFrame):
         '''Export security data either to local or to DB'''
 
-        if db.has_db:
+        if db.HAS_DB:
             codes = db.query(SecurityList.code).code.values
             
             # add new data
@@ -88,19 +93,14 @@ class CrawlStockData:
     def export_kbar_data(self, df: pd.DataFrame, scale: str):
         '''Export kbar data either to local or to DB'''
 
-        if db.has_db:
+        if db.HAS_DB:
             db.dataframe_to_DB(df, self.tables[scale])
         elif scale == '1T':
             day = self.folder_path.split('/')[-1]
             save_csv(df, f'{self.folder_path}/{day}-stock_data_1T.csv')
         else:
             filename = f'{PATH}/Kbars/{self.filename}_{scale}.pkl'
-            if os.path.exists(filename):
-                temp = pd.read_pickle(filename)
-            else:
-                temp = pd.DataFrame()
-
-            temp = pd.concat([temp, df]).reset_index(drop=True)
+            temp = read_and_concat(filename, df)
             temp.to_pickle(filename)
             return temp
 
@@ -232,7 +232,7 @@ class CrawlStockData:
     def add_new_data(self, scale: str, save=True, start=None, end=None):
         '''加入新資料到舊K棒資料中'''
 
-        if db.has_db:
+        if db.HAS_DB:
             condition1 = KBarData1T.date >= text(start) if start else text('1901-01-01')
             condition2 = KBarData1T.date <= text(end) if end else text(TODAY_STR)
             df = db.query(KBarData1T, condition1, condition2)
@@ -445,34 +445,24 @@ class CrawlFromHTML(TimeTool):
         return df.sort_values('Date').reset_index(drop=True)
     
     def export_put_call_ratio(self, df: pd.DataFrame):
-        if db.has_db:
+        if db.HAS_DB:
             dates = db.query(PutCallRatioList.Date).Date
             db.dataframe_to_DB(df[~df.Date.isin(dates)], PutCallRatioList)
         else:
             filename = f'{PATH}/put_call_ratio.csv'
-            if os.path.exists(filename):
-                df_pcr = pd.read_pickle(filename)
-            else:
-                df_pcr = pd.DataFrame()
-            
-            df_pcr = pd.concat([df_pcr, df])
+            df_pcr = read_and_concat(filename, df)
             save_csv(df_pcr, f'{PATH}/put_call_ratio.csv')
     
     def export_futures_kbar(self, df: pd.DataFrame):
-        if db.has_db:
+        if db.HAS_DB:
             db.dataframe_to_DB(df, KBarData1T)
         else:
             filename = f'{PATH}/Kbars/futures_data_1T.pkl'
-            if os.path.exists(filename):
-                tick_old = pd.read_pickle(filename)
-            else:
-                tick_old = pd.DataFrame()
-
-            df = pd.concat([tick_old, df])
+            df = read_and_concat(filename, df)
             df.to_pickle(filename)
     
     def export_ex_dividend_list(self, df: pd.DataFrame):
-        if db.has_db:
+        if db.HAS_DB:
             db.dataframe_to_DB(df, ExDividendTable)
         else:
             save_csv(df, f'{PATH}/exdividends.csv')
