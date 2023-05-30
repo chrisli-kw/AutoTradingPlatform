@@ -194,6 +194,7 @@ class CrawlStockData:
 
         if len(self.StockData):
             df = pd.concat(self.StockData)
+            df.name = df.name.astype(int).astype(str)
         else:
             files = self._listfiles(self.folder_path)
             N = len(files)

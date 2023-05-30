@@ -71,6 +71,7 @@ class SelectStock(SelectConditions):
     def load_and_merge(self):
         if db.HAS_DB:
             df = db.query(self.tables[self.scale])
+            df = df.drop(['pk_id', 'create_time'], axis=1).drop_duplicates()
         else:
             df = pd.read_pickle(f'{PATH}/Kbars/company_stock_data_{self.scale}.pkl')
 
