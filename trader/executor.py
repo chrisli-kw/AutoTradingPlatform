@@ -603,12 +603,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         is_day_trade = strategies[target] in StrategyShortDT + StrategyLongDT
 
         # udpate watchlist
-        condition = self.watchlist.code == target
-        if action in ['Buy', 'New']:
-            self.watchlist.loc[condition, 'position'] += position
-        else:
-            self.watchlist.loc[condition, 'position'] -= position
-        self.watchlist = self.watchlist[self.watchlist.position > 0]
+        self.update_watchlist_position(target, action, position)
 
         # append watchlist or update monitor list
         if action in ['Buy', 'Sell']:

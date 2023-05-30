@@ -103,10 +103,9 @@ class WatchListTool(TimeTool):
         df1.loc[~condi1 | condi2, 'position'] = 0
         df1.loc[condi1 & condi2, 'position'] = 100
         self.watchlist = pd.concat([df1, df2])
-        self.watchlist = self.watchlist[self.watchlist.position > 0]
+        self.remove_from_watchlist()
 
         if db.has_db:
-
             code1 = df1[~condi1 | condi2].code.values
             condition = Watchlist.code.in_(code1), self.MatchAccount
             db.update(Watchlist, {'position': 0}, *condition)
@@ -115,8 +114,26 @@ class WatchListTool(TimeTool):
             condition = Watchlist.code.in_(code2), self.MatchAccount
             db.update(Watchlist, {'position': 100}, condition)
 
-            # delete Watchlist data where position <= 0
+    def remove_from_watchlist(self):
+        '''Delete Watchlist data where position <= 0.'''
+
+        self.watchlist = self.watchlist[self.watchlist.position > 0]
+        if db.has_db:
             db.delete(Watchlist, Watchlist.position <= 0, self.MatchAccount)
+
+    def update_watchlist_position(self, target: str, action: str, position: float):
+        condition = self.watchlist.code == target
+        if action in ['Buy', 'New']:
+            self.watchlist.loc[condition, 'position'] += position
+        else:
+            self.watchlist.loc[condition, 'position'] -= position
+
+        self.remove_from_watchlist()
+
+        if db.has_db and condition.sum():
+            position = self.watchlist.loc[condition, 'position'].values[0]
+            condition = Watchlist.code.in_([target]), self.MatchAccount
+            db.update(Watchlist, {'position': position}, *condition)
 
     def save_watchlist(self, df: pd.DataFrame):
         # TODO either save_csv or dataframe_to_DB

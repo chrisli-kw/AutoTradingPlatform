@@ -436,8 +436,8 @@ class CrawlFromHTML(TimeTool):
             '賣權成交量': 'PutVolume',
             '買權成交量': 'CallVolume',
             '買賣權成交量比率%': 'PutCallVolumeRatio', 
-            '賣權未平倉': 'PutOpenInterest', 
-            '買權未平倉': 'CallOpenInterest',
+            '賣權未平倉量': 'PutOpenInterest', 
+            '買權未平倉量': 'CallOpenInterest',
             '買賣權未平倉量比率%': 'PutCallRatio'
         })
         df.Date = pd.to_datetime(df.Date)

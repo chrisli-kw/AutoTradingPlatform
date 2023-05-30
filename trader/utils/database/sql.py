@@ -12,12 +12,12 @@ from ...config import DB_HOST, DB_NAME, DB_PORT, DB_PWD, DB_USER
 
 Base = declarative_base()
 
-has_db = all(x for x in [DB_HOST, DB_NAME, DB_PORT, DB_PWD, DB_USER])
-DB_URL = f'{DB_USER}:{DB_PWD}@{DB_HOST}:{DB_PORT}' if has_db else ''
+HAS_DB = all(x for x in [DB_HOST, DB_NAME, DB_PORT, DB_PWD, DB_USER])
+DB_URL = f'{DB_USER}:{DB_PWD}@{DB_HOST}:{DB_PORT}' if HAS_DB else ''
 
 
 def create_schema(schemaName):
-    if has_db:
+    if HAS_DB:
         engine = create_engine(f'mysql+pymysql://{DB_URL}')
         
         conn = engine.connect()
@@ -33,8 +33,8 @@ def create_schema(schemaName):
 
 class SQLDatabase:
     def __init__(self):
-        self.has_db = has_db
-        if self.has_db:
+        self.HAS_DB = HAS_DB
+        if self.HAS_DB:
             create_schema(DB_NAME)
             self.sql_connect = f"mysql+pymysql://{DB_URL}/{DB_NAME}?charset=utf8mb4&binary_prefix=true"
             self.engine = create_engine(
