@@ -2,6 +2,8 @@ import pandas as pd
 import logging
 from collections import namedtuple
 from .. import PATH, TODAY_STR
+from ..utils import db
+from ..utils.database.tables import PutCallRatioList, ExDividendTable
 
 
 class StrategyTool:
@@ -57,20 +59,30 @@ class StrategyTool:
     def get_ex_dividends_list(self):
         '''取得當日除權息股票清單'''
 
+        if db.has_db:
+            df = db.query(ExDividendTable)
+            return df[df.Date == TODAY_STR].set_index('Code').CashDividend.to_dict()
+
         try:
             df = pd.read_csv(f'{PATH}/exdividends.csv')
-            df.股票代號 = df.股票代號.astype(str).str.zfill(4)
-            return df[df.除權除息日期 == TODAY_STR].set_index('股票代號').現金股利.to_dict()
+            df.Code = df.Code.astype(str).str.zfill(4)
+            return df[df.Date == TODAY_STR].set_index('Code').CashDividend.to_dict()
         except:
             logging.warning('==========exdividends.csv不存在，無除權息股票清單==========')
             return {}
 
     def get_put_call_ratio(self):
         '''取得前一個交易日收盤後的Put-Call ratio'''
+        if db.has_db:
+            pc_ratio = db.query(PutCallRatioList.PutCallRatio)
+            if pc_ratio.shape[0]:
+                return pc_ratio.PutCallRatio.values[-1] 
+            return 100
+        
         try:
             pc_ratio = pd.read_csv(f'{PATH}/put_call_ratio.csv')
-            pc_ratio = pc_ratio.sort_values('日期')
-            return pc_ratio.買賣權未平倉量比率.values[-1]
+            pc_ratio = pc_ratio.sort_values('Date')
+            return pc_ratio.PutCallRatio.values[-1]
         except:
             logging.warning('==========put_call_ratio.csv不存在，無前一交易日的Put/Call Ratio==========')
             return 100

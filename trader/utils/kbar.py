@@ -392,7 +392,7 @@ class TickDataProcesser(TimeTool):
         filename = f'{m}_{ymd[2]}.csv'
 
         if filename not in os.listdir(folder):
-            return None
+            return pd.DataFrame()
 
         filename = f'{folder}/{filename}'
         try:

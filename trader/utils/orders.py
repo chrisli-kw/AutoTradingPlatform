@@ -1,29 +1,39 @@
+import os
 import time
 import logging
 import pandas as pd
 from collections import namedtuple
+
 from .. import API
+from . import save_csv, db
+from .database.tables import TradingStatement
+
+if db.has_db:
+    db.create_table(TradingStatement)
 
 
 class OrderTool:
     OrderInfo = namedtuple(
-        "OrderInfo",
-        [
+        typename="OrderInfo",
+        field_names=[
             'action', 'target', 'quantity',
             'order_cond', 'octype', 'pos_target',
             'pos_balance', 'daytrade_short', 'reason'
         ],
-
         defaults=['', '', 0, '', '', 0, 0, False, '']
     )
-    MsgOrder = namedtuple('MsgOrder', ['operation', 'order', 'status', 'contract'])
-    tftOrder = pd.DataFrame(columns=[
-        'Time', 'code', 'action', 'price', 'quantity', 'amount',
-        'order_cond', 'order_lot', 'leverage', 'account_id', 'msg'
+    MsgOrder = namedtuple(
+        typename='MsgOrder', 
+        field_names=['operation', 'order', 'status', 'contract']
+    )
+    OrderTable = pd.DataFrame(columns=[
+        'Time', 'market', 'code', 'action', 
+        'price', 'quantity', 'amount',
+        'order_cond', 'order_lot', 'leverage', 
+        'op_type', 'account_id', 'msg',
+        
     ])
-    fOrder = pd.DataFrame(
-        columns=['Time', 'code', 'action', 'price', 'quantity', 'amount', 'op_type', 'account_id', 'msg'])
-
+    
     def get_sell_quantity(self, content: namedtuple, market: str = 'Stocks'):
         '''根據庫存, 剩餘部位比例, 賣出比例，反推賣出量(張)'''
         if market == 'Stocks':
@@ -47,10 +57,35 @@ class OrderTool:
         if status not in ['PreSubmitted', 'Filled']:
             logging.warning('order not submitted/filled')
 
-    def append_tftOrder(self, order_data: dict):
-        '''新增一筆股票交易明細'''
-        self.tftOrder = pd.concat([self.tftOrder, pd.DataFrame([order_data])])
+    def appendOrder(self, order_data: dict):
+        '''Add new order data to OrderTable'''
+        self.OrderTable = pd.concat([
+            self.OrderTable, 
+            pd.DataFrame([order_data])
+        ])
 
-    def append_fOrder(self, order_data: dict):
-        '''新增一筆期權交易明細'''
-        self.fOrder = pd.concat([self.fOrder, pd.DataFrame([order_data])])
+    def deleteOrder(self, code: str):
+        '''Delete order data from OrderTable'''
+        self.OrderTable = self.OrderTable[self.OrderTable.code != code]
+
+    def checkEnoughToPlace(self, market: str, target: str):
+        '''Check if current placed amount is under target limit.'''
+        df = self.OrderTable[self.OrderTable.market == market]
+        return df.amount.sum() < target
+    
+    def filterOrderTable(self, market: str):
+        '''Filter OrderTable by market'''
+        return self.OrderTable[self.OrderTable.market == market].copy()
+
+    def output_statement(self, filename: str=''):
+        '''儲存對帳單'''
+
+        if db.has_db:
+            db.dataframe_to_DB(self.OrderTable, TradingStatement)
+        else:
+            if os.path.exists(filename):
+                statement = pd.read_csv(filename)  
+            else:
+                statement = pd.DataFrame()
+            statement = pd.concat([statement, self.OrderTable])
+            save_csv(statement, filename)

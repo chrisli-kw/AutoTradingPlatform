@@ -3,7 +3,8 @@ import redis
 import pickle
 import logging
 from typing import Iterable
-from ..config import REDIS_HOST, REDIS_PORT, REDIS_PWD
+
+from ...config import REDIS_HOST, REDIS_PORT, REDIS_PWD
 
 
 class RedisTools:

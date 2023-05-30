@@ -10,9 +10,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from .. import TODAY_STR, PATH, create_folder
-from ..utils import progress_bar
+from ..utils import progress_bar, db
 from ..utils.kbar import KBarTool
 from ..utils.time import TimeTool
+from ..utils.database.tables import PutCallRatioList
 from ..strategies.select import SelectStock
 
 
@@ -21,9 +22,12 @@ create_folder(f'{PATH}/backtest')
 
 def merge_pc_ratio(df):
     # merge put call ratio data
-    df_pcr = pd.read_csv(f'{PATH}/put_call_ratio.csv').rename(
-        columns={'日期': 'date', '買賣權未平倉量比率': 'pc_ratio'}
-    )
+    if db.has_db:
+        df_pcr = db.queryAll(PutCallRatioList)
+    else:
+        df_pcr = pd.read_csv(f'{PATH}/put_call_ratio.csv')
+    
+    df_pcr = df_pcr.rename(columns={'Date': 'date'})
     df_pcr.date = pd.to_datetime(df_pcr.date)
     df_pcr.pc_ratio = df_pcr.pc_ratio.shift(1)
     df = df.merge(df_pcr[['date', 'pc_ratio']], how='left', on='date')
@@ -778,6 +782,7 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
         
     def load_data(self, backtestScript: object):
         print('Loading data...')
+        # TODO: Loading data from DB
         if backtestScript.market == 'Stocks':
             df = self.load_and_merge()
             df = self.preprocess(df)

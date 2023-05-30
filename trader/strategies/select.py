@@ -2,8 +2,9 @@ import numpy as np
 import pandas as pd
 
 from .. import PATH, TODAY_STR
-from ..utils import save_csv
+from ..utils import save_csv, db
 from .conditions import SelectConditions
+from ..utils.database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T
 
 
 def map_BKD(OTCclose, OTChigh, add_days=10):
@@ -20,6 +21,12 @@ class SelectStock(SelectConditions):
         self.dma = dma
         self.mode = mode
         self.scale = scale
+        self.tables = {
+            '1D':KBarData1D, 
+            '1T':KBarData1T,
+            '30T':KBarData30T,
+            '60T':KBarData60T
+        }
         self.categories = {
             1: '水泥工業',
             2: '食品工業',
@@ -61,7 +68,10 @@ class SelectStock(SelectConditions):
         self.METHODS = {m: getattr(self, f'condition_{m}') for m in methods}
 
     def load_and_merge(self):
-        df = pd.read_pickle(f'{PATH}/Kbars/company_stock_data_{self.scale}.pkl')
+        if db.has_db:
+            df = db.query(self.tables[self.scale])
+        else:
+            df = pd.read_pickle(f'{PATH}/Kbars/company_stock_data_{self.scale}.pkl')
 
         if self.scale == '1D':
             self.time_col = 'date'
