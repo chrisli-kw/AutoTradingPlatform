@@ -39,13 +39,14 @@ class AccountInfo(CrawlFromHTML, TimeTool):
         self.ProfitAccCount = 0  # 權益總值
         self.df_securityInfo = pd.DataFrame(
             columns=[
+                'account', 'market', 
                 'code', 'order_cond', 'action', 'pnl',
                 'cost_price', 'quantity', 'yd_quantity', 'last_price'
             ]
         )
         self.df_futuresInfo = pd.DataFrame(
             columns=[
-                'Account', 'Date', 'Code', 'CodeName', 'OrderNum',
+                'Account', 'Market', 'Date', 'Code', 'CodeName', 'OrderNum',
                 'OrderBS', 'OrderType', 'Currency', 'paddingByte', 'Volume',
                 'ContractAverPrice', 'SettlePrice', 'RealPrice', 'FlowProfitLoss', 'SettleProfitLoss',
                 'StartSecurity', 'UpKeepSecurity', 'OTAMT', 'MTAMT'

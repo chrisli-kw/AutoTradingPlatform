@@ -247,6 +247,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                         1000 if order['order_lot'] == 'Common' else quantity
                     order_data = {
                         'Time': datetime.now(),
+                        'market':'Stocks',
                         'code': stock,
                         'action': order['action'],
                         'price': price,
@@ -257,7 +258,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                         'leverage': leverage,
                         'account_id': order['account']['account_id']
                     }
-                    self.append_tftOrder(order_data)
+                    self.appendOrder(order_data)
 
                 # 若融資配額張數不足，改現股買進 ex: '此證券配額張數不足，餘額 0 張（證金： 0 ）'
                 elif c4:
@@ -286,8 +287,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
                 # 若刪單成功就自清單移除
                 if operation['op_type'] == 'Cancel':
-                    self.tftOrder = self.tftOrder[self.tftOrder.code != stock]
-
+                    self.deleteOrder(stock)
                     if c3 and stock in self.stock_bought:
                         self.stock_bought.remove(stock)
 
@@ -318,6 +318,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 # 紀錄成交的賣單
                 order_data = {
                     'Time': datetime.now(),
+                    'market':'Stocks',
                     'code': stock,
                     'price': -price,
                     'quantity': quantity,
@@ -328,7 +329,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                     'leverage': leverage,
                     'account_id': msg['account_id']
                 }
-                self.append_tftOrder(order_data)
+                self.appendOrder(order_data)
 
             # 更新監控庫存
             if not self.simulation:
@@ -358,6 +359,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                     quantity = order['quantity']
                     order_data = {
                         'Time': datetime.now(),
+                        'market':'Futures',
                         'code': symbol,
                         'price': price*sign,
                         'quantity': quantity,
@@ -365,11 +367,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                         'op_type': order['oc_type'],
                         'account_id': order['account']['account_id']
                     }
-                    self.append_fOrder(order_data)
+                    self.appendOrder(order_data)
 
                 # 若刪單成功就自清單移除
                 if operation['op_type'] == 'Cancel':
-                    self.fOrder = self.fOrder[self.fOrder.code != symbol]
+                    self.deleteOrder(symbol)
                     if symbol in self.futures_opened:
                         self.futures_opened.remove(symbol)
 
@@ -496,7 +498,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         self.init_watchlist(self.stocks, strategy_w)
 
         # 庫存的處理
-        self.stocks = self.stocks.merge(self.watchlist, how='left', on='code')
+        self.stocks = self.stocks.merge(
+            self.watchlist, 
+            how='left', 
+            on=['account', 'market', 'code']
+        )
         self.stocks.position.fillna(100, inplace=True)
         strategies = self.find_strategy(stocks_pool, 'Stocks')
 
@@ -557,7 +563,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         # 庫存的處理
         self.futures = preprocess_(self.futures)
         self.futures = self.futures.merge(
-            self.watchlist, how='left', left_on='Code', right_on='code')
+            self.watchlist, 
+            how='left', 
+            left_on=['Account', 'Market', 'Code'], 
+            right_on=['account', 'market', 'code']
+        )
         self.futures.position.fillna(100, inplace=True)
         
         self.n_futures = self.futures.shape[0]
@@ -900,6 +910,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
                 order_data = {
                     'Time': datetime.now(),
+                    'market':'Stocks',
                     'code': target,
                     'action': content.action,
                     'price': -price if content.action == 'Sell' else price,
@@ -911,7 +922,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                     'account_id': 'simulate',
                     'msg': content.reason
                 }
-                self.append_tftOrder(order_data)
+                self.appendOrder(order_data)
 
                 # 更新監控庫存
                 order_data.update({
@@ -932,6 +943,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 sign = -1 if content.octype == 'Cover' else 1
                 order_data = {
                     'Time': datetime.now(),
+                    'market':'Futures',
                     'code': target,
                     'action': content.action,
                     'price': price*sign,
@@ -941,7 +953,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                     'account_id': 'simulate',
                     'msg': content.reason
                 }
-                self.append_fOrder(order_data)
+                self.appendOrder(order_data)
                 self._update_futures_deal_list(target, content.octype)
 
                 # 更新監控庫存
@@ -966,12 +978,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 # #ff0000 批次下單的張數 (股票>1000股的單位為【張】) #ff0000
                 q = 5 if order_lot == 'Common' else quantity
                 if market == 'Stocks':
-                    enough_to_place = (
-                        self.tftOrder.amount.sum() < self.desposal_money)
+                    target_ = self.desposal_money
                 else:
-                    enough_to_place = (
-                        self.fOrder.amount.sum() < self.desposal_margin)
+                    target_ = self.desposal_margin
 
+                enough_to_place = self.checkEnoughToPlace(market, target_)
                 while quantity > 0 and enough_to_place:
                     order = API.Order(
                         # 價格 (市價單 = 0)
@@ -1007,12 +1018,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                     df = db.query(
                         SecurityInfoStocks, 
                         SecurityInfoStocks.account == self.ACCOUNT_NAME
-                    )
+                    ).drop(['pk_id', 'create_time'], axis=1)
                 elif db.has_db and market == 'Futures':
                     df = db.query(
                         SecurityInfoFutures, 
                         SecurityInfoFutures.Account == self.ACCOUNT_NAME
-                    )
+                    ).drop(['pk_id', 'create_time'], axis=1)
                 else:
                     df = pd.read_pickle(
                         f'{PATH}/stock_pool/simulation_{market.lower()}_{self.ACCOUNT_NAME}.pkl')
@@ -1246,7 +1257,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             buy_deals - sell_deals
 
         # 更新已委託金額
-        df = self.tftOrder.copy()
+        df = self.filterOrderTable('Stocks')
         df = df[df.code.apply(len) == 4]
         amount1 = df.amount.sum()
         amount2 = df[df.price > 0].amount.abs().sum()
@@ -1285,7 +1296,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             self.n_futures - open_deals + close_deals
 
         # 更新已委託金額
-        df = self.fOrder.copy()
+        df = self.filterOrderTable('Futures')
         amount1 = df.amount.sum()
         amount2 = df[df.price > 0].amount.sum()
 
@@ -1472,23 +1483,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         self.unsubscribe_all({'Stocks': all_stocks, 'Futures': all_futures})
         self.output_files()
 
-    def output_statement(self, market='Stocks'):
-        '''儲存對帳單'''
-
-        filename = f'{PATH}/stock_pool/statement_{market.lower()}_{self.ACCOUNT_NAME}.csv'
-        statement = pd.read_csv(filename) if os.path.exists(
-            filename) else pd.DataFrame()
-        if market == 'Stocks':
-            statement = pd.concat([statement, self.tftOrder])
-        else:
-            statement = pd.concat([statement, self.fOrder])
-        save_csv(statement, filename)
-
     def __save_simulate_securityInfo(self):
         '''儲存模擬交易模式下的股票庫存表'''
         if self.simulation:
-            self.output_statement('Stocks')
-
             # 儲存庫存
             logging.debug(f'stocks_to_monitor: {self.stocks_to_monitor}')
             logging.debug(
@@ -1522,8 +1519,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
     def __save_simulate_futuresInfo(self):
         '''儲存模擬交易模式下的期貨庫存表'''
         if self.simulation:
-            self.output_statement('Futures')
-
             # 儲存庫存
             logging.debug(f'futures_to_monitor: {self.futures_to_monitor}')
             df = pd.DataFrame(
@@ -1567,21 +1562,18 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             # self.history_kbars(self.stocks[self.stocks.yd_quantity == 0].code)
             self.update_watchlist(self.stocks)
         self.save_watchlist(self.watchlist)
+        self.output_statement(f'{PATH}/stock_pool/statement_{self.ACCOUNT_NAME}.csv')
 
         if (datetime.now().weekday() not in [5, 6]):
             for freq, df in self.KBars.items():
                 if freq != '1D':
-                    save_csv(
-                        df, f'{PATH}/Kbars/k{freq[:-1]}min_{self.ACCOUNT_NAME}.csv')
+                    filename = f'{PATH}/Kbars/k{freq[:-1]}min_{self.ACCOUNT_NAME}.csv'
+                    save_csv(df, filename)
 
         if self.can_stock:
             self.__save_simulate_securityInfo()
-            save_csv(self.tftOrder,
-                     f'{PATH}/stock_pool/order_{self.ACCOUNT_NAME}.csv')
-
+            
         if self.can_futures:
             self.__save_simulate_futuresInfo()
-            save_csv(
-                self.fOrder, f'{PATH}/stock_pool/forder_{self.ACCOUNT_NAME}.csv')
 
         time.sleep(5)

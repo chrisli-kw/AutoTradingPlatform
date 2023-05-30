@@ -262,3 +262,30 @@ class ExDividendTable(Base):
     def __init__(self, **kwargs):
         for property, value in kwargs.items():
             setattr(self, property, value)
+
+
+class TradingStatement(Base):
+    __tablename__ = 'trading_statement'
+
+    pk_id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+
+    Time = Column(TIMESTAMP(fsp=6), server_default=text("CURRENT_TIMESTAMP(6)"), comment='除權除息日期')
+    market = Column(String(10, 'utf8mb4_unicode_ci'), nullable=False, comment='市場別')
+    account_id = Column(String(50, 'utf8mb4_unicode_ci'), default='unknown', comment='帳號別')
+    code = Column(String(10, 'utf8mb4_unicode_ci'), nullable=False, comment='證券代號')
+    action = Column(String(50, 'utf8mb4_unicode_ci'), default='unknown', comment='買賣別')
+    price = Column(FLOAT(2), default=0, comment='成交價')
+    quantity = Column(FLOAT(2), default=0, comment='成交數量')
+    amount = Column(FLOAT(2), default=0, comment='成交金額')
+    order_cond = Column(String(50, 'utf8mb4_unicode_ci'), default='unknown', comment='現股或融資')
+    order_lot = Column(String(50, 'utf8mb4_unicode_ci'), default='unknown', comment='整張或零股')
+    op_type = Column(String(50, 'utf8mb4_unicode_ci'), default='unknown', comment='期權委託類型')
+    leverage = Column(FLOAT(2), default='unknown', comment='槓桿比例')
+    msg = Column(String(200, 'utf8mb4_unicode_ci'), default='unknown', comment='進出場訊息')
+
+    create_time = Column(
+        TIMESTAMP(fsp=6), nullable=False, server_default=text("CURRENT_TIMESTAMP(6)"))
+
+    def __init__(self, **kwargs):
+        for property, value in kwargs.items():
+            setattr(self, property, value)
