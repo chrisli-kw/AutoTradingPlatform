@@ -22,7 +22,6 @@ from .utils.cipher import CipherTool
 from .utils.notify import Notification
 from .utils.orders import OrderTool
 from .utils.database import db
-from .utils.database.redis import RedisTools
 from .utils.database.tables import SecurityInfoStocks, SecurityInfoFutures
 from .utils.subscribe import Subscriber
 from .strategies.long import LongStrategy
@@ -32,7 +31,7 @@ from .strategies.short import ShortStrategy
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
-class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisTools, Subscriber):
+class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscriber):
     def __init__(self, config=None, kbar_script=None):
         self.ct = CipherTool(decrypt=True, encrypt=False)
         self.CONFIG = config
@@ -81,7 +80,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         super().__init__()
         KBarTool.__init__(self, self.KBAR_START_DAYay)
         OrderTool.__init__(self)
-        RedisTools.__init__(self)
         Subscriber.__init__(self)
         WatchListTool.__init__(self, self.ACCOUNT_NAME)
 
@@ -243,7 +241,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                         1000 if order['order_lot'] == 'Common' else quantity
                     order_data = {
                         'Time': datetime.now(),
-                        'market':'Stocks',
+                        'market': 'Stocks',
                         'code': stock,
                         'action': order['action'],
                         'price': price,
@@ -314,7 +312,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 # 紀錄成交的賣單
                 order_data = {
                     'Time': datetime.now(),
-                    'market':'Stocks',
+                    'market': 'Stocks',
                     'code': stock,
                     'price': -price,
                     'quantity': quantity,
@@ -355,7 +353,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                     quantity = order['quantity']
                     order_data = {
                         'Time': datetime.now(),
-                        'market':'Futures',
+                        'market': 'Futures',
                         'code': symbol,
                         'price': price*sign,
                         'quantity': quantity,
@@ -495,8 +493,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
         # 庫存的處理
         self.stocks = self.stocks.merge(
-            self.watchlist, 
-            how='left', 
+            self.watchlist,
+            how='left',
             on=['account', 'market', 'code']
         )
         self.stocks.position.fillna(100, inplace=True)
@@ -538,11 +536,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 df = df.rename(columns={'ContractAverPrice': 'cost_price'})
                 df.Code = df.Code.astype(str).map(self.Futures_Code_List)
                 df.OrderBS = df.OrderBS.apply(
-                    lambda x:'Buy' if x == 'B' else ('Sell' if x == 'S' else x))
-                
+                    lambda x: 'Buy' if x == 'B' else ('Sell' if x == 'S' else x))
+
                 orders = df[['Volume', 'OrderBS']]
                 orders = orders.rename(
-                    columns={'Volume':'quantity', 'OrderBS':'action'})
+                    columns={'Volume': 'quantity', 'OrderBS': 'action'})
                 df['order'] = orders.to_dict('records')
             return df
 
@@ -559,13 +557,13 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         # 庫存的處理
         self.futures = preprocess_(self.futures)
         self.futures = self.futures.merge(
-            self.watchlist, 
-            how='left', 
-            left_on=['Account', 'Market', 'Code'], 
+            self.watchlist,
+            how='left',
+            left_on=['Account', 'Market', 'Code'],
             right_on=['account', 'market', 'code']
         )
         self.futures.position.fillna(100, inplace=True)
-        
+
         self.n_futures = self.futures.shape[0]
 
         # 取得策略清單
@@ -585,7 +583,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         self.history_kbars(all_futures)
 
         # 交易風險控制 TODO: add setNFuturesLimitLong
-        self.N_FUTURES_LIMIT = self.strategy_s.setNFuturesLimitShort(KBars=self.KBars)
+        self.N_FUTURES_LIMIT = self.strategy_s.setNFuturesLimitShort(
+            KBars=self.KBars)
         self._set_margin_limit()
         self.margin_table = self.get_margin_table().原始保證金.to_dict()
         return strategies, all_futures
@@ -716,7 +715,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 actionType = 'Open'
                 pos_balance = 0
                 order_cond = self.check_order_cond(target, mode)
-                quantity = self.get_quantity(target, strategy, order_cond, mode)
+                quantity = self.get_quantity(
+                    target, strategy, order_cond, mode)
                 enoughOpen = self.check_enough(target, quantity, mode)
 
             # 庫存
@@ -734,7 +734,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             # 非當沖做多賣出(庫存賣出)
             c3 = isSell and self.can_sell and isInStocks and strategy in StrategyLong
             # 當沖做空回補
-            c4 = (not isSell) and strategy in StrategyShortDT and target in self.stock_sold
+            c4 = (
+                not isSell) and strategy in StrategyShortDT and target in self.stock_sold
             # 非當沖做多買進
             c5 = (not isSell) and enoughOpen and strategy in StrategyLong
             # 非當沖做空回補
@@ -742,7 +743,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             # TODO 當沖做多買進
             # TODO 當沖做空賣出
             if quantity and (c1 or c2 or c3 or c4 or c5 or c6):
-                is_day_trade = strategy in StrategyShortDT + StrategyLongDT and (c1 or c4)
+                is_day_trade = strategy in StrategyShortDT + \
+                    StrategyLongDT and (c1 or c4)
                 tradeType = '當沖' if is_day_trade else '非當沖'
 
                 func = self.strategy_l if is_long_strategy else self.strategy_s
@@ -901,7 +903,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
                 order_data = {
                     'Time': datetime.now(),
-                    'market':'Stocks',
+                    'market': 'Stocks',
                     'code': target,
                     'action': content.action,
                     'price': -price if content.action == 'Sell' else price,
@@ -934,7 +936,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 sign = -1 if content.octype == 'Cover' else 1
                 order_data = {
                     'Time': datetime.now(),
-                    'market':'Futures',
+                    'market': 'Futures',
                     'code': target,
                     'action': content.action,
                     'price': price*sign,
@@ -948,7 +950,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 self._update_futures_deal_list(target, content.octype)
 
                 # 更新監控庫存
-                bsh = max(self.Quotes.AllTargets[target]['price']) if self.Quotes.AllTargets[target]['price'] else price
+                bsh = max(self.Quotes.AllTargets[target]['price']
+                          ) if self.Quotes.AllTargets[target]['price'] else price
                 order_data.update({
                     'symbol': target,
                     'cost_price': abs(price),
@@ -1007,12 +1010,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             try:
                 if db.HAS_DB and market == 'Stocks':
                     df = db.query(
-                        SecurityInfoStocks, 
+                        SecurityInfoStocks,
                         SecurityInfoStocks.account == self.ACCOUNT_NAME
                     ).drop(['pk_id', 'create_time'], axis=1)
                 elif db.HAS_DB and market == 'Futures':
                     df = db.query(
-                        SecurityInfoFutures, 
+                        SecurityInfoFutures,
                         SecurityInfoFutures.Account == self.ACCOUNT_NAME
                     ).drop(['pk_id', 'create_time'], axis=1)
                 else:
@@ -1347,8 +1350,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             self.stocks = self.stocks[self.stocks.code != target]
             if db.HAS_DB:
                 db.delete(
-                    SecurityInfoStocks, 
-                    SecurityInfoStocks.code == target, 
+                    SecurityInfoStocks,
+                    SecurityInfoStocks.code == target,
                     SecurityInfoStocks.account == self.ACCOUNT_NAME
                 )
 
@@ -1362,8 +1365,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             self.futures = self.futures[self.futures.Code != target]
             if db.HAS_DB:
                 db.delete(
-                    SecurityInfoFutures, 
-                    SecurityInfoFutures.Code == target, 
+                    SecurityInfoFutures,
+                    SecurityInfoFutures.Code == target,
                     SecurityInfoFutures.Account == self.ACCOUNT_NAME
                 )
 
@@ -1491,10 +1494,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 df = self.df_securityInfo
             logging.debug(
                 f'stocks shape: {df.shape}; watchlist shape: {self.watchlist.shape}')
-            
+
             if db.HAS_DB:
                 db.delete(
-                    SecurityInfoStocks, 
+                    SecurityInfoStocks,
                     SecurityInfoStocks.account == self.ACCOUNT_NAME
                 )
                 db.dataframe_to_DB(df, SecurityInfoStocks)
@@ -1533,7 +1536,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
             if db.HAS_DB:
                 db.delete(
-                    SecurityInfoFutures, 
+                    SecurityInfoFutures,
                     SecurityInfoFutures.Account == self.ACCOUNT_NAME
                 )
                 db.dataframe_to_DB(df, SecurityInfoStocks)
@@ -1548,7 +1551,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             # self.history_kbars(self.stocks[self.stocks.yd_quantity == 0].code)
             self.update_watchlist(self.stocks)
         self.save_watchlist(self.watchlist)
-        self.output_statement(f'{PATH}/stock_pool/statement_{self.ACCOUNT_NAME}.csv')
+        self.output_statement(
+            f'{PATH}/stock_pool/statement_{self.ACCOUNT_NAME}.csv')
 
         if (datetime.now().weekday() not in [5, 6]):
             for freq, df in self.KBars.items():
@@ -1558,7 +1562,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
         if self.can_stock:
             self.__save_simulate_securityInfo()
-            
+
         if self.can_futures:
             self.__save_simulate_futuresInfo()
 

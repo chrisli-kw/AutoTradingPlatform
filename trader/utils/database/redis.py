@@ -4,30 +4,26 @@ import pickle
 import logging
 from typing import Iterable
 
-from ...config import REDIS_HOST, REDIS_PORT, REDIS_PWD
+from ...config import HAS_REDIS, REDIS_HOST, REDIS_PORT, REDIS_PWD
+from .. import progress_bar
 
 
 class RedisTools:
-    def __init__(self, redisKey='TickData'):
+    def __init__(self, redisKey):
+        self.HAS_REDIS = HAS_REDIS
         self.REDIS_KEY = redisKey
-
         self.redis_client = self.init_client()
-        self.redis_data = {}
 
     def init_client(self):
-        '''Initialize  Redis/Codis by config settings'''
+        '''Initialize Redis by config settings'''
 
-        return redis.Redis(
-            host=REDIS_HOST,
-            port=REDIS_PORT,
-            password=REDIS_PWD,
-            decode_responses=False
-        )
-
-    def _progress_bar(self, N: int, i: int):
-        n = i+1
-        progress = f"\r|{'█'*int(n*50/N)}{' '*(50-int(n*50/N))} | {n}/{N} ({round(n/N*100, 2)})%"
-        print(progress, end='')
+        if self.HAS_REDIS:
+            return redis.Redis(
+                host=REDIS_HOST,
+                port=REDIS_PORT,
+                password=REDIS_PWD,
+                decode_responses=False
+            )
 
     def _data2byte(self, data: Iterable):
         return pickle.dumps(data)
@@ -41,13 +37,14 @@ class RedisTools:
 
             for i, c in enumerate(data):
                 pipe.set(f'{self.REDIS_KEY}:{c}', self._data2byte(data[c]))
-                self._progress_bar(N, i)
+                progress_bar(N, i)
 
             pipe.execute()
 
         else:
             for k, v in data.items():
-                self.redis_client.set(f'{self.REDIS_KEY}:{k}', self._data2byte(v))
+                self.redis_client.set(
+                    f'{self.REDIS_KEY}:{k}', self._data2byte(v))
 
     def query(self, key: str):
         '''query data from redis'''
@@ -59,7 +56,8 @@ class RedisTools:
                 break
             except:
                 n += 1
-                logging.error(f"Cannot connect to {REDIS_HOST}, reconnect ({n}/5).")
+                logging.error(
+                    f"Cannot connect to {REDIS_HOST}, reconnect ({n}/5).")
                 self.redis_client = self.init_client()
                 time.sleep(1)
 

@@ -2,6 +2,7 @@ import logging
 from sqlalchemy import create_engine
 
 from .sql import SQLDatabase
+from .redis import RedisTools
 from .tables import *
 from ...config import DB_NAME, DB_URL
 
@@ -21,6 +22,7 @@ def create_schema(schemaName):
 
 
 db = SQLDatabase()
+redis_tick = RedisTools(redisKey='TickData')
 
 if db.HAS_DB:
     create_schema(DB_NAME)

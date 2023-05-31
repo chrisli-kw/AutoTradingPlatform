@@ -14,7 +14,7 @@ from trader.config import ACCOUNTS, TEnd, SelectMethods, ConvertScales
 from trader.strategies.select import SelectStock
 from trader.utils import save_excel
 from trader.utils.notify import Notification
-from trader.utils.database.redis import RedisTools
+from trader.utils.database import redis_tick
 from trader.utils.subscribe import Subscriber
 from trader.utils.kbar import TickDataProcesser
 from trader.utils.crawler import CrawlStockData, CrawlFromHTML
@@ -34,8 +34,10 @@ def parse_args():
 
     """
     parser = ArgumentParser()
-    parser.add_argument('--task', '-TASK', type=str, default='auto_trader', help='執行的目標程式')
-    parser.add_argument('--account', '-ACCT', type=str, default='chrisli_1', help='代號')
+    parser.add_argument(
+        '--task', '-TASK', type=str, default='auto_trader', help='執行的目標程式')
+    parser.add_argument(
+        '--account', '-ACCT', type=str, default='chrisli_1', help='代號')
     args = parser.parse_args()
     return (args)
 
@@ -77,7 +79,8 @@ def runAccountInfo():
                 notifier.post_account_info(account_id, row)
 
             elif hasattr(df, 'sheet_names') and account.account_name in df.sheet_names:
-                tables[acct] = pd.read_excel(df, sheet_name=account.account_name)
+                tables[acct] = pd.read_excel(
+                    df, sheet_name=account.account_name)
 
             else:
                 tables[acct] = account.DEFAULT_TABLE
@@ -88,15 +91,17 @@ def runAccountInfo():
             time.sleep(10)
 
         logging.info('儲存資訊')
-        writer = pd.ExcelWriter(f'{PATH}/daily_info/{account.filename}', engine='xlsxwriter')
+        writer = pd.ExcelWriter(
+            f'{PATH}/daily_info/{account.filename}', engine='xlsxwriter')
 
         for sheet in tables:
             try:
-                tables[sheet].to_excel(writer, encoding='utf-8-sig',
-                                       index=False, sheet_name=sheet)
+                tables[sheet].to_excel(
+                    writer, encoding='utf-8-sig', index=False, sheet_name=sheet)
             except:
                 logging.exception('Catch an exception:')
-                tables[sheet].to_excel(sheet+'.csv', encoding='utf-8-sig', index=False)
+                tables[sheet].to_excel(
+                    sheet+'.csv', encoding='utf-8-sig', index=False)
         writer.save()
     except:
         logging.exception('Catch an exception:')
@@ -111,11 +116,13 @@ def runAutoTrader():
         se.login_and_activate()
         se.run()
     except KeyboardInterrupt:
-        notifier.post(f"\n【Interrupt】【下單機監控】{se.ACCOUNT_NAME}已手動關閉", msgType='Tasker')
+        notifier.post(
+            f"\n【Interrupt】【下單機監控】{se.ACCOUNT_NAME}已手動關閉", msgType='Tasker')
         se.output_files()
     except:
         logging.exception('Catch an exception:')
-        notifier.post(f"\n【Error】【下單機監控】{se.ACCOUNT_NAME}發生異常", msgType='Tasker')
+        notifier.post(
+            f"\n【Error】【下單機監控】{se.ACCOUNT_NAME}發生異常", msgType='Tasker')
         se.output_files()
     finally:
         logging.info(f'登出系統: {API.logout()}')
@@ -133,7 +140,8 @@ def runCrawlStockData():
     try:
         now = datetime.now()
         if now < target:
-            logging.info(f'Current time is still early, will start to crawl after {target}')
+            logging.info(
+                f'Current time is still early, will start to crawl after {target}')
             aInfo.CountDown(target)
 
         logging.info('開始爬蟲')
@@ -164,7 +172,8 @@ def runCrawlStockData():
         logging.exception('Catch an exception:')
         notifier.post(f"\n【Error】【爬蟲程式】股價爬蟲發生異常", msgType='Tasker')
         if len(crawler.StockData):
-            pd.concat(crawler.StockData).to_pickle(f'{crawler.folder_path}/stock_data_1T.pkl')
+            pd.concat(crawler.StockData).to_pickle(
+                f'{crawler.folder_path}/stock_data_1T.pkl')
     finally:
         logging.info(f'登出系統: {API.logout()}')
 
@@ -179,7 +188,8 @@ def runSelectStock():
         tb1 = tb[exists == True]
         # TODO: 加入籌碼資料
         picker.export(tb1)
-        notifier.post_stock_selection(tb1[['name', 'company_name']+SelectMethods].copy())
+        notifier.post_stock_selection(
+            tb1[['name', 'company_name']+SelectMethods].copy())
 
         # 更新前一日資料
         d = str(df[(df.date != TODAY_STR)].date.max().date())
@@ -190,10 +200,11 @@ def runSelectStock():
 
             tb = tb.set_index('name')
             for i, c in enumerate(['Open', 'High', 'Low', 'Close', 'Volume']):
+                data = tb2.name.map(tb[c].to_dict())
                 if f'{TODAY_STR}-Open' in tb2.columns:
-                    tb2[f'{TODAY_STR}-{c}'] = tb2.name.map(tb[c].to_dict())
+                    tb2[f'{TODAY_STR}-{c}'] = data
                 else:
-                    tb2.insert(11+i, f'{TODAY_STR}-{c}',  tb2.name.map(tb[c].to_dict()))
+                    tb2.insert(11+i, f'{TODAY_STR}-{c}', data)
             tb2.to_csv(filename, index=False, encoding='utf-8-sig')
 
     except FileNotFoundError as e:
@@ -239,7 +250,6 @@ def runCrawlFromHTML():
 def thread_subscribe(user, targets):
     import shioaji as sj
 
-    redis = RedisTools(redisKey='TickData')
     subscriber = Subscriber()
     api = sj.Shioaji()
 
@@ -247,7 +257,6 @@ def thread_subscribe(user, targets):
     def event_callback(resp_code: int, event_code: int, info: str, event: str):
         if 'Subscription Not Found' in info:
             logging.warning(info)
-
         else:
             logging.info(
                 f'Response code: {resp_code} | Event code: {event_code} | info: {info} | Event: {event}')
@@ -256,7 +265,7 @@ def thread_subscribe(user, targets):
     def stk_quote_callback_v1(exchange, tick):
         if tick.intraday_odd == 0 and tick.simtrade == 0:
             tick_data = subscriber.stk_quote_v1(tick)
-            redis.to_redis({tick.code: tick_data})
+            redis_tick.to_redis({tick.code: tick_data})
 
     config = dotenv_values(f'./lib/envs/{user}.env')
     API_KEY = config['API_KEY']
@@ -290,7 +299,7 @@ def thread_subscribe(user, targets):
 
 
 def runShioajiSubscriber():
-    #TODO: 讀取要盤中選股的股票池
+    # TODO: 讀取要盤中選股的股票池
     df = pd.read_excel(f'{PATH}/selections/stock_list.xlsx')
     codes = df[df.exchange.isin(['TSE', 'OTC'])].code.astype(str).values
 
@@ -314,7 +323,8 @@ def runSimulationChecker():
             if config['MODE'] == 'Simulation':
                 # check stock pool size
                 watchlist = pd.read_csv(f'{filepath}/watchlist_{account}.csv')
-                stocks = pd.read_pickle(f'{filepath}/simulation_stocks_{account}.pkl')
+                stocks = pd.read_pickle(
+                    f'{filepath}/simulation_stocks_{account}.pkl')
 
                 watchlist.buyday = pd.to_datetime(watchlist.buyday).dt.date
                 watchlist.code = watchlist.code.astype(str)
@@ -337,7 +347,8 @@ def runSimulationChecker():
                 # update performance statement
                 df = pd.read_csv(f'{filepath}/statement_stocks_{account}.csv')
                 df = convert_statement(df)
-                save_excel(df, f'{filepath}/simulation_performance_{account}.xlsx', saveEmpty=True)
+                save_excel(
+                    df, f'{filepath}/simulation_performance_{account}.xlsx', saveEmpty=True)
     except FileNotFoundError as e:
         logging.warning(e)
         notifier.post(f'\n{e}', msgType='Tasker')
