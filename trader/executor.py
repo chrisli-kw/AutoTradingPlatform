@@ -699,7 +699,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             data = self.stocks_to_monitor[target]
             strategy = strategies[target]
 
-            isInStocks = target in self.stocks.code.values
             is_long_strategy = strategy in StrategyLong + StrategyLongDT
             isSell = (
                 # 做多賣出
@@ -727,24 +726,13 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 quantity = data['quantity']
                 enoughOpen = False
 
-            # 當沖做多賣出
-            c1 = isSell and strategy in StrategyLongDT and target in self.stock_bought
-            # 非當沖做空賣出(放空建倉)
-            c2 = isSell and enoughOpen and strategy in StrategyShort
-            # 非當沖做多賣出(庫存賣出)
-            c3 = isSell and self.can_sell and isInStocks and strategy in StrategyLong
-            # 當沖做空回補
-            c4 = (
-                not isSell) and strategy in StrategyShortDT and target in self.stock_sold
-            # 非當沖做多買進
-            c5 = (not isSell) and enoughOpen and strategy in StrategyLong
-            # 非當沖做空回補
-            c6 = (not isSell) and enoughOpen and isInStocks and strategy in StrategyShort
-            # TODO 當沖做多買進
-            # TODO 當沖做空賣出
-            if quantity and (c1 or c2 or c3 or c4 or c5 or c6):
-                is_day_trade = strategy in StrategyShortDT + \
-                    StrategyLongDT and (c1 or c4)
+            c1 = actionType == 'Open' and enoughOpen
+            c2 = actionType == 'Close'
+            if quantity and (c1 or c2):
+                is_day_trade = (
+                    (strategy in StrategyShortDT + StrategyLongDT) and
+                    (target in self.stock_bought + self.stock_sold)
+                )
                 tradeType = '當沖' if is_day_trade else '非當沖'
 
                 func = self.strategy_l if is_long_strategy else self.strategy_s
@@ -764,8 +752,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                         action='Sell' if isSell else 'Buy',
                         target=target,
                         quantity=quantity,
-                        order_cond=self.day_trade_cond[order_cond] if c1 or c4 else order_cond,
-                        pos_target=-actionInfo.position if c2 or c4 or c6 else actionInfo.position,
+                        order_cond=self.day_trade_cond[order_cond] if is_day_trade else order_cond,
+                        pos_target=-actionInfo.position if not is_long_strategy else actionInfo.position,
                         pos_balance=pos_balance,
                         reason=actionInfo.msg,
                     )
@@ -807,19 +795,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     quantity = data['Volume']
                     action = data['OrderBS']
 
-            # 當沖做多建倉
-            # 當沖做多平倉
-            # 當沖做空建倉
-            c3 = octype == 'New' and enoughOpen and not self.is_not_trade_day(
+            c1 = octype == 'New' and enoughOpen and not self.is_not_trade_day(
                 inputs['datetime'])
-            # 當沖做空平倉
-            c4 = octype == 'Cover'  # TODO 平倉的判定條件
-            # 非當沖做多建倉
-            # 非當沖做多平倉
-            # 非當沖做空建倉
-            # 非當沖做空平倉
-
-            if c3 or c4:
+            c2 = octype == 'Cover'
+            if c1 or c2:
                 is_day_trade = strategy in StrategyShortDT + StrategyLongDT
                 tradeType = '當沖' if is_day_trade else '非當沖'
                 func = self.strategy_l if is_long_strategy else self.strategy_s
