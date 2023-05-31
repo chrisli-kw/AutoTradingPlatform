@@ -2,36 +2,35 @@ from .. import API
 from . import get_contract
 
 
+class Quotes:
+    AllIndex = {'TSE001': [], 'OTC101': []}
+    NowIndex = {}
+    AllTargets = {}
+    NowTargets = {}
+
+
 class Subscriber:
     def __init__(self):
         # 即時成交資料, 所有成交資料, 下單資料
-        self.quotes_now_s = {}
-        self.quotes_now_i = {}
-        self.quotes_now_f = {}
-        self.quotes_all_s = {}
-        self.quotes_all_i = {'TSE001': [], 'OTC101': []}
-        self.quotes_all_f = {}
         self.BidAsk = {}
+        self.Quotes = Quotes()
 
-    def _set_target_quote_default(self, targets: str, market: str = 'Stocks'):
+    def _set_target_quote_default(self, targets: str):
         '''初始化股票/期權盤中資訊'''
         keys = ['price', 'amount', 'total_amount', 'volume', 'total_volume', 'tick_type']
-        if market == 'Stocks':
-            self.quotes_all_s = {s: {k: [] for k in keys} for s in targets}
-        elif market == 'Futures':
-            self.quotes_all_f = {t: {k: [] for k in keys} for t in targets}
-
+        self.Quotes.AllTargets = {s: {k: [] for k in keys} for s in targets}
+    
     def _set_index_quote_default(self):
         '''初始化指數盤中資訊'''
-        self.quotes_all_i = {'TSE001': [], 'OTC101': []}
+        self.Quotes.AllIndex = {'TSE001': [], 'OTC101': []}
 
     def index_v0(self, quote: dict):
         if quote['Code'] == '001':
-            self.quotes_now_i['TSE001'] = quote
-            self.quotes_all_i['TSE001'].append(quote)
+            self.Quotes.NowIndex['TSE001'] = quote
+            self.Quotes.AllIndex['TSE001'].append(quote)
         elif quote['Code'] == '101':
-            self.quotes_now_i['OTC101'] = quote
-            self.quotes_all_i['OTC101'].append(quote)
+            self.Quotes.NowIndex['OTC101'] = quote
+            self.Quotes.AllIndex['OTC101'].append(quote)
 
     def stk_quote_v1(self, tick):
         '''處理股票即時成交資料'''
@@ -44,9 +43,9 @@ class Subscriber:
         tick_data['price'] = tick_data['close']
 
         for k in ['price', 'amount', 'total_amount', 'volume', 'total_volume', 'tick_type']:
-            self.quotes_all_s[tick.code][k].append(tick_data[k])
+            self.Quotes.AllTargets[tick.code][k].append(tick_data[k])
 
-        self.quotes_now_s[tick.code] = tick_data
+        self.Quotes.NowTargets[tick.code] = tick_data
         return tick_data
 
     def fop_quote_v1(self, symbol: str, tick):
@@ -62,9 +61,9 @@ class Subscriber:
         tick_data['symbol'] = symbol
 
         for k in ['price', 'amount', 'total_amount', 'volume', 'total_volume', 'tick_type']:
-            self.quotes_all_f[symbol][k].append(tick_data[k])
+            self.Quotes.AllTargets[symbol][k].append(tick_data[k])
 
-        self.quotes_now_f[symbol] = tick_data
+        self.Quotes.NowTargets[symbol] = tick_data
         return tick_data
 
     def subscribe_index(self):
@@ -98,10 +97,9 @@ class Subscriber:
         '''訂閱指數、tick、bidask資料'''
 
         self.subscribe_index()
-        for market, targets in targetLists.items():
-            self.subscribe_targets(targets, 'tick')
-            self.subscribe_targets(targets, 'bidask')
-            self._set_target_quote_default(targets, market)
+        self.subscribe_targets(targetLists, 'tick')
+        self.subscribe_targets(targetLists, 'bidask')
+        self._set_target_quote_default(targetLists)
 
     def unsubscribe_all(self, targetLists: dict):
         '''取消訂閱指數、tick、bidask資料'''

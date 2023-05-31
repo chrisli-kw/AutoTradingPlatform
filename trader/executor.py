@@ -237,7 +237,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 leverage = self.check_leverage(stock, order['order_cond'])
                 if c2 and c3:
                     # 記錄委託成功的買單
-                    price = self.quotes_now_s[stock]['price'] if stock in self.quotes_now_s else order['price']
+                    price = self.Quotes.NowTargets[stock]['price'] if stock in self.Quotes.NowTargets else order['price']
                     quantity = order['quantity']
                     quantity = quantity * \
                         1000 if order['order_lot'] == 'Common' else quantity
@@ -336,8 +336,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             symbol = code + msg['contract']['delivery_month']
             msg.update({
                 'symbol': symbol,
-                'cost_price': self.quotes_now_f[symbol]['price'] if symbol in self.quotes_now_f else 0,
-                'bsh': max(self.quotes_all_f[symbol]['price']) if self.quotes_all_f[symbol]['price'] else 0,
+                'cost_price': self.Quotes.NowTargets[symbol]['price'] if symbol in self.Quotes.NowTargets else 0,
+                'bsh': max(self.Quotes.AllTargets[symbol]['price']) if self.Quotes.AllTargets[symbol]['price'] else 0,
                 'bst': datetime.now(),
                 'position': 100
             })
@@ -408,7 +408,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         def stk_quote_callback_v1(exchange, tick):
             if tick.intraday_odd == 0 and tick.simtrade == 0:
 
-                if tick.code not in self.quotes_now_s:
+                if tick.code not in self.Quotes.NowTargets:
                     logging.debug(f'First quote of {tick.code}')
 
                 tick_data = self.stk_quote_v1(tick)
@@ -420,7 +420,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 if tick.simtrade == 0:
                     symbol = self.Futures_Code_List[tick.code]
 
-                    if symbol not in self.quotes_now_f:
+                    if symbol not in self.Quotes.NowTargets:
                         logging.debug(f'First quote of {symbol}')
 
                     tick_data = self.fop_quote_v1(symbol, tick)
@@ -605,13 +605,13 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         if action in ['Buy', 'Sell']:
             if target not in self.stocks.code.values:
                 self._append_watchlist(
-                    'Stocks', order, self.quotes_now_s, strategies)
+                    'Stocks', order, self.Quotes, strategies)
             else:
                 self.stocks_to_monitor[target]['position'] -= abs(position)
         elif action == 'New':
             if target not in self.futures.Code.values:
                 self._append_watchlist(
-                    'Futures', order, self.quotes_now_f, strategies)
+                    'Futures', order, self.Quotes, strategies)
         else:  # and target in self.futures.Code.values:
             self.futures_to_monitor[target]['position'] -= abs(position)
 
@@ -695,8 +695,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         return np.unique(all)
 
     def monitor_stocks(self, target: str, strategies: Dict[str, str]):
-        if target in self.quotes_now_s and self.quotes_now_i:
-            inputs = self.quotes_now_s[target].copy()
+        if target in self.Quotes.NowTargets and self.Quotes.NowIndex:
+            inputs = self.Quotes.NowTargets[target].copy()
             data = self.stocks_to_monitor[target]
             strategy = strategies[target]
 
@@ -754,7 +754,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 actionInfo = func(
                     inputs=inputs,
                     kbars=self.KBars,
-                    indexQuotes=self.quotes_now_i,
+                    indexQuotes=self.Quotes.NowIndex,
                     pct_chg_DowJones=self.pct_chg_DowJones
                 )
                 if actionInfo.position:
@@ -775,8 +775,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
     def monitor_futures(self, target: str, strategies: Dict[str, str]):
         '''檢查期貨是否符合賣出條件，回傳賣出部位(%)'''
 
-        if target in self.quotes_now_f and self.N_FUTURES_LIMIT != 0:
-            inputs = self.quotes_now_f[target].copy()
+        if target in self.Quotes.NowTargets and self.N_FUTURES_LIMIT != 0:
+            inputs = self.Quotes.NowTargets[target].copy()
             data = self.futures_to_monitor[target]
             strategy = strategies[target]
             is_long_strategy = strategy in StrategyLong + StrategyLongDT
@@ -829,8 +829,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 actionInfo = func(
                     inputs=inputs,
                     kbars=self.KBars,
-                    indexQuotes=self.quotes_now_i,
-                    allQuotes=self.quotes_all_f,
+                    indexQuotes=self.Quotes.NowIndex,
+                    allQuotes=self.Quotes.AllTargets,
                 )
                 if actionInfo.position:
                     self._log_and_notify(actionInfo.msg)
@@ -876,7 +876,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                         price = bid_ask[3]
                     elif contract.exchange == 'OES':
                         price_type = 'LMT'
-                        price = self.quotes_now_s[target]['price']
+                        price = self.Quotes.NowTargets[target]['price']
 
                 log_msg = f"【{target}下單內容: price={price}, quantity={quantity}, action={content.action}, price_type={price_type}, order_cond={content.order_cond}, order_lot={order_lot}】"
             else:
@@ -885,7 +885,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             # 下單
             logging.debug(log_msg)
             if self.simulation and market == 'Stocks':
-                price = self.quotes_now_s[target]['price']
+                price = self.Quotes.NowTargets[target]['price']
                 quantity *= 1000
                 leverage = self.check_leverage(target, content.order_cond)
                 if content.action == 'Sell':
@@ -930,7 +930,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 self.notifier.post(log_msg, msgType='Order')
 
             elif self.simulation and market == 'Futures':
-                price = self.quotes_now_f[target]['price']
+                price = self.Quotes.NowTargets[target]['price']
                 sign = -1 if content.octype == 'Cover' else 1
                 order_data = {
                     'Time': datetime.now(),
@@ -948,7 +948,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 self._update_futures_deal_list(target, content.octype)
 
                 # 更新監控庫存
-                bsh = max(self.quotes_all_f[target]['price']) if self.quotes_all_f[target]['price'] else price
+                bsh = max(self.Quotes.AllTargets[target]['price']) if self.Quotes.AllTargets[target]['price'] else price
                 order_data.update({
                     'symbol': target,
                     'cost_price': abs(price),
@@ -1153,7 +1153,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         else:
             quantityFunc = self.strategy_s.mapQuantities(strategy)
 
-        inputs = self.quotes_now_s[target]
+        inputs = self.Quotes.NowTargets[target]
         quantity, quantity_limit = quantityFunc(
             inputs=inputs, kbars=self.KBars)
         leverage = self.check_leverage(target, order_cond)
@@ -1180,7 +1180,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         else:
             quantityFunc = self.strategy_s.mapQuantities(strategy)
 
-        inputs = self.quotes_now_f[target]
+        inputs = self.Quotes.NowTargets[target]
         slot, quantity_limit = quantityFunc(inputs=inputs, kbars=self.KBars)
         slot = int(min(slot, quantity_limit))
         slot = min(slot, 499)
@@ -1189,7 +1189,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
     def get_open_margin(self, target: str, quantity: int):
         '''計算期貨保證金額'''
 
-        if target in self.quotes_now_f and self.margin_table and target in self.margin_table:
+        if target in self.Quotes.NowTargets and self.margin_table and target in self.margin_table:
             fee = 100
             return self.margin_table[target]*quantity + fee
 
@@ -1239,6 +1239,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
     def check_enough(self, target: str, quantity: int, mode='long'):
         '''計算可買進的股票數量 & 金額'''
 
+        if target not in self.Quotes.NowTargets:
+            return False
+
         # 更新可買進的股票額度 TODO: buy_deals, sell_deals會合計多空股票數，使quota1, quota2無法精準
         buy_deals = len([s for s in self.stock_bought if len(s) == 4])
         sell_deals = len([s for s in self.stock_sold if len(s) == 4])
@@ -1254,7 +1257,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         amount2 = df[df.price > 0].amount.abs().sum()
         amount3 = df[df.price < 0].amount.abs().sum()
 
-        cost_price = self.quotes_now_s[target]['price'] if target in self.quotes_now_s else 99999
+        cost_price = self.Quotes.NowTargets[target]['price']
         target_amount = self.get_stock_amount(
             target, cost_price, quantity, mode)
 
@@ -1369,7 +1372,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
 
         strategy_s, all_stocks = self.init_stocks()
         strategy_f, all_futures = self.init_futures()
-        self.subscribe_all({'Stocks': all_stocks, 'Futures': all_futures})
+        self.subscribe_all(all_stocks+all_futures)
 
         now = datetime.now()
         if (not self.is_not_trade_day(now)) and now > TStart:
@@ -1425,16 +1428,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 (self.can_stock and now > TimeStartStock + timedelta(seconds=30))
             )
             if is_trading_time and now.second < 5:
-                self._update_K1(
-                    self.strategy_l.dividends,
-                    all_s=self.quotes_all_s,
-                    all_f=self.quotes_all_f,
-                    all_i=self.quotes_all_i,
-                    now_s=self.quotes_now_s,
-                    now_f=self.quotes_now_f
-                )
-                self._set_target_quote_default(all_stocks, 'Stocks')
-                self._set_target_quote_default(all_futures, 'Futures')
+                self._update_K1(self.strategy_l.dividends, quotes=self.Quotes)
+                # TODO: all_stocks+all_futures
+                self._set_target_quote_default(all_stocks+all_futures)
                 self._set_index_quote_default()
                 self._set_futures_code_list()
                 self.strategy_l.update_indicators(now, self.KBars)
@@ -1487,7 +1483,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
                 df = df[df.account_id == 'simulate']
                 df = df.sort_values('code').reset_index()
                 df['last_price'] = df.code.map(
-                    {s: self.quotes_now_s[s]['price'] for s in df.code})
+                    {s: self.Quotes.NowTargets[s]['price'] for s in df.code})
                 df['pnl'] = df.action.apply(lambda x: 1 if x == 'Buy' else -1)
                 df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
                 df.yd_quantity = df.quantity

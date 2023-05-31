@@ -207,14 +207,13 @@ class KBarTool(TechnicalSignals, TimeTool):
 
         if df.shape[0]:
             has_dividend = df.name.isin(dividends.keys())
-            if df[has_dividend].shape[0]:
+            if has_dividend.sum():
                 _dividends = df[has_dividend].name.map(dividends)
                 for col in ['Open', 'High', 'Low', 'Close']:
                     df.loc[has_dividend, col] += _dividends
-
         return df
 
-    def stock_tick_stream_2_df(self, q_all: dict, q_now: dict):
+    def tick_to_df_targets(self, q_all: dict, q_now: dict):
         '''將個股tick資料轉為K棒'''
 
         if not q_all and not q_now:
@@ -244,14 +243,14 @@ class KBarTool(TechnicalSignals, TimeTool):
             columns={'index': 'name', 'volume': 'Volume'})
         return tb[self.kbar_columns]
 
-    def index_tick_stream_2_df(self, quote_data: list):
+    def tick_to_df_index(self, quotes: list):
         '''將指數tick資料轉為K棒'''
 
-        if not quote_data:
+        if not quotes:
             return pd.DataFrame()
 
         try:
-            tb = pd.DataFrame(quote_data)
+            tb = pd.DataFrame(quotes)
             tb = tb.rename(columns={'Code': 'name', 'Date': 'date'})
 
             tb['Time'] = pd.to_datetime(datetime.now())
@@ -293,17 +292,13 @@ class KBarTool(TechnicalSignals, TimeTool):
                     [self.KBars['1T'], df]).sort_values(['name', 'date']).reset_index(drop=True)
 
         if TimeStartStock <= datetime.now() <= TimeEndStock:
-            stocks = self.stock_tick_stream_2_df(
-                quotes['all_s'], quotes['now_s'])
-            stocks = self.revert_dividend_price(stocks, dividends)
-            concat_df(stocks)
-
-            for i in quotes['all_i']:
-                tb = self.index_tick_stream_2_df(quotes['all_i'][i])
+            for i in quotes.AllIndex:
+                tb = self.tick_to_df_index(quotes.AllIndex[i])
                 concat_df(tb)
 
-        futures = self.stock_tick_stream_2_df(quotes['all_f'], quotes['now_f'])
-        concat_df(futures)
+        df = self.tick_to_df_targets(quotes.AllTargets, quotes.NowTargets)
+        df = self.revert_dividend_price(df, dividends)
+        concat_df(df)
 
     def _update_K5(self):
         '''每隔5分鐘更新5分K'''

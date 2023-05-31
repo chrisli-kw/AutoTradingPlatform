@@ -34,6 +34,8 @@ ACCOUNTS = get_settings("ACCOUNT", "USERS", dataType='list')
 REDIS_HOST = get_settings('DB', 'REDIS_HOST')
 REDIS_PORT = get_settings('DB', 'REDIS_PORT', dataType='int')
 REDIS_PWD = get_settings('DB', 'REDIS_PWD')
+HAS_REDIS = all(x for x in [REDIS_HOST, REDIS_PORT, REDIS_PWD])
+
 DB_HOST = get_settings('DB', 'DB_HOST')
 DB_PORT = get_settings('DB', 'DB_PORT', dataType='int')
 DB_USER = get_settings('DB', 'DB_USER')

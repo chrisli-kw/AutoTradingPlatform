@@ -49,7 +49,7 @@ class WatchListTool(TimeTool):
             # Auto trading
             target = orderinfo.target
             position = abs(orderinfo.pos_target)
-            cost_price = quotes[target]['price']
+            cost_price = quotes.NowTargets[target]['price']
             check_quantity = orderinfo.quantity != 0
 
         if target not in self.watchlist.code.values and check_quantity:
