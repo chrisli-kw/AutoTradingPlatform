@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
+from datetime import timedelta
 
-from .. import PATH, TODAY_STR
+from .. import PATH, TODAY_STR, TODAY
 from ..utils import save_csv
 from .conditions import SelectConditions
 from ..utils.database import db
@@ -70,7 +71,9 @@ class SelectStock(SelectConditions):
 
     def load_and_merge(self):
         if db.HAS_DB:
-            df = db.query(self.tables[self.scale])
+            start = TODAY - timedelta(days=365)
+            condition = self.tables[self.scale].date >= start
+            df = db.query(self.tables[self.scale], condition)
             df = df.drop(['pk_id', 'create_time'], axis=1).drop_duplicates()
         else:
             df = pd.read_pickle(f'{PATH}/Kbars/company_stock_data_{self.scale}.pkl')
