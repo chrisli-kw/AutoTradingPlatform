@@ -79,6 +79,10 @@ class OrderTool:
         '''儲存對帳單'''
 
         if db.HAS_DB:
+            self.OrderTable.order_cond.fillna('', inplace=True)
+            self.OrderTable.order_lot.fillna('', inplace=True)
+            self.OrderTable.leverage.fillna(-1, inplace=True)
+            self.OrderTable.op_type.fillna('', inplace=True)
             db.dataframe_to_DB(self.OrderTable, TradingStatement)
         else:
             if os.path.exists(filename):

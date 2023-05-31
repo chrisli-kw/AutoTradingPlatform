@@ -280,7 +280,7 @@ class TradingStatement(Base):
     order_cond = Column(String(50, 'utf8mb4_unicode_ci'), default='unknown', comment='現股或融資')
     order_lot = Column(String(50, 'utf8mb4_unicode_ci'), default='unknown', comment='整張或零股')
     op_type = Column(String(50, 'utf8mb4_unicode_ci'), default='unknown', comment='期權委託類型')
-    leverage = Column(FLOAT(2), default='unknown', comment='槓桿比例')
+    leverage = Column(FLOAT(2), default=1, comment='槓桿比例')
     msg = Column(String(200, 'utf8mb4_unicode_ci'), default='unknown', comment='進出場訊息')
 
     create_time = Column(
