@@ -14,7 +14,7 @@ from ..utils import progress_bar
 from ..utils.kbar import KBarTool
 from ..utils.time import TimeTool
 from ..utils.database import db
-from ..utils.database.tables import PutCallRatioList
+from ..utils.database.tables import PutCallRatioList, TradingStatement
 from ..strategies.select import SelectStock
 
 
@@ -40,7 +40,10 @@ def AccountingNumber(number: float):
 
 
 def read_statement(acctName):
-    df = pd.read_csv(f'./data/stock_pool/statement_stocks_{acctName}.csv')
+    if db.HAS_DB:
+        df = db.query(TradingStatement)
+    else:
+        df = pd.read_csv(f'./data/stock_pool/statement_stocks_{acctName}.csv')
     df = df[df.account_id == 'simulate'].drop_duplicates()
     df = df.astype({
         'price': float, 
@@ -783,7 +786,6 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
         
     def load_data(self, backtestScript: object):
         print('Loading data...')
-        # TODO: Loading data from DB
         if backtestScript.market == 'Stocks':
             df = self.load_and_merge()
             df = self.preprocess(df)

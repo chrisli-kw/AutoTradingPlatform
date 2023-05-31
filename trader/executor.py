@@ -1377,7 +1377,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
         now = datetime.now()
         if (not self.is_not_trade_day(now)) and now > TStart:
             self.update_today_previous_kbar(
-                all_stocks, self.strategy_l.dividends)
+                all_stocks+all_futures, self.strategy_l.dividends)
 
         logging.info(f"Today's punish lis: {self.punish_list}")
         logging.info(
@@ -1429,7 +1429,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, RedisToo
             )
             if is_trading_time and now.second < 5:
                 self._update_K1(self.strategy_l.dividends, quotes=self.Quotes)
-                # TODO: all_stocks+all_futures
                 self._set_target_quote_default(all_stocks+all_futures)
                 self._set_index_quote_default()
                 self._set_futures_code_list()

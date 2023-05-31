@@ -283,7 +283,7 @@ class KBarTool(TechnicalSignals, TimeTool):
             if tb.shape[0]:
                 return self.convert_kbar(tb, scale=scale)
 
-    def _update_K1(self, dividends: dict, **quotes):
+    def _update_K1(self, dividends: dict, quotes):
         '''每隔1分鐘更新1分K'''
 
         def concat_df(df):

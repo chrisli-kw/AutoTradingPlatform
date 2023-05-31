@@ -95,9 +95,9 @@ class CrawlStockData:
 
         if db.HAS_DB:
             db.dataframe_to_DB(df, self.tables[scale])
-        elif scale == '1T':
-            day = self.folder_path.split('/')[-1]
-            save_csv(df, f'{self.folder_path}/{day}-stock_data_1T.csv')
+            if scale == '1T':
+                day = self.folder_path.split('/')[-1]
+                save_csv(df, f'{self.folder_path}/{day}-stock_data_1T.csv')
         else:
             filename = f'{PATH}/Kbars/{self.filename}_{scale}.pkl'
             temp = read_and_concat(filename, df)
@@ -192,6 +192,7 @@ class CrawlStockData:
         此程式用來將全部的公司股票資料合併成一個
         '''
 
+        logging.info("Merge stockinfo")
         if len(self.StockData):
             df = pd.concat(self.StockData)
             df.name = df.name.astype(int).astype(str)
