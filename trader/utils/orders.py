@@ -14,24 +14,25 @@ class OrderTool:
     OrderInfo = namedtuple(
         typename="OrderInfo",
         field_names=[
+            'action_type',
             'action', 'target', 'quantity',
             'order_cond', 'octype', 'pos_target',
             'pos_balance', 'daytrade_short', 'reason'
         ],
-        defaults=['', '', 0, '', '', 0, 0, False, '']
+        defaults=['', '', '', 0, '', '', 0, 0, False, '']
     )
     MsgOrder = namedtuple(
-        typename='MsgOrder', 
+        typename='MsgOrder',
         field_names=['operation', 'order', 'status', 'contract']
     )
     OrderTable = pd.DataFrame(columns=[
-        'Time', 'market', 'code', 'action', 
+        'Time', 'market', 'code', 'action',
         'price', 'quantity', 'amount',
-        'order_cond', 'order_lot', 'leverage', 
+        'order_cond', 'order_lot', 'leverage',
         'op_type', 'account_id', 'msg',
-        
+
     ])
-    
+
     def get_sell_quantity(self, content: namedtuple, market: str = 'Stocks'):
         '''根據庫存, 剩餘部位比例, 賣出比例，反推賣出量(張)'''
         if market == 'Stocks':
@@ -42,7 +43,8 @@ class OrderTool:
             condition = content.pos_balance > 0 and content.quantity != 0
 
         if condition:
-            quantity = int(q_before/content.pos_balance*abs(content.pos_target))
+            quantity = int(q_before/content.pos_balance *
+                           abs(content.pos_target))
             quantity = 1000*max(min(quantity, q_before), 1)
             return max(round(quantity/1000), 1)
         return q_before
@@ -58,7 +60,7 @@ class OrderTool:
     def appendOrder(self, order_data: dict):
         '''Add new order data to OrderTable'''
         self.OrderTable = pd.concat([
-            self.OrderTable, 
+            self.OrderTable,
             pd.DataFrame([order_data])
         ])
 
@@ -70,12 +72,12 @@ class OrderTool:
         '''Check if current placed amount is under target limit.'''
         df = self.OrderTable[self.OrderTable.market == market]
         return df.amount.sum() < target
-    
+
     def filterOrderTable(self, market: str):
         '''Filter OrderTable by market'''
         return self.OrderTable[self.OrderTable.market == market].copy()
 
-    def output_statement(self, filename: str=''):
+    def output_statement(self, filename: str = ''):
         '''儲存對帳單'''
 
         if db.HAS_DB:
@@ -86,7 +88,7 @@ class OrderTool:
             db.dataframe_to_DB(self.OrderTable, TradingStatement)
         else:
             if os.path.exists(filename):
-                statement = pd.read_csv(filename)  
+                statement = pd.read_csv(filename)
             else:
                 statement = pd.DataFrame()
             statement = pd.concat([statement, self.OrderTable])

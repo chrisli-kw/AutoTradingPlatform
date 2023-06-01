@@ -27,8 +27,10 @@ class WatchListTool(TimeTool):
         try:
             df = pd.read_csv(f'{PATH}/stock_pool/{self.watchlist_file}.csv')
         except:
-            columns = ['account', 'market', 'code', 'buyday', 'bsh', 'position', 'strategy']
-            df = pd.DataFrame(columns=columns)
+            df = pd.DataFrame(columns=[
+                'account', 'market', 'code', 'buyday',
+                'bsh', 'position', 'strategy'
+            ])
             self.save_watchlist(df)
 
         df.code = df.code.astype(str)
@@ -74,7 +76,8 @@ class WatchListTool(TimeTool):
         if not self.watchlist.shape[0] and stocks.shape[0]:
             for stock in stocks:
                 cost_price = get_contract(stock).reference
-                self._append_watchlist('Stocks', stock, cost_price, strategy_pool)
+                self._append_watchlist(
+                    'Stocks', stock, cost_price, strategy_pool)
 
     def update_watchlist(self, df_stocks: pd.DataFrame):
         '''Update watchlist data when trading time is closed'''
@@ -124,10 +127,8 @@ class WatchListTool(TimeTool):
         position = order.pos_target
 
         if target in self.watchlist.code.values:
-            action = order.action if not order.octype else order.octype
-
             condition = self.watchlist.code == target
-            if action in ['Buy', 'New']:
+            if order.action_type == 'Open':
                 self.watchlist.loc[condition, 'position'] += position
             else:
                 self.watchlist.loc[condition, 'position'] -= position
@@ -143,7 +144,8 @@ class WatchListTool(TimeTool):
 
     def save_watchlist(self, df: pd.DataFrame):
         # TODO either save_csv or dataframe_to_DB
-        save_csv(df, f'{PATH}/stock_pool/{self.watchlist_file}.csv', saveEmpty=True)
+        save_csv(
+            df, f'{PATH}/stock_pool/{self.watchlist_file}.csv', saveEmpty=True)
         if db.HAS_DB:
             codes = db.query(Watchlist.code, self.MatchAccount).code.values
             tb = df[~df.code.isin(codes)]
