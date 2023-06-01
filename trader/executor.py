@@ -597,22 +597,15 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         position = order.pos_target
         is_day_trade = strategies[target] in StrategyShortDT + StrategyLongDT
 
-        # udpate watchlist
-        self.update_watchlist_position(target, action, position)
-
         # append watchlist or update monitor list
-        if action in ['Buy', 'Sell']:
-            if target not in self.stocks.code.values:
-                self._append_watchlist(
-                    'Stocks', order, self.Quotes, strategies)
-            else:
+        if target in self.watchlist.code.values:
+            if action in ['Buy', 'Sell']:
                 self.stocks_to_monitor[target]['position'] -= abs(position)
-        elif action == 'New':
-            if target not in self.futures.Code.values:
-                self._append_watchlist(
-                    'Futures', order, self.Quotes, strategies)
-        else:  # and target in self.futures.Code.values:
-            self.futures_to_monitor[target]['position'] -= abs(position)
+            else:
+                self.futures_to_monitor[target]['position'] -= abs(position)
+
+        # udpate watchlist
+        self.update_watchlist_position(order, self.Quotes, strategies)
 
         # remove from monitor list
         if abs(position) == 100 or position >= order.pos_balance:
@@ -649,7 +642,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
     def update_monitor_lists(self, target, action, data, quantity):
         '''更新監控庫存(成交回報)'''
         if action in ['Buy', 'Sell']:
-            if target in self.stocks.code.values:
+            if target in self.stocks_to_monitor and self.stocks_to_monitor[target]:
                 logging.debug(
                     f'更新 stocks_to_monitor 【QUANTITY】: {action} {target}')
                 self.stocks_to_monitor[target]['quantity'] -= quantity

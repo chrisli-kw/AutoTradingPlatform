@@ -119,19 +119,27 @@ class WatchListTool(TimeTool):
         if db.HAS_DB:
             db.delete(Watchlist, Watchlist.position <= 0, self.MatchAccount)
 
-    def update_watchlist_position(self, target: str, action: str, position: float):
-        condition = self.watchlist.code == target
-        if action in ['Buy', 'New']:
-            self.watchlist.loc[condition, 'position'] += position
+    def update_watchlist_position(self, order: namedtuple, quotes: dict, strategy_pool: dict = None):
+        target = order.target
+        position = order.pos_target
+
+        if target in self.watchlist.code.values:
+            action = order.action if not order.octype else order.octype
+
+            condition = self.watchlist.code == target
+            if action in ['Buy', 'New']:
+                self.watchlist.loc[condition, 'position'] += position
+            else:
+                self.watchlist.loc[condition, 'position'] -= position
+
+            if db.HAS_DB and condition.sum():
+                position = self.watchlist.loc[condition, 'position'].values[0]
+                condition = Watchlist.code.in_([target]), self.MatchAccount
+                db.update(Watchlist, {'position': position}, *condition)
+
+            self.remove_from_watchlist()
         else:
-            self.watchlist.loc[condition, 'position'] -= position
-
-        self.remove_from_watchlist()
-
-        if db.HAS_DB and condition.sum():
-            position = self.watchlist.loc[condition, 'position'].values[0]
-            condition = Watchlist.code.in_([target]), self.MatchAccount
-            db.update(Watchlist, {'position': position}, *condition)
+            self._append_watchlist('Stocks', order, quotes, strategy_pool)
 
     def save_watchlist(self, df: pd.DataFrame):
         # TODO either save_csv or dataframe_to_DB
