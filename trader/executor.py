@@ -1357,21 +1357,19 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 all_stocks+all_futures, self.strategy_l.dividends)
 
         logging.info(f"Today's punish lis: {self.punish_list}")
-        logging.info(
-            f"Today's Ex-dividend stocks: {self.strategy_l.dividends}")
+        logging.info(f"Stocks Ex-dividend: {self.strategy_l.dividends}")
         logging.info(f"Previous Put/Call ratio: {self.strategy_l.pc_ratio}")
-        logging.info(
-            f"Previous percentage change in Dow Jones Index: {self.pct_chg_DowJones}")
         logging.info(f'Start to monitor, basic settings:')
         logging.info(f'Mode:{self.MODE}, Strategy:{self.STRATEGY_STOCK}')
+        logging.info(f'[Stock Position] Long:{self.n_stocks_long}')
+        logging.info(f'[Stock Position] Short:{self.n_stocks_short}')
+        logging.info(f'[Stock Portfolio Limit] Long:{self.N_LIMIT_LS}')
+        logging.info(f'[Stock Portfolio Limit] Short:{self.N_LIMIT_SS}')
+        logging.info(f'[Stock Position Limit] Long:{self.POSITION_LIMIT_LONG}')
         logging.info(
-            f'[Stock Position] Long:{self.n_stocks_long}; Short:{self.n_stocks_short}')
-        logging.info(
-            f'[Stock Portfolio Limit] Long:{self.N_LIMIT_LS}; Short:{self.N_LIMIT_SS}')
-        logging.info(
-            f'[Stock Position Limit] Long:{self.POSITION_LIMIT_LONG}; Short: {self.POSITION_LIMIT_SHORT}')
-        logging.info(
-            f'Futures positions:{self.n_futures}, portfolio Limit:{self.N_FUTURES_LIMIT}')
+            f'[Stock Position Limit] Short: {self.POSITION_LIMIT_SHORT}')
+        logging.info(f'[Futures position] {self.n_futures}')
+        logging.info(f'[Futures portfolio Limit] {self.N_FUTURES_LIMIT}')
 
         text = f"\n【開始監控】{self.ACCOUNT_NAME} 啟動完成({__version__})"
         text += f"\n【操盤模式】{self.MODE}\n【操盤策略】{self.STRATEGY_STOCK}"
@@ -1426,19 +1424,17 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     self._update_K60(hour-1)
 
             # TODO: merge stocks_to_monitor & futures_to_monitor
-            if self.can_stock:
-                for target in list(self.stocks_to_monitor):
-                    order = self.monitor_stocks(target, strategy_s)
-                    if order.pos_target:
-                        self._place_order(order, market='Stocks')
-                        self._update_position(order, strategy_s)
+            for target in list(self.stocks_to_monitor):
+                order = self.monitor_stocks(target, strategy_s)
+                if order.pos_target:
+                    self._place_order(order, market='Stocks')
+                    self._update_position(order, strategy_s)
 
-            if self.can_futures:
-                for target in list(self.futures_to_monitor):
-                    order = self.monitor_futures(target, strategy_f)
-                    if order.pos_target:
-                        self._place_order(order, market='Futures')
-                        self._update_position(order, strategy_f)
+            for target in list(self.futures_to_monitor):
+                order = self.monitor_futures(target, strategy_f)
+                if order.pos_target:
+                    self._place_order(order, market='Futures')
+                    self._update_position(order, strategy_f)
 
             time.sleep(max(5 - (datetime.now() - now).total_seconds(), 0))
 
