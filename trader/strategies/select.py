@@ -72,7 +72,7 @@ class SelectStock(SelectConditions):
     def load_and_merge(self):
         if db.HAS_DB:
             if self.mode == 'select':
-                start = TODAY - timedelta(days=365)
+                start = TODAY - timedelta(days=365*2)
                 condition = self.tables[self.scale].date >= start
                 df = db.query(self.tables[self.scale], condition)
             else:

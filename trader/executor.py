@@ -1077,17 +1077,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         day = self.last_business_day()
 
         if df.shape[0] > 1 and day == df.date.max():
-            # 建立族群清單
-            df['n_category'] = df.category.map(
-                df.groupby('category').name.count().to_dict())
-            self.n_categories = df[[
-                'name', 'company_name', 'category', 'n_category']]
-            self.n_categories = self.n_categories.sort_values(
-                'n_category', ascending=False)
-            self.n_categories = self.n_categories.set_index(
-                'name').n_category.to_dict()
+            df = df.sort_values('Close')# .dropna()
 
-            df = df.dropna().sort_values('Close')
+            # 建立族群清單
+            n_category = df.groupby('category').name.count().to_dict()
+            df['n_category'] = df.category.map(n_category)
+            self.n_categories = (
+                df.sort_values('n_category', ascending=False)
+                .set_index('name').n_category.to_dict())
 
             # 族群清單按照策略權重 & pc_ratio 決定
             # 權重大的先加入，避免重複
