@@ -1448,8 +1448,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             logging.debug(f'stocks_to_monitor: {self.stocks_to_monitor}')
             logging.debug(
                 f'stocks shape: {self.stocks.shape}; watchlist shape: {self.watchlist.shape}')
-            df = pd.DataFrame(
-                {k: v for k, v in self.stocks_to_monitor.items() if v}).T
+            df = {k: v for k, v in self.stocks_to_monitor.items() if v}
+            df = pd.DataFrame(df).T
             if df.shape[0]:
                 df = df[df.account_id == 'simulate']
                 df = df.sort_values('code').reset_index()
@@ -1479,8 +1479,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         if self.simulation:
             # 儲存庫存
             logging.debug(f'futures_to_monitor: {self.futures_to_monitor}')
-            df = pd.DataFrame(
-                {k: v for k, v in self.futures_to_monitor.items() if v}).T
+            df = {k: v for k, v in self.futures_to_monitor.items() if v}
+            df = pd.DataFrame(df).T
             if df.shape[0]:
                 df = df[df.account_id == 'simulate']
                 df = df.reset_index(drop=True)
@@ -1508,7 +1508,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     SecurityInfoFutures,
                     SecurityInfoFutures.Account == self.ACCOUNT_NAME
                 )
-                db.dataframe_to_DB(df, SecurityInfoStocks)
+                db.dataframe_to_DB(df, SecurityInfoFutures)
             else:
                 df.to_pickle(
                     f'{PATH}/stock_pool/simulation_futures_{self.ACCOUNT_NAME}.pkl')

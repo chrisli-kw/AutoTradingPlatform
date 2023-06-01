@@ -111,6 +111,7 @@ class SelectStock(SelectConditions):
         return df.sort_values(['name', self.time_col]).dropna()
 
     def preprocess(self, df: pd.DataFrame):
+        df = df[df.name != 'TX']
         df.name = df.name.astype(int).astype(str)
         if self.mode == 'select':
             df = df.sort_values(['name', self.time_col])
