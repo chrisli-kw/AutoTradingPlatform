@@ -152,6 +152,7 @@ class AccountInfo(CrawlFromHTML, TimeTool):
             stocks.pnl = stocks.pnl.astype(int)  # 未實現損益
             stocks.order_cond = stocks.order_cond.astype(str)  # 交易別
             stocks.insert(1, 'name', stocks.code.apply(self.get_stock_name))
+            stocks[['account', 'market']] = [self.account_name, 'Stocks']
             return stocks
         return self.df_securityInfo
 
@@ -345,8 +346,9 @@ class AccountInfo(CrawlFromHTML, TimeTool):
 
         df = self._obj_2_df(positions)
         if df.shape[0]:
-            return self.df_futuresInfo
-        return df
+            df[['Account', 'Market']] = [self.account_name, 'Futures']
+            return df
+        return self.df_futuresInfo
 
     def get_settle_profitloss(self, start_date: str, end_date: str):
         '''查看期權帳戶(已實現)損益'''

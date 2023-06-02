@@ -95,9 +95,10 @@ class CrawlStockData:
 
         if db.HAS_DB:
             db.dataframe_to_DB(df, self.tables[scale])
-            if scale == '1T':
-                day = self.folder_path.split('/')[-1]
-                save_csv(df, f'{self.folder_path}/{day}-stock_data_1T.csv')
+        
+        if scale == '1T':
+            day = self.folder_path.split('/')[-1]
+            save_csv(df, f'{self.folder_path}/{day}-stock_data_1T.csv')
         else:
             filename = f'{PATH}/Kbars/{self.filename}_{scale}.pkl'
             temp = read_and_concat(filename, df)

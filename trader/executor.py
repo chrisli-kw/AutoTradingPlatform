@@ -1459,6 +1459,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 df['pnl'] = df.action.apply(lambda x: 1 if x == 'Buy' else -1)
                 df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
                 df.yd_quantity = df.quantity
+                df['account'] = se.ACCOUNT_NAME
                 df = df[self.df_securityInfo.columns]
             else:
                 df = self.df_securityInfo
@@ -1495,6 +1496,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     'price': 'RealPrice',
                 })
                 df['Code'] = df.CodeName.apply(lambda x: get_contract(x).code)
+                df.Account = self.ACCOUNT_NAME
 
                 for c in self.df_futuresInfo.columns:
                     if c not in df.columns:
