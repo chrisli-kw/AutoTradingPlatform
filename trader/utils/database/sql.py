@@ -60,6 +60,9 @@ class SQLDatabase:
         result = pd.read_sql(query.statement, session.bind)
         session.close()
 
+        for c in ['pk_id', 'create_time']:
+            if c in result.columns:
+                result = result.drop(['pk_id', 'create_time'], axis=1)
         return result
     
     def queryAll(self, table):

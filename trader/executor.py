@@ -892,7 +892,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     'order_cond': content.order_cond if market == 'Stocks' else 'Cash',
                     'order_lot': order_lot,
                     'leverage': leverage,
-                    'account_id': 'simulate',
+                    'account_id': f'simulate-{self.ACCOUNT_NAME}',
                     'msg': content.reason
                 }
                 self.appendOrder(order_data)
@@ -921,7 +921,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     'quantity': quantity,
                     'amount': self.get_open_margin(target, quantity)*sign,
                     'op_type': content.octype,
-                    'account_id': 'simulate',
+                    'account_id': f'simulate-{self.ACCOUNT_NAME}',
                     'msg': content.reason
                 }
                 self.appendOrder(order_data)
@@ -989,12 +989,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     df = db.query(
                         SecurityInfoStocks,
                         SecurityInfoStocks.account == self.ACCOUNT_NAME
-                    ).drop(['pk_id', 'create_time'], axis=1)
+                    )
                 elif db.HAS_DB and market == 'Futures':
                     df = db.query(
                         SecurityInfoFutures,
                         SecurityInfoFutures.Account == self.ACCOUNT_NAME
-                    ).drop(['pk_id', 'create_time'], axis=1)
+                    )
                 else:
                     df = pd.read_pickle(
                         f'{PATH}/stock_pool/simulation_{market.lower()}_{self.ACCOUNT_NAME}.pkl')
@@ -1440,7 +1440,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         time.sleep(10)
         self.unsubscribe_all({'Stocks': all_stocks, 'Futures': all_futures})
-        self.output_files()
 
     def __save_simulate_securityInfo(self):
         '''儲存模擬交易模式下的股票庫存表'''
@@ -1459,7 +1458,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 df['pnl'] = df.action.apply(lambda x: 1 if x == 'Buy' else -1)
                 df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
                 df.yd_quantity = df.quantity
-                df['account'] = se.ACCOUNT_NAME
+                df['account'] = self.ACCOUNT_NAME
                 df = df[self.df_securityInfo.columns]
             else:
                 df = self.df_securityInfo

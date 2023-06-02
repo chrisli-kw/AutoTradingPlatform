@@ -118,13 +118,18 @@ def runAutoTrader():
     except KeyboardInterrupt:
         notifier.post(
             f"\n【Interrupt】【下單機監控】{se.ACCOUNT_NAME}已手動關閉", msgType='Tasker')
-        se.output_files()
     except:
         logging.exception('Catch an exception:')
         notifier.post(
             f"\n【Error】【下單機監控】{se.ACCOUNT_NAME}發生異常", msgType='Tasker')
-        se.output_files()
     finally:
+        try:
+            se.output_files()
+        except:
+            logging.exception('Catch an exception (output_files):')
+            notifier.post(
+                f"\n【Error】【下單機監控】{se.ACCOUNT_NAME}資料儲存失敗", msgType='Tasker')
+            
         logging.info(f'登出系統: {API.logout()}')
         notifier.post(f"\n【停止監控】{se.ACCOUNT_NAME}關閉程式並登出", msgType='Tasker')
 

@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import shioaji as sj
 
-__version__ = '1.2.10'
+__version__ = '1.2.11'
 API = sj.Shioaji()
 TODAY = datetime.today()
 TODAY_STR = TODAY.strftime("%Y-%m-%d")

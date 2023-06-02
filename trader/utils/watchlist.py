@@ -21,7 +21,6 @@ class WatchListTool(TimeTool):
         """Load watchlist data"""
         if db.HAS_DB:
             df = db.query(Watchlist, Watchlist.account == self.account_name)
-            df = df.drop(['pk_id', 'create_time'], axis=1)
             return df
 
         try:
