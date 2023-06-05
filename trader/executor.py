@@ -237,8 +237,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     # 記錄委託成功的買單
                     price = self.Quotes.NowTargets[stock]['price'] if stock in self.Quotes.NowTargets else order['price']
                     quantity = order['quantity']
-                    quantity = quantity * \
-                        1000 if order['order_lot'] == 'Common' else quantity
+                    if order['order_lot'] == 'Common':
+                        quantity *= 1000
                     order_data = {
                         'Time': datetime.now(),
                         'market': 'Stocks',
@@ -332,10 +332,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         elif stat == constant.OrderState.FuturesOrder:
             code = msg['contract']['code']
             symbol = code + msg['contract']['delivery_month']
+            bsh = self.Quotes.AllTargets[symbol]['price']
             msg.update({
                 'symbol': symbol,
                 'cost_price': self.Quotes.NowTargets[symbol]['price'] if symbol in self.Quotes.NowTargets else 0,
-                'bsh': max(self.Quotes.AllTargets[symbol]['price']) if self.Quotes.AllTargets[symbol]['price'] else 0,
+                'bsh': max(bsh) if bsh else 0,
                 'bst': datetime.now(),
                 'position': 100
             })
@@ -728,7 +729,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             if quantity and (c1 or c2):
                 is_day_trade = (
                     (strategy in StrategyShortDT + StrategyLongDT) and
-                    (target in self.stock_bought + self.stock_sold)
+                    (target in self.stock_bought + self.stock_sold) and
+                    (target not in self.stocks.code.values)
                 )
                 tradeType = '當沖' if is_day_trade else '非當沖'
 
@@ -914,7 +916,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 sign = -1 if content.action == 'Sell' else 1
                 order_data = {
                     'Time': datetime.now(),
-                    'market': 'Futures',
+                    'market': market,
                     'code': target,
                     'action': content.action,
                     'price': price*sign,
@@ -928,8 +930,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 self._update_futures_deal_list(target, content.octype)
 
                 # 更新監控庫存
-                bsh = max(self.Quotes.AllTargets[target]['price']
-                          ) if self.Quotes.AllTargets[target]['price'] else price
+                bsh = self.Quotes.AllTargets[target]['price']
+                bsh = max(bsh) if bsh else price
                 order_data.update({
                     'symbol': target,
                     'cost_price': price,
@@ -1360,12 +1362,13 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         logging.info(f"Stocks Ex-dividend: {self.strategy_l.dividends}")
         logging.info(f"Previous Put/Call ratio: {self.strategy_l.pc_ratio}")
         logging.info(f'Start to monitor, basic settings:')
-        logging.info(f'Mode:{self.MODE}, Strategy:{self.STRATEGY_STOCK}')
+        logging.info(f'Mode:{self.MODE}, Strategy: {self.STRATEGY_STOCK}')
         logging.info(f'[Stock Position] Long:{self.n_stocks_long}')
         logging.info(f'[Stock Position] Short:{self.n_stocks_short}')
-        logging.info(f'[Stock Portfolio Limit] Long:{self.N_LIMIT_LS}')
-        logging.info(f'[Stock Portfolio Limit] Short:{self.N_LIMIT_SS}')
-        logging.info(f'[Stock Position Limit] Long:{self.POSITION_LIMIT_LONG}')
+        logging.info(f'[Stock Portfolio Limit] Long: {self.N_LIMIT_LS}')
+        logging.info(f'[Stock Portfolio Limit] Short: {self.N_LIMIT_SS}')
+        logging.info(
+            f'[Stock Position Limit] Long: {self.POSITION_LIMIT_LONG}')
         logging.info(
             f'[Stock Position Limit] Short: {self.POSITION_LIMIT_SHORT}')
         logging.info(f'[Futures position] {self.n_futures}')
