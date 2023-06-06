@@ -4,7 +4,7 @@ import logging
 import pandas as pd
 from collections import namedtuple
 
-from .. import API
+from .. import API, PATH
 from . import save_csv
 from .database import db
 from .database.tables import TradingStatement
@@ -78,7 +78,7 @@ class OrderTool:
         return self.OrderTable[self.OrderTable.market == market].copy()
 
     def output_statement(self, filename: str = ''):
-        '''儲存對帳單'''
+        '''Export trading statement'''
 
         if db.HAS_DB:
             self.OrderTable.order_cond.fillna('', inplace=True)
@@ -93,3 +93,20 @@ class OrderTool:
                 statement = pd.DataFrame()
             statement = pd.concat([statement, self.OrderTable])
             save_csv(statement, filename)
+
+    def read_statement(self, account: str = ''):
+        '''Import trading statement'''
+
+        if db.HAS_DB:
+            df = db.query(
+                TradingStatement,
+                TradingStatement.account_id == account
+            )
+        else:
+            filename = f"{PATH}/stock_pool/statement_stocks_{account.split('-')[-1]}.csv"
+            if os.path.exists(filename):
+                df = pd.read_csv(filename)
+            else:
+                df = self.OrderTable
+
+        return df

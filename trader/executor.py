@@ -1454,7 +1454,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             df = {k: v for k, v in self.stocks_to_monitor.items() if v}
             df = pd.DataFrame(df).T
             if df.shape[0]:
-                df = df[df.account_id == 'simulate']
+                df = df[df.account_id == f'simulate-{self.ACCOUNT_NAME}']
                 df = df.sort_values('code').reset_index()
                 df['last_price'] = df.code.map(
                     {s: self.Quotes.NowTargets[s]['price'] for s in df.code})
@@ -1468,15 +1468,16 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             logging.debug(
                 f'stocks shape: {df.shape}; watchlist shape: {self.watchlist.shape}')
 
-            if db.HAS_DB:
-                db.delete(
-                    SecurityInfoStocks,
-                    SecurityInfoStocks.account == self.ACCOUNT_NAME
-                )
-                db.dataframe_to_DB(df, SecurityInfoStocks)
-            else:
-                df.to_pickle(
-                    f'{PATH}/stock_pool/simulation_stocks_{self.ACCOUNT_NAME}.pkl')
+            if df.shape[0]:
+                if db.HAS_DB:
+                    db.delete(
+                        SecurityInfoStocks,
+                        SecurityInfoStocks.account == self.ACCOUNT_NAME
+                    )
+                    db.dataframe_to_DB(df, SecurityInfoStocks)
+                else:
+                    df.to_pickle(
+                        f'{PATH}/stock_pool/simulation_stocks_{self.ACCOUNT_NAME}.pkl')
 
     def __save_simulate_futuresInfo(self):
         '''儲存模擬交易模式下的期貨庫存表'''
@@ -1486,7 +1487,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             df = {k: v for k, v in self.futures_to_monitor.items() if v}
             df = pd.DataFrame(df).T
             if df.shape[0]:
-                df = df[df.account_id == 'simulate']
+                df = df[df.account_id == f'simulate-{self.ACCOUNT_NAME}']
                 df = df.reset_index(drop=True)
                 df = df.rename(columns={
                     'account_id': 'Account',
@@ -1508,22 +1509,23 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             else:
                 df = self.df_futuresInfo
 
-            if db.HAS_DB:
-                db.delete(
-                    SecurityInfoFutures,
-                    SecurityInfoFutures.Account == self.ACCOUNT_NAME
-                )
-                db.dataframe_to_DB(df, SecurityInfoFutures)
-            else:
-                df.to_pickle(
-                    f'{PATH}/stock_pool/simulation_futures_{self.ACCOUNT_NAME}.pkl')
+            if df.shape[0]:
+                if db.HAS_DB:
+                    db.delete(
+                        SecurityInfoFutures,
+                        SecurityInfoFutures.Account == self.ACCOUNT_NAME
+                    )
+                    db.dataframe_to_DB(df, SecurityInfoFutures)
+                else:
+                    df.to_pickle(
+                        f'{PATH}/stock_pool/simulation_futures_{self.ACCOUNT_NAME}.pkl')
 
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''
         if 'position' in self.stocks.columns and not self.simulation:
             self.stocks = self.get_securityInfo('Stocks')
-            # self.history_kbars(self.stocks[self.stocks.yd_quantity == 0].code)
             self.update_watchlist(self.stocks)
+
         self.save_watchlist(self.watchlist)
         self.output_statement(
             f'{PATH}/stock_pool/statement_{self.ACCOUNT_NAME}.csv')

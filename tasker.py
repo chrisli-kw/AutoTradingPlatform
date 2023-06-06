@@ -129,7 +129,7 @@ def runAutoTrader():
             logging.exception('Catch an exception (output_files):')
             notifier.post(
                 f"\n【Error】【下單機監控】{se.ACCOUNT_NAME}資料儲存失敗", msgType='Tasker')
-            
+
         logging.info(f'登出系統: {API.logout()}')
         notifier.post(f"\n【停止監控】{se.ACCOUNT_NAME}關閉程式並登出", msgType='Tasker')
 
@@ -321,23 +321,15 @@ def runShioajiSubscriber():
 
 def runSimulationChecker():
     try:
-        filepath = f'{PATH}/stock_pool'
         for account in ACCOUNTS:
             config = dotenv_values(f'./lib/envs/{account}.env')
 
             if config['MODE'] == 'Simulation':
+                se = StrategyExecutor(config=config)
+
                 # check stock pool size
-                watchlist = pd.read_csv(f'{filepath}/watchlist_{account}.csv')
-                stocks = pd.read_pickle(
-                    f'{filepath}/simulation_stocks_{account}.pkl')
-
-                watchlist.buyday = pd.to_datetime(watchlist.buyday).dt.date
-                watchlist.code = watchlist.code.astype(str)
-                watchlist = watchlist[
-                    ~watchlist.code.str.contains('MXF') &
-                    ~watchlist.code.str.contains('TXF')
-                ]
-
+                watchlist = se.watchlist[se.watchlist.market == 'Stocks']
+                stocks = se.get_securityInfo('Stocks')
                 is_same_shape = watchlist.shape[0] == stocks.shape[0]
                 if not is_same_shape:
                     text = f'\n【{account} 庫存不一致】'
@@ -350,10 +342,13 @@ def runSimulationChecker():
                     notifier.post(text, msgType='Monitor')
 
                 # update performance statement
-                df = pd.read_csv(f'{filepath}/statement_stocks_{account}.csv')
+                df = se.read_statement(f'simulation-{account}')
                 df = convert_statement(df)
                 save_excel(
-                    df, f'{filepath}/simulation_performance_{account}.xlsx', saveEmpty=True)
+                    df,
+                    f'{PATH}/stock_pool/simulation_performance_{account}.xlsx',
+                    saveEmpty=True
+                )
     except FileNotFoundError as e:
         logging.warning(e)
         notifier.post(f'\n{e}', msgType='Tasker')

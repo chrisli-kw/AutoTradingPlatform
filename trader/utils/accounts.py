@@ -39,7 +39,7 @@ class AccountInfo(CrawlFromHTML, TimeTool):
         self.ProfitAccCount = 0  # 權益總值
         self.df_securityInfo = pd.DataFrame(
             columns=[
-                'account', 'market', 
+                'account', 'market',
                 'code', 'order_cond', 'action', 'pnl',
                 'cost_price', 'quantity', 'yd_quantity', 'last_price'
             ]
@@ -54,11 +54,23 @@ class AccountInfo(CrawlFromHTML, TimeTool):
         )
 
     def _login(self, API_KEY, SECRET_KEY, account_name):
-        API.login(api_key=API_KEY, secret_key=SECRET_KEY, contracts_timeout=10000)
+        n = 0
+        while n < 5:
+            try:
+                API.login(
+                    api_key=API_KEY,
+                    secret_key=SECRET_KEY,
+                    contracts_timeout=10000
+                )
+            except TimeoutError as e:
+                logging.warning(f'{e}')
+                n += 1
+                time.sleep(5)
 
         nth_account = int(account_name[-1])
         if nth_account > 1:
-            accounts = [a for a in API.list_accounts() if isinstance(a, StockAccount)]
+            accounts = API.list_accounts()
+            accounts = [a for a in accounts if isinstance(a, StockAccount)]
             if len(accounts) > 1:
                 API.set_default_account(accounts[nth_account-1])
             else:
@@ -135,7 +147,10 @@ class AccountInfo(CrawlFromHTML, TimeTool):
         '''查庫存明細'''
         while True:
             try:
-                stocks = API.list_positions(API.stock_account, unit=sj.constant.Unit.Share)
+                stocks = API.list_positions(
+                    API.stock_account,
+                    unit=sj.constant.Unit.Share
+                )
                 stocks = self._obj_2_df(stocks)
                 break
             except:
@@ -244,7 +259,8 @@ class AccountInfo(CrawlFromHTML, TimeTool):
     def compute_margin_amount(self, stocks: pd.DataFrame):
         '''計算融資/融券金額'''
         if stocks.shape[0]:
-            is_leverage = ('MarginTrading' == stocks.order_cond.apply(lambda x: x._value_))
+            is_leverage = (
+                'MarginTrading' == stocks.order_cond.apply(lambda x: x._value_))
             leverages = [self.get_leverage(s)['融資成數']/100 for s in stocks.code]
             return sum(is_leverage*stocks.cost_price*stocks.quantity*leverages)
         return 0
@@ -290,9 +306,10 @@ class AccountInfo(CrawlFromHTML, TimeTool):
 
         # 帳務交割資訊
         settle_info = self.settle_info()
+        settles = settle_info.amount[1:].sum()
 
         # 總現值 = 帳戶餘額 + T+1日交割金額 + T+2日交割金額 + 庫存現值
-        total_value = int(balance + total_market_value + settle_info.amount[1:].sum())
+        total_value = int(balance + total_market_value + settles)
 
         now = int(total_value - margin_amount - unrealized_profit)
         settle_t1 = settle_info.values[1, 1]
