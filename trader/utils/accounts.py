@@ -62,6 +62,7 @@ class AccountInfo(CrawlFromHTML, TimeTool):
                     secret_key=SECRET_KEY,
                     contracts_timeout=10000
                 )
+                break
             except TimeoutError as e:
                 logging.warning(f'{e}')
                 n += 1
