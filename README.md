@@ -99,6 +99,11 @@ USERS = your env file name
 REDIS_HOST = your_redis_host
 REDIS_PORT = your_redis_port
 REDIS_PWD = your_redis_password
+DB_HOST = your_DB_host
+DB_PORT = your_DB_port
+DB_USER = your_DB_user_name
+DB_PWD = your_DB_password
+DB_NAME = your_DB_schema_name
 
 [LINENOTIFY] # optional, can be left blank
 TOKEN_MONITOR = your_LINE_Notify_token1
@@ -148,4 +153,4 @@ python tasker.py -TASK update_and_select_stock
 ```
 
 ## Releases and Contributing
-AutoTradingPlatform has a 7-day release cycle, any updates will be committed by each Friday.
+AutoTradingPlatform has a 7-day release cycle, any updates will be committed by each Friday (git commits are not included).

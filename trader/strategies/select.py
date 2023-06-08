@@ -70,6 +70,7 @@ class SelectStock(SelectConditions):
         self.METHODS = {m: getattr(self, f'condition_{m}') for m in methods}
 
     def load_and_merge(self):
+        # TODO: 加入籌碼資料、自選資料
         if db.HAS_DB:
             if self.mode == 'select':
                 start = TODAY - timedelta(days=365*2)

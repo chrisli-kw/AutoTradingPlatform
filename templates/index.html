@@ -212,18 +212,14 @@
                     </tr>
 
                     <tr>
-                        <th scope="row">期貨交易模式設定</th>
+                        <th scope="row">期貨交易時段設定</th>
                         <td>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="MODE_FUTURES" id="MODE_FUTURES1"
-                                    value='long'>
-                                <label class="form-check-label" for="MODE_FUTURES1">做多</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="MODE_FUTURES" id="MODE_FUTURES2"
-                                    value='short' checked='checked'>
-                                <label class="form-check-label" for="MODE_FUTURES2">做空</label>
-                            </div>
+                            <select id="inputState" class="form-control" name="TRADING_PERIOD">
+                                <option></option>
+                                <option selected>日盤</option>
+                                <option>夜盤</option>
+                                <option>日盤&夜盤</option>
+                            </select>
                         </td>
                     </tr>
                     <tr>

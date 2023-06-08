@@ -3,10 +3,10 @@ from datetime import datetime
 from trader.strategies import StrategyTool
 
 
-class LongStrategy(StrategyTool):
+class StrategySet(StrategyTool):
     '''
     ===================================================================
-    LongStrategy is a LONG strategy class for AutoTradingPlatform, it 
+    StrategySet is a set of strategy class for AutoTradingPlatform, it 
     inherits the StrategyTool Object for the use of common functions.
 
     *****
@@ -24,35 +24,35 @@ class LongStrategy(StrategyTool):
     '''
 
     def __init__(self, **kwargs):
-        super().__init__()
+        StrategyTool.__init__()
 
         # customized settings
-        self.account_name = kwargs['account_name']
-        self.hold_day = kwargs['hold_day']
-        self.is_simulation = kwargs['is_simulation']
-        self.stock_limit_type = kwargs['stock_limit_type']
-        self.futures_limit_type = kwargs['futures_limit_type']
-        self.stock_limit_long = kwargs['stock_limit_long']
-        self.futures_limit = kwargs['futures_limit']
         self.STRATEGIES = pd.DataFrame(
+            # table of strategy set, recording each strategy name and its
+            # weight of long/short perspective. If a strategy is a long
+            # strategy, give an integer to its long_weight and 0 to its
+            # short_weight; and vice versa.
             [
-                ['Strategy1', 1],
-                ['Strategy2', 2],
-                ['Strategy3', 3]
+                ['Strategy1', 1, 0],
+                ['Strategy2', 2, 0],
+                ['Strategy3', 3, 0],
+                ['Strategy4', 0, 1],
             ],
-            columns=['name', 'weight']
+            columns=['name', 'long_weight', 'short_weight']
         )
         self.Funcs = {
             'Open': {
                 '當沖': {},
                 '非當沖': {
                     'Strategy1': self.buyStrategy1,
+                    'Strategy2': self.sellStrategy2,
                 }
             },
             'Close': {
                 '當沖': {},
                 '非當沖': {
                     'Strategy1': self.sellStrategy1,
+                    'Strategy2': self.buyStrategy2,
                 }
             }
         }
@@ -93,14 +93,14 @@ class LongStrategy(StrategyTool):
             return self.stock_limit_long
         return self.stock_limit_long
 
-    def setNFuturesLimitLong(self, KBars: dict = None):
+    def setNFuturesLimit(self, KBars: dict = None):
         '''
         ===================================================================
 
         *****OPTIONAL*****
 
         Functions of setting the number of FUTURES limit to trade for all 
-        LONG strategies. This function is OPTIONAL to use, which means 
+        futures strategies. This function is OPTIONAL to use, which means 
         if not determine this func, the system will automatically return 
         the value of self.futures_limit for further operations.
         ===================================================================
@@ -130,7 +130,8 @@ class LongStrategy(StrategyTool):
     def buyStrategy1(self, inputs: dict, kbars: dict, **kwargs):
         '''
         ===================================================================
-        Functions of determining if the system can open a stock position.
+        Functions of determining if the system can open a LONG stock 
+        position.
 
         Arguments:
         inputs: daily quote data of a stock/futures security, including, 
@@ -157,7 +158,64 @@ class LongStrategy(StrategyTool):
     def sellStrategy1(self, inputs: dict, kbars: dict, **kwargs):
         '''
         ===================================================================
-        Functions of determining if the system can close a stock position.
+        Functions of determining if the system can close a LONG stock 
+        position.
+
+        Arguments:
+        inputs: daily quote data of a stock/futures security, including, 
+        open, high, low, close, price, volume, ..., etc
+        kbars: Kbar data for condition checking, supported kbar frequencies
+        are 1D, 60T, 30T, 15T, 5T, 1T.
+
+        Supported key-word arguments:
+        indexQuotes: index quote data (TSE, OTC) for the specific trade-
+        day.
+        pct_chg_DowJones: the percentage change of the previous trade-day
+        Dow-Jones index.
+
+        The function returns a namedtuple Object, including position(%), 
+        reason, and msg.
+        ===================================================================
+        '''
+        sell_condition = inputs['price'] < inputs['open']
+        if sell_condition == True:
+            sell_position = 100
+            return self.Action(sell_position, 'sell_type', 'sell_message')
+        return self.Action()
+
+    def buyStrategy2(self, inputs: dict, kbars: dict, **kwargs):
+        '''
+        ===================================================================
+        Functions of determining if the system can close a SHORT stock 
+        position.
+
+        Arguments:
+        inputs: daily quote data of a stock/futures security, including, 
+        open, high, low, close, volume, ..., etc
+        kbars: Kbar data for condition checking, supported kbar frequencies
+        are 1D, 60T, 30T, 15T, 5T, 1T.
+
+        Supported key-word arguments:
+        indexQuotes: index quote data (TSE, OTC) for the specific trade-
+        day.
+        pct_chg_DowJones: the percentage change of the previous trade-day
+        Dow-Jones index.
+
+        The function returns a namedtuple Object, including position(%), 
+        reason, and msg.
+        ===================================================================
+        '''
+        buy_condition = inputs['price'] > inputs['open']
+        if buy_condition == True:
+            buy_position = 100
+            return self.Action(buy_position, 'buy_type', 'buy_message')
+        return self.Action()
+
+    def sellStrategy2(self, inputs: dict, kbars: dict, **kwargs):
+        '''
+        ===================================================================
+        Functions of determining if the system can open a SHORT stock 
+        position.
 
         Arguments:
         inputs: daily quote data of a stock/futures security, including, 

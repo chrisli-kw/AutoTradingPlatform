@@ -10,7 +10,7 @@ from collections import namedtuple
 from datetime import datetime, timedelta
 
 from shioaji import constant
-from . import API, PATH, TODAY, TODAY_STR, __version__
+from . import API, PATH, TODAY, TODAY_STR, __version__, holidays
 from .config import StrategyLong, StrategyShort, StrategyLongDT, StrategyShortDT
 from .config import FEE_RATE, TStart, TEnd, TTry, TimeStartStock, TimeStartFuturesDay
 from .config import TimeEndFuturesDay, TimeStartFuturesNight, TimeEndFuturesNight
@@ -24,8 +24,6 @@ from .utils.orders import OrderTool
 from .utils.database import db
 from .utils.database.tables import SecurityInfoStocks, SecurityInfoFutures
 from .utils.subscribe import Subscriber
-# from .strategies.long import LongStrategy
-# from .strategies.short import ShortStrategy
 try:
     from .strategies.StrategySet import StrategySet as StrategySets
 except:
@@ -73,7 +71,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.simulation = self.MODE == 'Simulation'
 
         # 期貨使用者設定
-        self.MODE_FUTURES = self.getENV('MODE_FUTURES')  # TODO: delete
+        self.TRADING_PERIOD = self.getENV('TRADING_PERIOD')
         self.STRATEGY_FUTURES = self.getENV('STRATEGY_FUTURES', 'list')
         self.MARGIN_LIMIT = self.getENV('MARGIN_LIMIT', 'int')
         self.N_FUTURES_LIMIT_TYPE = self.getENV('N_FUTURES_LIMIT_TYPE')
@@ -612,8 +610,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         # remove from monitor list
         if position == 100 or position >= order.pos_balance:
             if target in self.stocks_to_monitor and self.stocks_to_monitor[target]['position'] <= 0:
-                # TODO: 一天可以當沖進出很多次的判定
-                # if is_day_trade: self.stocks_to_monitor[target] = None
+                # TODO:if is_day_trade: self.stocks_to_monitor[target] = None
                 self.remove_stock_monitor_list(target)
 
             if target in self.futures_to_monitor and self.futures_to_monitor[target]['position'] <= 0:
@@ -698,7 +695,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             inputs = self.Quotes.NowTargets[target].copy()
             data = self.stocks_to_monitor[target]
             strategy = strategies[target]
-
             isLongStrategy = strategy in StrategyLong + StrategyLongDT
             isDTStrategy = strategy in StrategyShortDT + StrategyLongDT
             isSell = (
@@ -1132,9 +1128,16 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         quantity, quantity_limit = quantityFunc(
             inputs=inputs, kbars=self.KBars)
         leverage = self.check_leverage(target, order_cond)
-        # TODO: 不可超過券商可融資餘額上限
+        
         quantity = int(min(quantity, quantity_limit)/(1 - leverage))
         quantity = min(quantity, 499)
+
+        contract = get_contract(target)
+        if order_cond == 'MarginTrading':
+            quantity = min(contract.margin_trading_balance, quantity)
+        elif order_cond == 'ShortSelling':
+            quantity = min(contract.short_selling_balance, quantity)
+
         return 1000*quantity
 
     def get_stock_amount(self, target: str, price: float, quantity: int, mode='long'):
@@ -1299,15 +1302,20 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
     def is_not_trade_day(self, now: datetime):
         '''檢查是否為非交易時段'''
+        is_holiday = TODAY in holidays
         if self.can_futures:
-            return (
-                (now.weekday() in [5, 6]) or
-                ((now > TimeEndFuturesNight) and (now < TimeStartFuturesDay)) or
-                # TODO: 只在 05:00 ~ 08:45之間關閉
-                ((now > TimeEndFuturesDay) and (now < TimeStartFuturesNight))
+            close1 = (
+                (now > TimeEndFuturesNight) and 
+                (now < TimeStartFuturesDay + timedelta(days=1))
             )
+            close2 = now > TimeEndFuturesDay and now < TimeStartFuturesNight
+            if self.TRADING_PERIOD != 'Day':
+                # trader only closes during 05:00 ~ 08:45
+                close2 = False
+            
+            return is_holiday or close1 or close2
 
-        return (now.weekday() in [5, 6]) or not (now <= TEnd)
+        return is_holiday or not (now <= TEnd)
 
     def remove_stock_monitor_list(self, target: str):
         logging.debug(f'Remove【{target}】from stocks_to_monitor.')
@@ -1535,8 +1543,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''
         if 'position' in self.stocks.columns and not self.simulation:
-            self.stocks = self.get_securityInfo('Stocks')
-            self.update_watchlist(self.stocks)
+            codeList = self.get_securityInfo('Stocks').code.to_list()
+            self.update_watchlist(codeList)
 
         self.save_watchlist(self.watchlist)
         self.output_statement(

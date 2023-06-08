@@ -5,8 +5,7 @@ The instruction document regarding script design has 3 parts:
 - [Script Design Instructions](#script-design-instructions)
   - [Long/Short Strategies](#longshort-strategies)
     - [Step 1: add files](#step-1-add-files)
-    - [Step 2: add long strategy scripts](#step-2-add-long-strategy-scripts)
-    - [Step 3: add short strategy scripts](#step-3-add-short-strategy-scripts)
+    - [Step 2: add strategy scripts](#step-2-add-strategy-scripts)
   - [K-Bar Features](#k-bar-features)
     - [Step 1: add file](#step-1-add-file)
     - [Step 2: add feature scripts](#step-2-add-feature-scripts)
@@ -18,21 +17,17 @@ The instruction document regarding script design has 3 parts:
 ## Long/Short Strategies
 
 ### Step 1: add files
-Add ```long.py``` and ```short.py``` to ```./trader/strategies/``` to represent long/short strategy modules, respectively.
+Add ```StrategySet.py``` to ```./trader/strategies/``` as a strategy module.
 
 ```lua
 .
   |-- trader
     |-- strategies
-      |-- long.py  <--
-      |-- short.py <--
+      |-- StrategySet.py  <--
 ```
 
-### Step 2: add long strategy scripts
-The script should be an class object, see the [sample code](../../docs/script%20samples/long.py) for more details.
-
-### Step 3: add short strategy scripts
-The script should be an class object, see the [sample code](../../docs/script%20samples/short.py) for more details.
+### Step 2: add strategy scripts
+The script should be an class object, see the [sample code](../../docs/script%20samples/StrategySet.py) for more details.
 
 <u>Be sure to update self.STRATEGIES, self.Funcs, and self.QuantityFunc (if exists) before running AutoTradingPlatform</u>
 

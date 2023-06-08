@@ -89,8 +89,8 @@ def _create_env(inputs):
         HOLD_DAY={inputs['HOLD_DAY']}
 
         # ----------------------------------- 期貨設定 ----------------------------------- #
-        # 多空模式
-        MODE_FUTURES={inputs['MODE_FUTURES']}
+        # 交易時段(Day/Night/Both)
+        TRADING_PERIOD={inputs['TRADING_PERIOD']}
 
         # 期貨要執行的策略
         STRATEGY_FUTURES={inputs['STRATEGY_FUTURES']}

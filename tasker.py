@@ -191,7 +191,6 @@ def runSelectStock():
         tb = df[df.date == TODAY_STR].copy()
         exists = tb[SelectMethods].isin([True]).any(axis=1)
         tb1 = tb[exists == True]
-        # TODO: 加入籌碼資料
         picker.export(tb1)
         notifier.post_stock_selection(
             tb1[['name', 'company_name']+SelectMethods].copy())

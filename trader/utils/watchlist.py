@@ -78,39 +78,23 @@ class WatchListTool(TimeTool):
                 self._append_watchlist(
                     'Stocks', stock, cost_price, strategy_pool)
 
-    def update_watchlist(self, df_stocks: pd.DataFrame):
+    def update_watchlist(self, codeList: list):
         '''Update watchlist data when trading time is closed'''
-
-        df1 = self.watchlist[self.watchlist.market == 'Stocks']
-        df2 = self.watchlist[self.watchlist.market == 'Futures']
-
-        # Update watchlist if there's any new stock added in stock account.
-        condi1 = (df_stocks.yd_quantity == 0) & (df_stocks.quantity > 0)
-        condi2 = ~df_stocks.code.isin(df1.code)
-        _stocks = df_stocks[condi1 | condi2]
-
-        # Only update those which are manual traded (TODO: delete)
-        for stock in _stocks.code.values:
-            if stock in df1.code.values:
-                condition = (df1.code == stock) & (df1.strategy.isnull())
-                df1.loc[condition, ['buyday', 'position']] = [TODAY, 100]
 
         # Update watchlist position if there's any stock both exists
         # in stock account and watchlist but position <= 0.
-        condi1 = df1.code.isin(df_stocks.code)
-        condi2 = (df1.position <= 0)
-
-        df1.loc[~condi1 | condi2, 'position'] = 0
-        df1.loc[condi1 & condi2, 'position'] = 100
-        self.watchlist = pd.concat([df1, df2])
+        condi1 = self.watchlist.code.isin(codeList)
+        condi2 = (self.watchlist.position <= 0)
+        self.watchlist.loc[~condi1 | condi2, 'position'] = 0
+        self.watchlist.loc[condi1 & condi2, 'position'] = 100
         self.remove_from_watchlist()
 
         if db.HAS_DB:
-            code1 = df1[~condi1 | condi2].code.values
+            code1 = self.watchlist[~condi1 | condi2].code.values
             condition = Watchlist.code.in_(code1), self.MatchAccount
             db.update(Watchlist, {'position': 0}, *condition)
 
-            code2 = df1[condi1 & condi2].code.values
+            code2 = self.watchlist[condi1 & condi2].code.values
             condition = Watchlist.code.in_(code2), self.MatchAccount
             db.update(Watchlist, {'position': 100}, condition)
 
@@ -142,10 +126,10 @@ class WatchListTool(TimeTool):
             self._append_watchlist('Stocks', order, quotes, strategy_pool)
 
     def save_watchlist(self, df: pd.DataFrame):
-        # TODO either save_csv or dataframe_to_DB
-        save_csv(
-            df, f'{PATH}/stock_pool/{self.watchlist_file}.csv', saveEmpty=True)
         if db.HAS_DB:
             codes = db.query(Watchlist.code, self.MatchAccount).code.values
             tb = df[~df.code.isin(codes)]
             db.dataframe_to_DB(tb, Watchlist)
+        else:
+            save_csv(
+                df, f'{PATH}/stock_pool/{self.watchlist_file}.csv', saveEmpty=True)
