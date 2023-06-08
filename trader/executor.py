@@ -1452,22 +1452,31 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.unsubscribe_all({'Stocks': all_stocks, 'Futures': all_futures})
 
     def simulator_update_securityInfo(self, df: pd.DataFrame, table):
+        market = 'stocks' if 'stocks' in table.__tablename__ else 'futures'
         if db.HAS_DB:
-            match_account = table.account == self.ACCOUNT_NAME
-            codes = db.query(table.code, match_account).code.values
+            if market == 'stocks':
+                match_account = table.account == self.ACCOUNT_NAME
+                codes = db.query(table.code, match_account).code.values
+                tb = df[~df.code.isin(codes)]
+                update_values = df[df.code.isin(codes)].set_index('code')
+            else:
+                match_account = table.Account == self.ACCOUNT_NAME
+                codes = db.query(table.Code, match_account).Code.values
+                tb = df[~df.Code.isin(codes)]
+                update_values = df[df.Code.isin(codes)].set_index('Code')
 
             # add new stocks
-            tb = df[~df.code.isin(codes)]
             db.dataframe_to_DB(tb, table)
 
             # update in-stocks
-            update_values = df[df.code.isin(codes)].set_index('code')
             update_values = update_values.to_dict('index')
             for target, values in update_values.items():
-                condition = table.code == target, match_account
+                if market == 'stocks':
+                    condition = table.code == target, match_account
+                else:
+                    condition = table.Code == target, match_account
                 db.update(table, values, *condition)
         else:
-            market = 'stocks' if 'stocks' in table.__tablename__ else 'futures'
             df.to_pickle(
                 f'{PATH}/stock_pool/simulation_{market}_{self.ACCOUNT_NAME}.pkl')
             
@@ -1524,7 +1533,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     if c not in df.columns:
                         if c in [
                             'ContractAverPrice', 'SettlePrice', 
-                            'RealPrice', 'FlowProfitLoss'
+                            'RealPrice', 'FlowProfitLoss',
+                            'SettleProfitLoss', 'OTAMT', 'MTAMT'
                         ]:
                             df[c] = 0
                         else:
