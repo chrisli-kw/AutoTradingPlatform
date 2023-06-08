@@ -697,15 +697,16 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             data = self.stocks_to_monitor[target]
             strategy = strategies[target]
 
-            is_long_strategy = strategy in StrategyLong + StrategyLongDT
+            isLongStrategy = strategy in StrategyLong + StrategyLongDT
+            isDTStrategy = strategy in StrategyShortDT + StrategyLongDT
             isSell = (
-                # 做多賣出
+                # long selling
                 (data and 'action' in data and data['action'] == 'Buy') or
-                # 做空賣出
-                (not data and self.can_sell and not is_long_strategy)
+                # short selling
+                (not data and self.can_sell and not isLongStrategy)
             )
 
-            # 建倉
+            # new position
             if data is None:
                 mode = 'short' if isSell else 'long'
 
@@ -716,7 +717,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     target, strategy, order_cond, mode)
                 enoughOpen = self.check_enough(target, quantity, mode)
 
-            # 庫存
+            # in-stock position
             else:
                 actionType = 'Close'
                 pos_balance = data['position']
@@ -724,17 +725,21 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 quantity = data['quantity']
                 enoughOpen = False
 
-            c1 = actionType == 'Open' and enoughOpen
-            c2 = actionType == 'Close'
-            if quantity and (c1 or c2):
-                is_day_trade = (
-                    (strategy in StrategyShortDT + StrategyLongDT) and
-                    (target in self.stock_bought + self.stock_sold) and
-                    (target not in self.stocks.code.values)
-                )
-                tradeType = '當沖' if is_day_trade else '非當沖'
+            inStocks = target in self.stocks.code.values
+            inDeal = target in self.stock_bought + self.stock_sold
 
-                func = self.strategy_l if is_long_strategy else self.strategy_s
+            is_day_trade = isDTStrategy and inDeal and (not inStocks)
+            isOpen = actionType == 'Open' and enoughOpen
+            isClose = (
+                (not isDTStrategy) and (not inDeal) and inStocks and 
+                (actionType == 'Close')
+            )
+            isDTClose = (is_day_trade and (actionType == 'Close'))
+            
+            if quantity and (isOpen or isClose or isDTClose):
+                tradeType = '當沖' if is_day_trade else '非當沖'
+                
+                func = self.strategy_l if isLongStrategy else self.strategy_s
                 func = func.mapFunction(actionType, tradeType, strategy)
 
                 if data:
@@ -769,18 +774,18 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             inputs = self.Quotes.NowTargets[target].copy()
             data = self.futures_to_monitor[target]
             strategy = strategies[target]
-            is_long_strategy = strategy in StrategyLong + StrategyLongDT
+            isLongStrategy = strategy in StrategyLong + StrategyLongDT
 
             # 建倉
             if data is None:
-                mode = 'long' if is_long_strategy else 'short'
+                mode = 'long' if isLongStrategy else 'short'
 
                 octype = 'New'
                 actionType = 'Open'
                 quantity = self.get_open_slot(target, strategy, mode)
                 enoughOpen = self._check_enough_open(target, quantity)
                 pos_balance = 100
-                action = 'Buy' if is_long_strategy else 'Sell'
+                action = 'Buy' if isLongStrategy else 'Sell'
 
             # 庫存
             else:
@@ -801,7 +806,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             if quantity and (c1 or c2):
                 is_day_trade = strategy in StrategyShortDT + StrategyLongDT
                 tradeType = '當沖' if is_day_trade else '非當沖'
-                func = self.strategy_l if is_long_strategy else self.strategy_s
+                func = self.strategy_l if isLongStrategy else self.strategy_s
                 func = func.mapFunction(actionType, tradeType, strategy)
 
                 if data:
@@ -1363,6 +1368,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         logging.info(f"Previous Put/Call ratio: {self.strategy_l.pc_ratio}")
         logging.info(f'Start to monitor, basic settings:')
         logging.info(f'Mode:{self.MODE}, Strategy: {self.STRATEGY_STOCK}')
+        logging.info(f'[Stock Strategy] {strategy_s}')
         logging.info(f'[Stock Position] Long:{self.n_stocks_long}')
         logging.info(f'[Stock Position] Short:{self.n_stocks_short}')
         logging.info(f'[Stock Portfolio Limit] Long: {self.N_LIMIT_LS}')
@@ -1371,6 +1377,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             f'[Stock Position Limit] Long: {self.POSITION_LIMIT_LONG}')
         logging.info(
             f'[Stock Position Limit] Short: {self.POSITION_LIMIT_SHORT}')
+        logging.info(f'[Futures Strategy] {strategy_f}')
         logging.info(f'[Futures position] {self.n_futures}')
         logging.info(f'[Futures portfolio Limit] {self.N_FUTURES_LIMIT}')
 
@@ -1444,6 +1451,26 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         time.sleep(10)
         self.unsubscribe_all({'Stocks': all_stocks, 'Futures': all_futures})
 
+    def simulator_update_securityInfo(self, df: pd.DataFrame, table):
+        if db.HAS_DB:
+            match_account = table.account == self.ACCOUNT_NAME
+            codes = db.query(table.code, match_account).code.values
+
+            # add new stocks
+            tb = df[~df.code.isin(codes)]
+            db.dataframe_to_DB(tb, table)
+
+            # update in-stocks
+            update_values = df[df.code.isin(codes)].set_index('code')
+            update_values = update_values.to_dict('index')
+            for target, values in update_values.items():
+                condition = table.code == target, match_account
+                db.update(table, values, *condition)
+        else:
+            market = 'stocks' if 'stocks' in table.__tablename__ else 'futures'
+            df.to_pickle(
+                f'{PATH}/stock_pool/simulation_{market}_{self.ACCOUNT_NAME}.pkl')
+            
     def __save_simulate_securityInfo(self):
         '''儲存模擬交易模式下的股票庫存表'''
         if self.simulation:
@@ -1469,16 +1496,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 f'stocks shape: {df.shape}; watchlist shape: {self.watchlist.shape}')
 
             if df.shape[0]:
-                if db.HAS_DB:
-                    db.delete(
-                        SecurityInfoStocks,
-                        SecurityInfoStocks.account == self.ACCOUNT_NAME
-                    )
-                    db.dataframe_to_DB(df, SecurityInfoStocks)
-                else:
-                    df.to_pickle(
-                        f'{PATH}/stock_pool/simulation_stocks_{self.ACCOUNT_NAME}.pkl')
-
+                self.simulator_update_securityInfo(df, SecurityInfoStocks)
+    
     def __save_simulate_futuresInfo(self):
         '''儲存模擬交易模式下的期貨庫存表'''
         if self.simulation:
@@ -1503,22 +1522,19 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
                 for c in self.df_futuresInfo.columns:
                     if c not in df.columns:
-                        df[c] = 0 if c in ['ContractAverPrice',
-                                           'SettlePrice', 'RealPrice'] else ''
+                        if c in [
+                            'ContractAverPrice', 'SettlePrice', 
+                            'RealPrice', 'FlowProfitLoss'
+                        ]:
+                            df[c] = 0
+                        else:
+                            df[c] = ''
                 df = df[self.df_futuresInfo.columns]
             else:
                 df = self.df_futuresInfo
 
             if df.shape[0]:
-                if db.HAS_DB:
-                    db.delete(
-                        SecurityInfoFutures,
-                        SecurityInfoFutures.Account == self.ACCOUNT_NAME
-                    )
-                    db.dataframe_to_DB(df, SecurityInfoFutures)
-                else:
-                    df.to_pickle(
-                        f'{PATH}/stock_pool/simulation_futures_{self.ACCOUNT_NAME}.pkl')
+                self.simulator_update_securityInfo(df, SecurityInfoFutures)
 
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''
