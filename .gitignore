@@ -145,6 +145,7 @@ dev.py
 python_practice.py
 trader/strategies/long.py
 trader/strategies/short.py
+trader/strategies/StrategySet.py
 trader/strategies/conditions.py
 trader/strategies/features.py
 trader/indicators/indexes.py

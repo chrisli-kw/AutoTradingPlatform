@@ -1,13 +1,23 @@
-import pandas as pd
 import logging
+import pandas as pd
+from datetime import datetime
 from collections import namedtuple
+
 from .. import PATH, TODAY_STR
 from ..utils.database import db
 from ..utils.database.tables import PutCallRatioList, ExDividendTable
 
 
 class StrategyTool:
-    def __init__(self):
+    def __init__(self, **kwargs):
+        self.account_name = kwargs['account_name']
+        self.hold_day = kwargs['hold_day']
+        self.is_simulation = kwargs['is_simulation']
+        self.stock_limit_type = kwargs['stock_limit_type']
+        self.futures_limit_type = kwargs['futures_limit_type']
+        self.stock_limit_long = kwargs['stock_limit_long']
+        self.stock_limit_short = kwargs['stock_limit_short']
+        self.futures_limit = kwargs['futures_limit']
         self.Action = namedtuple(
             typename="Action", 
             field_names=['position', 'reason', 'msg', 'price'], 
@@ -15,6 +25,9 @@ class StrategyTool:
         )
         self.pc_ratio = self.get_put_call_ratio()
         self.dividends = self.get_ex_dividends_list()
+        self.STRATEGIES = pd.DataFrame(
+            columns=['name', 'long_weight', 'short_weight']
+        )
         self.Funcs = {
             'Open': {  # action
                 '當沖': {},  # tradeType
@@ -48,6 +61,37 @@ class StrategyTool:
     def __DoNothing__(self, **kwargs):
         return self.Action()
 
+    def update_indicators(self, now: datetime, kbars: dict):
+        pass
+    
+    def setNStockLimitLong(self, KBars: dict = None):
+        '''
+        Set the number limit of securities of a portfolio can hold 
+        for a long strategy
+        '''
+
+        if self.is_simulation:
+            return 3000
+        elif self.stock_limit_type != 'constant':
+            return self.stock_limit_long
+        return self.stock_limit_long
+    
+    def setNStockLimitShort(self, KBars: dict = None):
+        '''
+        Set the number limit of securities of a portfolio can hold 
+        for a short strategy
+        '''
+
+        if self.is_simulation:
+            return 3000
+        elif self.stock_limit_type != 'constant':
+            return self.stock_limit_short
+        return self.stock_limit_short
+    
+    def setNFuturesLimit(self, KBars: dict = None):
+        '''Set the number limit of securities of a portfolio can hold'''
+        return 0
+    
     def _get_value(self, df: pd.DataFrame, stockid: str, col: str):
         tb = df[df.name == stockid]
 
