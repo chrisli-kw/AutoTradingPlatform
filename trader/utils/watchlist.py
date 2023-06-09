@@ -15,9 +15,9 @@ class WatchListTool(TimeTool):
         self.account_name = account_name
         self.MatchAccount = Watchlist.account == self.account_name
         self.watchlist_file = f'watchlist_{account_name}'
-        self.watchlist = self._open_watchlist()
+        self.watchlist = self.get_watchlist()
 
-    def _open_watchlist(self):
+    def get_watchlist(self):
         """Load watchlist data"""
         if db.HAS_DB:
             df = db.query(Watchlist, Watchlist.account == self.account_name)
@@ -87,7 +87,6 @@ class WatchListTool(TimeTool):
         condi2 = (self.watchlist.position <= 0)
         self.watchlist.loc[~condi1 | condi2, 'position'] = 0
         self.watchlist.loc[condi1 & condi2, 'position'] = 100
-        self.remove_from_watchlist()
 
         if db.HAS_DB:
             code1 = self.watchlist[~condi1 | condi2].code.values
@@ -97,6 +96,8 @@ class WatchListTool(TimeTool):
             code2 = self.watchlist[condi1 & condi2].code.values
             condition = Watchlist.code.in_(code2), self.MatchAccount
             db.update(Watchlist, {'position': 100}, condition)
+
+        self.remove_from_watchlist()
 
     def remove_from_watchlist(self):
         '''Delete Watchlist data where position <= 0.'''
@@ -132,4 +133,7 @@ class WatchListTool(TimeTool):
             db.dataframe_to_DB(tb, Watchlist)
         else:
             save_csv(
-                df, f'{PATH}/stock_pool/{self.watchlist_file}.csv', saveEmpty=True)
+                df=df,
+                filename=f'{PATH}/stock_pool/{self.watchlist_file}.csv',
+                saveEmpty=True
+            )

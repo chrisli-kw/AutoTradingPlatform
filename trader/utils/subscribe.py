@@ -1,3 +1,6 @@
+import numpy as np
+from typing import Union
+
 from .. import API
 from . import get_contract
 
@@ -86,14 +89,14 @@ class Subscriber:
             target = get_contract(t)
             API.quote.subscribe(target, quote_type=quote_type, version='v1')
 
-    def unsubscribe_targets(self, targets, quote_type: str = 'tick'):
+    def unsubscribe_targets(self, targets: str, quote_type: str = 'tick'):
         '''取消訂閱股票盤中資訊'''
 
         for t in targets:
             target = get_contract(t)
             API.quote.unsubscribe(target, quote_type=quote_type, version='v1')
 
-    def subscribe_all(self, targetLists: dict):
+    def subscribe_all(self, targetLists: Union[list, np.array]):
         '''訂閱指數、tick、bidask資料'''
 
         self.subscribe_index()
@@ -101,10 +104,9 @@ class Subscriber:
         self.subscribe_targets(targetLists, 'bidask')
         self._set_target_quote_default(targetLists)
 
-    def unsubscribe_all(self, targetLists: dict):
+    def unsubscribe_all(self, targetLists: Union[list, np.array]):
         '''取消訂閱指數、tick、bidask資料'''
 
         self.unsubscribe_index()
-        for _, targets in targetLists.items():
-            self.unsubscribe_targets(targets, 'tick')
-            self.unsubscribe_targets(targets, 'bidask')
+        self.unsubscribe_targets(targetLists, 'tick')
+        self.unsubscribe_targets(targetLists, 'bidask')

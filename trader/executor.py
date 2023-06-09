@@ -1443,7 +1443,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             time.sleep(max(5 - (datetime.now() - now).total_seconds(), 0))
 
         time.sleep(10)
-        self.unsubscribe_all({'Stocks': all_stocks, 'Futures': all_futures})
+        self.unsubscribe_all(all_stocks+all_futures)
 
     def simulator_update_securityInfo(self, df: pd.DataFrame, table):
         market = 'stocks' if 'stocks' in table.__tablename__ else 'futures'

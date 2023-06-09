@@ -26,12 +26,4 @@ redis_tick = RedisTools(redisKey='TickData')
 
 if db.HAS_DB:
     create_schema(DB_NAME)
-
-    for table in [
-        SecurityInfoStocks, SecurityInfoFutures,
-        TradingStatement, Watchlist,
-        SecurityList, PutCallRatioList, ExDividendTable,
-        KBarData1D, KBarData1T, KBarData30T, KBarData60T,
-
-    ]:
-        db.create_table(table)
+    Base.metadata.create_all(db.engine)

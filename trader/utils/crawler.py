@@ -197,6 +197,7 @@ class CrawlStockData:
         if len(self.StockData):
             df = pd.concat(self.StockData)
             df.name = df.name.astype(int).astype(str)
+            self.StockData = df
         else:
             files = self._listfiles(self.folder_path)
             N = len(files)
@@ -235,7 +236,9 @@ class CrawlStockData:
     def add_new_data(self, scale: str, save=True, start=None, end=None):
         '''加入新資料到舊K棒資料中'''
 
-        if db.HAS_DB:
+        if isinstance(self.StockData, pd.DataFrame) and self.StockData.shape[0]:
+            df = self.StockData.copy()
+        elif db.HAS_DB:
             condition1 = KBarData1T.date >= text(start) if start else text('1901-01-01')
             condition2 = KBarData1T.date <= text(end) if end else text(TODAY_STR)
             df = db.query(KBarData1T, condition1, condition2)
