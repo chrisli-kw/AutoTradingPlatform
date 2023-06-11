@@ -188,28 +188,10 @@ def runSelectStock():
     try:
         picker.set_select_methods(SelectMethods)
         df = picker.pick(3, 1.8, 3)
-        tb = df[df.date == TODAY_STR].copy()
-        exists = tb[SelectMethods].isin([True]).any(axis=1)
-        tb1 = tb[exists == True]
-        picker.export(tb1)
-        notifier.post_stock_selection(
-            tb1[['name', 'company_name']+SelectMethods].copy())
-
-        # 更新前一日資料
-        d = str(df[(df.date != TODAY_STR)].date.max().date())
-        filename = f'{PATH}/selections/history/{d}-all.csv'
-        if os.path.exists(filename):
-            tb2 = pd.read_csv(filename)
-            tb2.name = tb2.name.astype(str)
-
-            tb = tb.set_index('name')
-            for i, c in enumerate(['Open', 'High', 'Low', 'Close', 'Volume']):
-                data = tb2.name.map(tb[c].to_dict())
-                if f'{TODAY_STR}-Open' in tb2.columns:
-                    tb2[f'{TODAY_STR}-{c}'] = data
-                else:
-                    tb2.insert(11+i, f'{TODAY_STR}-{c}', data)
-            tb2.to_csv(filename, index=False, encoding='utf-8-sig')
+        df = picker.melt_table(df)
+        tb = df[df.date == TODAY_STR].reset_index(drop=True)
+        picker.export(tb)
+        notifier.post_stock_selection(tb)
 
     except FileNotFoundError as e:
         logging.warning(f'{e} No stock is selected.')

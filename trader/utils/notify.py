@@ -39,7 +39,12 @@ class Notification:
         if image_name:
             image = open(f'{PATH}/{image_name}.jpg', 'rb')
             files = {'imageFile': image}
-            requests.post(self.NotifyURL, headers=headers, data=data, files=files)
+            requests.post(
+                self.NotifyURL,
+                headers=headers,
+                data=data,
+                files=files
+            )
         else:
             requests.post(self.NotifyURL, headers=headers, data=data)
 
@@ -142,9 +147,12 @@ class Notification:
         '''發送推播-每日選股清單'''
 
         if df.shape[0]:
+            strategies = df.Strategy.unique()
+
             text = ''
-            for s in df.columns[2:]:
-                temp = df[df[s] == True].set_index('company_name').name.to_dict()
+            for s in strategies:
+                temp = df[df.Strategy == s]
+                temp = temp.set_index('company_name').name.to_dict()
 
                 _text = ''
                 for k, v in temp.items():

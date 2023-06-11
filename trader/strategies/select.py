@@ -6,7 +6,7 @@ from .. import PATH, TODAY_STR, TODAY
 from ..utils import save_csv
 from .conditions import SelectConditions
 from ..utils.database import db
-from ..utils.database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T
+from ..utils.database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T, SelectedStocks
 
 
 def map_BKD(OTCclose, OTChigh, add_days=10):
@@ -24,10 +24,10 @@ class SelectStock(SelectConditions):
         self.mode = mode
         self.scale = scale
         self.tables = {
-            '1D':KBarData1D, 
-            '1T':KBarData1T,
-            '30T':KBarData30T,
-            '60T':KBarData60T
+            '1D': KBarData1D,
+            '1T': KBarData1T,
+            '30T': KBarData30T,
+            '60T': KBarData60T
         }
         self.categories = {
             1: '水泥工業',
@@ -66,7 +66,8 @@ class SelectStock(SelectConditions):
         }
 
     def set_select_methods(self, methods):
-        self.Preprocess = {m: getattr(self, f'preprocess_{m}') for m in methods}
+        self.Preprocess = {
+            m: getattr(self, f'preprocess_{m}') for m in methods}
         self.METHODS = {m: getattr(self, f'condition_{m}') for m in methods}
 
     def load_and_merge(self):
@@ -80,15 +81,18 @@ class SelectStock(SelectConditions):
                 df = db.query(self.tables[self.scale])
             df = df.drop_duplicates()
         else:
-            df = pd.read_pickle(f'{PATH}/Kbars/company_stock_data_{self.scale}.pkl')
+            df = pd.read_pickle(
+                f'{PATH}/Kbars/company_stock_data_{self.scale}.pkl')
 
         if self.scale == '1D':
             self.time_col = 'date'
             df = df.drop(['Time', 'hour', 'minute'], axis=1)
 
             for col in ['Open', 'High', 'Low', 'Close']:
-                df.loc[(df.name == '8070') & (df.date < '2020-08-17'), col] /= 10
-                df.loc[(df.name == '6548') & (df.date < '2019-09-09'), col] /= 10
+                df.loc[
+                    (df.name == '8070') & (df.date < '2020-08-17'), col] /= 10
+                df.loc[
+                    (df.name == '6548') & (df.date < '2019-09-09'), col] /= 10
         else:
             self.time_col = 'Time'
             df = df.drop(['date', 'hour', 'minute'], axis=1)
@@ -97,15 +101,19 @@ class SelectStock(SelectConditions):
         otc = df[df.name == '101'].rename(
             columns={c: f'OTC{c.lower()}' for c in ohlcva}).drop(['name'], axis=1)
         otc[self.time_col] = pd.to_datetime(otc[self.time_col])
-        otc[f'otc_{self.dma}ma'] = otc.OTCclose.shift(self.d_shift).rolling(self.dma).mean()
-        otc['otcbkd30'] = [window.to_list() for window in otc.OTChigh.rolling(window=80)]
-        otc['otcbkd30'] = otc.apply(lambda x: map_BKD(x.OTCclose, x.otcbkd30, 30), axis=1)
+        otc[f'otc_{self.dma}ma'] = otc.OTCclose.shift(
+            self.d_shift).rolling(self.dma).mean()
+        otc['otcbkd30'] = [window.to_list()
+                           for window in otc.OTChigh.rolling(window=80)]
+        otc['otcbkd30'] = otc.apply(lambda x: map_BKD(
+            x.OTCclose, x.otcbkd30, 30), axis=1)
         otc.otcbkd30 = otc.otcbkd30.fillna(method='ffill')
 
         tse = df[df.name == '1'].rename(
             columns={c: f'TSE{c.lower()}' for c in ohlcva}).drop(['name'], axis=1)
         tse[self.time_col] = pd.to_datetime(tse[self.time_col])
-        tse[f'tse_{self.dma}ma'] = tse.TSEclose.shift(self.d_shift).rolling(self.dma).mean()
+        tse[f'tse_{self.dma}ma'] = tse.TSEclose.shift(
+            self.d_shift).rolling(self.dma).mean()
 
         df = df.merge(otc, how='left', on=self.time_col)
         df = df.merge(tse, how='left', on=self.time_col)
@@ -124,11 +132,14 @@ class SelectStock(SelectConditions):
         group = df.groupby('name')
 
         if self.scale == '1D':
-            df['volume_ma'] = group.Volume.transform(lambda x: x.shift(1).rolling(22).mean())
-            df['volume_std'] = group.Volume.transform(lambda x: x.shift(1).rolling(22).std())
+            df['volume_ma'] = group.Volume.transform(
+                lambda x: x.shift(1).rolling(22).mean())
+            df['volume_std'] = group.Volume.transform(
+                lambda x: x.shift(1).rolling(22).std())
             df['yClose'] = group.Close.transform('shift')
             df['y2Close'] = group.Close.transform(lambda x: x.shift(2))
-            df['ma_1_20'] = group.Close.transform(lambda x: x.shift(1).rolling(20).mean())
+            df['ma_1_20'] = group.Close.transform(
+                lambda x: x.shift(1).rolling(20).mean())
 
         return df
 
@@ -142,15 +153,43 @@ class SelectStock(SelectConditions):
         for i, (m, func) in enumerate(self.METHODS.items()):
             df.insert(i+2, m, func(df, *args))
 
+        # insert columns
         stockids = pd.read_excel(f'{PATH}/selections/stock_list.xlsx')
         stockids.code = stockids.code.astype(int).astype(str)
         stockids.category = stockids.category.astype(int)
-        df.insert(1, 'company_name', df.name.map(stockids.set_index('code').name.to_dict()))
+        df.insert(1, 'company_name', df.name.map(
+            stockids.set_index('code').name.to_dict()))
         df.insert(2, 'category', df.name.map(stockids.set_index(
             'code').category.to_dict()).map(self.categories))
 
         return df
 
+    def melt_table(self, df: pd.DataFrame, columns=[]):
+        '''Melt the "strategy" columns into values of a table'''
+
+        if not columns:
+            columns = [
+                'name', 'company_name', 'category', 'date',
+                'Open', 'High', 'Low', 'Close', 'Volume', 'Amount',
+            ]
+        select_methods = list(self.METHODS)
+
+        df = df[columns + select_methods]
+        df = df.melt(
+            id_vars=columns,
+            value_vars=select_methods,
+            var_name='Strategy',
+            value_name='isMatch'
+        )
+        df.Strategy *= df.isMatch
+        df = df[df.Strategy != '']
+        df = df.reset_index(drop=True).drop('isMatch', axis=1)
+
+        return df
+
     def export(self, df: pd.DataFrame):
-        save_csv(df, f'{PATH}/selections/all.csv')
-        save_csv(df, f'{PATH}/selections/history/{TODAY_STR}-all.csv')
+        if db.HAS_DB:
+            db.dataframe_to_DB(df, SelectedStocks)
+        else:
+            save_csv(df, f'{PATH}/selections/all.csv')
+            save_csv(df, f'{PATH}/selections/history/{TODAY_STR}-all.csv')
