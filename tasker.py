@@ -12,7 +12,7 @@ from trader import __version__ as ver
 from trader import API, PATH, TODAY_STR, holidays
 from trader.config import ACCOUNTS, TEnd, SelectMethods, ConvertScales
 from trader.strategies.select import SelectStock
-from trader.utils import save_excel
+from trader.utils import save_table
 from trader.utils.notify import Notification
 from trader.utils.database import redis_tick
 from trader.utils.subscribe import Subscriber
@@ -325,7 +325,7 @@ def runSimulationChecker():
                 # update performance statement
                 df = se.read_statement(f'simulation-{account}')
                 df = convert_statement(df)
-                save_excel(
+                save_table(
                     df,
                     f'{PATH}/stock_pool/simulation_performance_{account}.xlsx',
                     saveEmpty=True

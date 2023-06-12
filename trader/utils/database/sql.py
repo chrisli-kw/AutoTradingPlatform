@@ -8,6 +8,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, scoped_session, load_only
 
 from ...config import HAS_DB, DB_NAME, DB_URL
+from .. import save_table
 
 
 Base = declarative_base()
@@ -65,15 +66,6 @@ class SQLDatabase:
                 result = result.drop(['pk_id', 'create_time'], axis=1)
         return result
     
-    def queryAll(self, table):
-        '''Query all data from DB'''
-
-        session = self.get_session()
-        sql = f"SELECT * FROM {DB_NAME}.{table.__tablename__}"
-        result = pd.read_sql(sql, session.bind)
-        session.close()
-        return result
-
     def update(self, table, update_content:dict, *filterBy):
         '''Update data in table'''
         
@@ -137,3 +129,9 @@ class SQLDatabase:
                 f"Save data into {table.__tablename__} failed")
         finally:
             session.close()
+
+    def export_table(self, table, filename, *filterBy, **conditions):
+        '''Export DB data'''
+
+        df = self.query(table, *filterBy, **conditions)
+        save_table(df, filename)

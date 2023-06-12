@@ -92,14 +92,14 @@ def get_contract(target: str):
     return API.Contracts.Stocks[target]
 
 
-def save_csv(df: pd.DataFrame, filename: str, saveEmpty=False):
+def save_table(df: pd.DataFrame, filename: str, saveEmpty=False):
     if df.shape[0] or saveEmpty:
-        df.to_csv(filename, index=False, encoding='utf-8-sig')
-
-
-def save_excel(df: pd.DataFrame, filename: str, saveEmpty=False):
-    if df.shape[0] or saveEmpty:
-        df.to_excel(filename, index=False, encoding='utf-8-sig')
+        if '.csv' in filename:
+            df.to_csv(filename, index=False, encoding='utf-8-sig')
+        elif '.xlsx' in filename:
+            df.to_excel(filename, index=False, encoding='utf-8-sig')
+        else:
+            df.to_pickle(filename)
 
 
 def rpt_2_df(file):
@@ -136,5 +136,5 @@ def unzip_file(filename: str, filters: list = [], filepath=''):
             file = BytesIO(folders.read(folder))
             file = rpt_2_df(file)
             folderPath = filepath if filepath else (filename if N > 1 else '.')
-            save_csv(file, f"{folderPath}/{folder.replace('.rpt', '.csv')}")
+            save_table(file, f"{folderPath}/{folder.replace('.rpt', '.csv')}")
             progress_bar(N, i)

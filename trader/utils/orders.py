@@ -5,7 +5,7 @@ import pandas as pd
 from collections import namedtuple
 
 from .. import API, PATH
-from . import save_csv
+from . import save_table
 from .database import db
 from .database.tables import TradingStatement
 
@@ -92,7 +92,7 @@ class OrderTool:
             else:
                 statement = pd.DataFrame()
             statement = pd.concat([statement, self.OrderTable])
-            save_csv(statement, filename)
+            save_table(statement, filename)
 
     def read_statement(self, account: str = ''):
         '''Import trading statement'''

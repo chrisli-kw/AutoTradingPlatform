@@ -24,7 +24,7 @@ create_folder(f'{PATH}/backtest')
 def merge_pc_ratio(df):
     # merge put call ratio data
     if db.HAS_DB:
-        df_pcr = db.queryAll(PutCallRatioList)
+        df_pcr = db.query(PutCallRatioList)
     else:
         df_pcr = pd.read_csv(f'{PATH}/put_call_ratio.csv')
     

@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import timedelta
 
 from .. import PATH, TODAY_STR, TODAY
-from ..utils import save_csv
+from ..utils import save_table
 from .conditions import SelectConditions
 from ..utils.database import db
 from ..utils.database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T, SelectedStocks
@@ -183,7 +183,7 @@ class SelectStock(SelectConditions):
         )
         df.Strategy *= df.isMatch
         df = df[df.Strategy != '']
-        
+
         df = df.reset_index(drop=True).drop('isMatch', axis=1)
         df = df.rename(columns={'name':'code'})
         df = df.sort_values(['Strategy', 'code'])
@@ -194,5 +194,5 @@ class SelectStock(SelectConditions):
         if db.HAS_DB:
             db.dataframe_to_DB(df, SelectedStocks)
         else:
-            save_csv(df, f'{PATH}/selections/all.csv')
-            save_csv(df, f'{PATH}/selections/history/{TODAY_STR}-all.csv')
+            save_table(df, f'{PATH}/selections/all.csv')
+            save_table(df, f'{PATH}/selections/history/{TODAY_STR}-all.csv')

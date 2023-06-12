@@ -7,7 +7,7 @@ from typing import List, Dict
 from datetime import datetime, timedelta
 
 from .. import API, PATH, TODAY, TODAY_STR
-from . import progress_bar, get_contract, save_csv
+from . import progress_bar, get_contract, save_table
 from .time import TimeTool
 from ..indicators.signals import TechnicalSignals
 from ..config import TimeStartStock, TimeEndStock, K15min_feature, K30min_feature, K60min_feature
@@ -374,7 +374,7 @@ class KBarTool(TechnicalSignals, TimeTool):
     def save_OTC_5k(self):
         filename = f'{PATH}/Kbars/OTC/{TODAY_STR}_OTC_5k.csv'
         otc = self.KBars['5T'][self.KBars['5T'].name == '101'].copy()
-        save_csv(otc, filename)
+        save_table(otc, filename)
 
 
 class TickDataProcesser(TimeTool):

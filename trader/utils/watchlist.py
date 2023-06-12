@@ -3,7 +3,7 @@ from datetime import datetime
 from collections import namedtuple
 
 from .. import PATH, TODAY
-from . import save_csv, get_contract
+from . import save_table, get_contract
 from .time import TimeTool
 from .database import db
 from .database.tables import Watchlist
@@ -132,7 +132,7 @@ class WatchListTool(TimeTool):
             tb = df[~df.code.isin(codes)]
             db.dataframe_to_DB(tb, Watchlist)
         else:
-            save_csv(
+            save_table(
                 df=df,
                 filename=f'{PATH}/stock_pool/{self.watchlist_file}.csv',
                 saveEmpty=True

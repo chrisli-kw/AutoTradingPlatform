@@ -14,7 +14,7 @@ from . import API, PATH, TODAY, TODAY_STR, __version__, holidays
 from .config import StrategyLong, StrategyShort, StrategyLongDT, StrategyShortDT
 from .config import FEE_RATE, TStart, TEnd, TTry, TimeStartStock, TimeStartFuturesDay
 from .config import TimeEndFuturesDay, TimeStartFuturesNight, TimeEndFuturesNight
-from .utils import get_contract, save_csv
+from .utils import get_contract, save_table
 from .utils.kbar import KBarTool
 from .utils.accounts import AccountInfo
 from .utils.watchlist import WatchListTool
@@ -1517,7 +1517,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             for freq, df in self.KBars.items():
                 if freq != '1D':
                     filename = f'{PATH}/Kbars/k{freq[:-1]}min_{self.ACCOUNT_NAME}.csv'
-                    save_csv(df, filename)
+                    save_table(df, filename)
 
         if self.can_stock:
             self.__save_simulate_securityInfo()

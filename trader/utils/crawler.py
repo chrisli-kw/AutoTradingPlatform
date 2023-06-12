@@ -13,7 +13,7 @@ from sqlalchemy import text
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
-from . import progress_bar, create_queue, delete_selection_files, save_csv
+from . import progress_bar, create_queue, delete_selection_files, save_table
 from .notify import Notification
 from .kbar import KBarTool
 from .time import TimeTool
@@ -98,7 +98,7 @@ class CrawlStockData:
         
         if scale == '1T':
             day = self.folder_path.split('/')[-1]
-            save_csv(df, f'{self.folder_path}/{day}-stock_data_1T.csv')
+            save_table(df, f'{self.folder_path}/{day}-stock_data_1T.csv')
         else:
             filename = f'{PATH}/Kbars/{self.filename}_{scale}.pkl'
             temp = read_and_concat(filename, df)
@@ -458,7 +458,7 @@ class CrawlFromHTML(TimeTool):
         else:
             filename = f'{PATH}/put_call_ratio.csv'
             df_pcr = read_and_concat(filename, df)
-            save_csv(df_pcr, f'{PATH}/put_call_ratio.csv')
+            save_table(df_pcr, f'{PATH}/put_call_ratio.csv')
     
     def export_futures_kbar(self, df: pd.DataFrame):
         if db.HAS_DB:
@@ -472,7 +472,7 @@ class CrawlFromHTML(TimeTool):
         if db.HAS_DB:
             db.dataframe_to_DB(df, ExDividendTable)
         else:
-            save_csv(df, f'{PATH}/exdividends.csv')
+            save_table(df, f'{PATH}/exdividends.csv')
 
     def ex_dividend_list(self):
         '''爬蟲:證交所除權息公告表'''
