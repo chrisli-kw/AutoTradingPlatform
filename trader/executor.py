@@ -22,8 +22,10 @@ from .utils.cipher import CipherTool
 from .utils.notify import Notification
 from .utils.orders import OrderTool
 from .utils.database import db
+from .utils.database.tables import SelectedStocks
 from .utils.database.tables import SecurityInfoStocks, SecurityInfoFutures
 from .utils.subscribe import Subscriber
+from .utils.crawler import CrawlFromHTML
 try:
     from .strategies.StrategySet import StrategySet as StrategySets
 except:
@@ -466,15 +468,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         logging.info(msg)
         self.notifier.post(f'\n{msg}', msgType='Monitor')
 
-    def _filter_out_targets(self, market='Stocks'):
-        '''過濾關注股票'''
-
-        if market == 'Stocks':
-            self.stocks = self.stocks[~self.stocks.code.isin(self.FILTER_OUT)]
-        else:
-            self.futures = self.futures[~self.futures.Code.isin(
-                self.FILTER_OUT)]
-
     def init_stocks(self):
         '''初始化股票資訊'''
 
@@ -482,14 +475,13 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             return None, []
 
         # 讀取選股清單
-        stocks_pool = self.get_stock_pool()
+        strategies = self.get_stock_pool()
 
         # 取得遠端庫存
         self.stocks = self.get_securityInfo('Stocks')
 
         # 取得策略清單
-        strategy_w = self.find_strategy(stocks_pool, 'All')
-        self.init_watchlist(self.stocks, strategy_w)
+        self.init_watchlist(self.stocks, strategies)
 
         # 庫存的處理
         self.stocks = self.stocks.merge(
@@ -498,13 +490,13 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             on=['account', 'market', 'code']
         )
         self.stocks.position.fillna(100, inplace=True)
-        strategies = self.find_strategy(stocks_pool, 'Stocks')
+        strategies.update(self.stocks.set_index('code').strategy.to_dict())
 
         # 剔除不堅控的股票
-        self._filter_out_targets(market='Stocks')
+        self.stocks = self.stocks[~self.stocks.code.isin(self.FILTER_OUT)]
 
         # 新增歷史K棒資料
-        self.update_stocks_to_monitor(stocks_pool)
+        self.update_stocks_to_monitor(strategies)
         all_targets = list(self.stocks_to_monitor)
         self.history_kbars(['TSE001', 'OTC101'] + all_targets)
 
@@ -548,7 +540,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             return None, []
 
         # 讀取選股清單
-        futures_pool = self.get_futures_pool()
+        strategies = self.get_futures_pool()
 
         # 取得遠端庫存
         self.futures = self.get_securityInfo('Futures')
@@ -567,16 +559,16 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.n_futures = self.futures.shape[0]
 
         # 取得策略清單
-        strategies = self.find_strategy(futures_pool, 'Futures')
+        strategies.update(self.futures.set_index('Code').strategy.to_dict())
 
         # 剔除不堅控的股票
-        self._filter_out_targets(market='Futures')
+        self.futures = self.futures[~self.futures.Code.isin(self.FILTER_OUT)]
 
         # update_futures_to_monitor
         self.futures.index = self.futures.Code
         self.futures_to_monitor.update(self.futures.to_dict('index'))
         self.futures_to_monitor.update({
-            s: None for ids in futures_pool.values() for s in ids if s not in self.futures_to_monitor})
+            f: None for f in strategies if f not in self.futures_to_monitor})
 
         # 新增歷史K棒資料
         all_futures = list(self.futures_to_monitor)
@@ -622,22 +614,18 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
     def update_stocks_to_monitor(self, stocks_pool: Dict[str, list]):
         '''更新買進/賣出股票監控清單'''
 
-        def not_in_stocks(x):
-            return (x not in self.stocks_to_monitor)
-
         df = self.stocks.copy()
         df.index = df.code
         if not self.simulation:
             df.order_cond = df.order_cond.apply(lambda x: x._value_)
         self.stocks_to_monitor = df.to_dict('index')
 
-        for stra, stocks_ in stocks_pool.items():
+        for stock, stra in stocks_pool.items():
             if (
                 (self.can_buy and (stra in StrategyLong + StrategyLongDT)) or
                 (self.can_sell and (stra in StrategyShort + StrategyShortDT))
-            ):
-                self.stocks_to_monitor.update(
-                    {s: None for s in stocks_ if not_in_stocks(s)})
+            ) and (stock not in self.stocks_to_monitor):
+                self.stocks_to_monitor.update({stock: None})
 
     def update_monitor_lists(self, action, data):
         '''更新監控庫存(成交回報)'''
@@ -1012,41 +1000,24 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
             df = self.get_openpositions()
         return df
-
-    def _get_day_filter_out(self):
-        '''取得交易當日全額交割股清單'''
-
-        try:
-            url = 'https://www.sinotrade.com.tw/Stock/Stock_3_8_3'
-            df = pd.read_html(url)
-            return df[0]
-        except:
-            logging.warning('查無全額交割股清單')
-            return pd.DataFrame(columns=['股票代碼'])
-
+    
     def get_selection_files(self):
         '''取得選股清單'''
 
-        dirpath = f'{PATH}/selections'
-        files = os.listdir(dirpath)
-        files = [f for f in files if '.csv' in f]
-        if files:
-            df = pd.read_csv(f'{PATH}/selections/{files[0]}')
+        filename = f'{PATH}/selections/all.csv'
+        day = self.last_business_day()
+
+        if db.HAS_DB:
+            df = db.query(SelectedStocks, SelectedStocks.date == day)
+        elif os.path.exists(filename):
+            df = pd.read_csv(filename)
             df.date = pd.to_datetime(df.date)
-            df.name = df.name.astype(str)
+            df.code = df.code.astype(str)
+            df = df[df.date == day]
+        else:
+            df = pd.DataFrame()
 
-            # 排除不交易的股票
-            # ### 全額交割股不買
-            day_filter_out = self._get_day_filter_out()
-            df = df[~df.name.isin(day_filter_out.股票代碼.values)]
-            df = df[~df.name.isin(self.FILTER_OUT)]
-
-            # 排除高價股
-            df = df[df.Close <= self.PRICE_THRESHOLD]
-
-            return df
-
-        return pd.DataFrame()
+        return df
 
     def get_margin_table(self):
         '''取得保證金清單'''
@@ -1066,22 +1037,34 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         return df.dropna().set_index('code')
 
     def get_stock_pool(self):
-        '''取得股票選股池'''
+        '''
+        取得股票選股池
+        pools = {
+            'stockid':'strategy',
+        }
+        '''
 
-        pools = {st: [] for st in self.STRATEGY_STOCK}
+        pools = {}
 
         df = self.get_selection_files()
-        day = self.last_business_day()
+        if df.shape[0]:
+            # 排除不交易的股票
+            # ### 全額交割股不買
+            day_filter_out = CrawlFromHTML().get_CashSettle()
+            df = df[~df.code.isin(day_filter_out.股票代碼.values)]
+            df = df[~df.code.isin(self.FILTER_OUT)]
 
-        if df.shape[0] > 1 and day == df.date.max():
-            df = df.sort_values('Close')  # .dropna()
+            # 排除高價股
+            df = df[df.Close <= self.PRICE_THRESHOLD]
+
+            df = df.sort_values('Close')
 
             # 建立族群清單
-            n_category = df.groupby('category').name.count().to_dict()
+            n_category = df.groupby('category').code.count().to_dict()
             df['n_category'] = df.category.map(n_category)
             self.n_categories = (
                 df.sort_values('n_category', ascending=False)
-                .set_index('name').n_category.to_dict())
+                .set_index('code').n_category.to_dict())
 
             # 族群清單按照策略權重 & pc_ratio 決定
             # 權重大的先加入，避免重複
@@ -1093,17 +1076,17 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     sort_order, ascending=False).name.to_list()
 
             for s in strategies:
-                if s in df.columns and s in pools:
-                    stockids = df[df[s] == 1].name.to_list()
-                    pools[s] = stockids
-                    df = df[df[s] != 1]
+                if s in df.Strategy.values and s in self.STRATEGY_STOCK:
+                    stockids = df[df.Strategy == s].code
+                    pools.update({stock:s for stock in stockids})
+                    df = df[~df.code.isin(stockids)]
 
         return pools
 
     def get_futures_pool(self):
         '''取得期權目標商品清單'''
 
-        pools = {st: [] for st in self.STRATEGY_FUTURES}
+        pools = {}
 
         due_year_month = self.GetDueMonth(TODAY)
         indexes = {
@@ -1112,8 +1095,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             '放空大台': [f'TXF{due_year_month}'],
             '做多大台': [f'TXF{due_year_month}'],
         }
-        pools.update(
-            {st: indexes[st] if st in indexes else [] for st in pools})
+        pools.update({
+            symbol:st for st in self.STRATEGY_FUTURES for symbol in indexes[st]
+        })
         return pools
 
     def get_quantity(self, target: str, strategy: str, order_cond: str):
@@ -1279,27 +1263,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             (quota > 0)
         )
 
-    def find_strategy(self, stocks_pool: dict, market='Stocks') -> Dict[str, str]:
-        '''
-        找出買進股票對應的策略
-        result = {
-            'stockid':'strategy',
-        }
-        '''
-
-        if market == 'Stocks':
-            result = self.stocks.set_index('code').strategy.to_dict()
-        elif market == 'Futures' and self.futures.shape[0]:
-            result = self.futures.set_index('Code').strategy.to_dict()
-        else:
-            result = {}
-
-        for s, stocks in stocks_pool.items():
-            for stock in stocks:
-                if stock not in result:
-                    result[stock] = s
-        return result
-
     def is_not_trade_day(self, now: datetime):
         '''檢查是否為非交易時段'''
         is_holiday = TODAY in holidays
@@ -1364,8 +1327,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         logging.info(f'Start to monitor, basic settings:')
         logging.info(f'Mode:{self.MODE}, Strategy: {self.STRATEGY_STOCK}')
         logging.info(f'[Stock Strategy] {strategy_s}')
-        logging.info(f'[Stock Position] Long:{self.n_stocks_long}')
-        logging.info(f'[Stock Position] Short:{self.n_stocks_short}')
+        logging.info(f'[Stock Position] Long: {self.n_stocks_long}')
+        logging.info(f'[Stock Position] Short: {self.n_stocks_short}')
         logging.info(f'[Stock Portfolio Limit] Long: {self.N_LIMIT_LS}')
         logging.info(f'[Stock Portfolio Limit] Short: {self.N_LIMIT_SS}')
         logging.info(

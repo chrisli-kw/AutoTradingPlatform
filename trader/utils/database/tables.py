@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, FLOAT, String, text
+from sqlalchemy import Column, Integer, FLOAT, String, text, BigInteger
 from sqlalchemy.dialects.mysql import TIMESTAMP
 
 from .sql import Base
@@ -17,7 +17,7 @@ class SecurityInfoStocks(Base):
     account = Column(String(50, collation), nullable=False, comment='帳戶代號')
     market = Column(String(10, collation), nullable=False, comment='市場別')
     code = Column(String(10, collation), nullable=False, comment='證券代號')
-    order_cond = Column(String(10, collation), nullable=False, comment='委託類型')
+    order_cond = Column(String(50, collation), nullable=False, comment='委託類型')
     action = Column(String(10, collation), nullable=False, comment='買賣別')
     pnl = Column(Integer, comment='未實現損益')
     cost_price = Column(FLOAT(2), nullable=False, comment='成本價')
@@ -333,7 +333,7 @@ class SelectedStocks(Base):
     Low = Column(FLOAT(2), nullable=False, comment='最低價')
     Close = Column(FLOAT(2), nullable=False, comment='收盤價')
     Volume = Column(Integer, comment='成交量')
-    Amount = Column(Integer, comment='成交額')
+    Amount = Column(BigInteger, comment='成交額')
     Strategy = Column(String(10, collation), nullable=False, comment='選股策略')
 
     create_time = Column(

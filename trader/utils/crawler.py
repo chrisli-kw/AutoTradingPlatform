@@ -291,6 +291,7 @@ class CrawlFromHTML(TimeTool):
     url_pc_ratio = 'https://www.taifex.com.tw/cht/3/pcRatio'
     url_ex_dividend = 'https://www.twse.com.tw/rwd/zh/exRight/TWT48U?response=csv'
     url_futures_tick = 'https://www.taifex.com.tw/file/taifex/Dailydownload/DailydownloadCSV'
+    url_cash_settle = 'https://www.sinotrade.com.tw/Stock/Stock_3_8_3'
 
     def above_one_url(self, pageName: str, date: str, stockid: str):
         '''產生豹投資網站資料的URL'''
@@ -586,3 +587,14 @@ class CrawlFromHTML(TimeTool):
             logging.error('輸入的日期非交易日')
         except:
             logging.exception('Catch an exception (get_FuturesTickData):')
+
+    def get_CashSettle(self):
+        '''取得交易當日全額交割股清單'''
+
+        try:
+            df = pd.read_html(self.url_cash_settle)
+            return df[0]
+        except:
+            logging.warning('查無全額交割股清單')
+            return pd.DataFrame(columns=['股票代碼'])
+        

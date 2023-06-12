@@ -183,7 +183,10 @@ class SelectStock(SelectConditions):
         )
         df.Strategy *= df.isMatch
         df = df[df.Strategy != '']
+        
         df = df.reset_index(drop=True).drop('isMatch', axis=1)
+        df = df.rename(columns={'name':'code'})
+        df = df.sort_values(['Strategy', 'code'])
 
         return df
 
