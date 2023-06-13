@@ -463,10 +463,10 @@ class CrawlFromHTML(TimeTool):
     def export_futures_kbar(self, df: pd.DataFrame):
         if db.HAS_DB:
             db.dataframe_to_DB(df, KBarData1T)
-        else:
-            filename = f'{PATH}/Kbars/futures_data_1T.pkl'
-            df = read_and_concat(filename, df)
-            df.to_pickle(filename)
+        
+        filename = f'{PATH}/Kbars/futures_data_1T.pkl'
+        df = read_and_concat(filename, df)
+        df.to_pickle(filename)
     
     def export_ex_dividend_list(self, df: pd.DataFrame):
         if db.HAS_DB:

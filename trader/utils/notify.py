@@ -152,7 +152,7 @@ class Notification:
             text = ''
             for s in strategies:
                 temp = df[df.Strategy == s]
-                temp = temp.set_index('company_name').name.to_dict()
+                temp = temp.set_index('company_name').code.to_dict()
 
                 _text = ''
                 for k, v in temp.items():
