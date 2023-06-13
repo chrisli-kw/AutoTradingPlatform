@@ -142,11 +142,18 @@ class CrawlStockData:
 
         if not start:
             if update:
-                filename = f'{PATH}/Kbars/{self.filename}_{self.scale}.pkl'
-                if os.path.exists(filename):
-                    last_end = pd.read_pickle(filename).date.max()
+                if db.HAS_DB:
+                    dates = db.query(self.tables[self.scale].date)
+                    if dates.shape[0]:
+                        last_end = dates.date.max()
+                    else:
+                        last_end = self.timetool.last_business_day()
                 else:
-                    last_end = self.timetool.last_business_day()
+                    filename = f'{PATH}/Kbars/{self.filename}_{self.scale}.pkl'
+                    if os.path.exists(filename):
+                        last_end = pd.read_pickle(filename).date.max()
+                    else:
+                        last_end = self.timetool.last_business_day()
                 start = self.timetool._strf_timedelta(last_end, -1)
             else:
                 start = '2017-01-01'
@@ -196,6 +203,7 @@ class CrawlStockData:
         logging.info("Merge stockinfo")
         if len(self.StockData):
             df = pd.concat(self.StockData)
+            df.date = pd.to_datetime(df.date)
             df.name = df.name.astype(int).astype(str)
             self.StockData = df
         else:
@@ -470,6 +478,9 @@ class CrawlFromHTML(TimeTool):
     
     def export_ex_dividend_list(self, df: pd.DataFrame):
         if db.HAS_DB:
+            df_old = db.query(ExDividendTable)
+            df = df[df.Date > df_old.Date.max()].copy()
+
             db.dataframe_to_DB(df, ExDividendTable)
         else:
             save_table(df, f'{PATH}/exdividends.csv')
@@ -477,7 +488,14 @@ class CrawlFromHTML(TimeTool):
     def ex_dividend_list(self):
         '''爬蟲:證交所除權息公告表'''
 
-        df = pd.read_csv(self.url_ex_dividend, encoding='big5', error_bad_lines=False).reset_index()
+        try:
+            df = pd.read_csv(
+                self.url_ex_dividend, encoding='cp950', on_bad_lines='skip')
+        except:
+            df = pd.read_csv(
+                self.url_ex_dividend, encoding='big5', on_bad_lines='skip')
+        
+        df = df.reset_index()
         df.columns = df.iloc[0, :]
         df = df.rename(columns={
             '除權除息日期': 'Date',
@@ -498,6 +516,7 @@ class CrawlFromHTML(TimeTool):
         df = df[df.Code.notnull()]
         df = df[(df.Code.apply(len) == 4)]
         df.Date = df.Date.apply(self.convert_date_format)
+        df.Date = pd.to_datetime(df.Date)
         df.CashDividend = df.CashDividend.astype(float)
         df.CashCapitalPrice = df.CashCapitalPrice.replace('尚未公告', -1)
         return df.sort_values('Date')

@@ -96,7 +96,9 @@ class TimeTool:
         '''轉換民國格式為西元格式'''
 
         x = re.findall('\d+', x)
-        x[0] = str(int(x[0]) + 1911)
+        year = int(x[0])
+        if year < 1911:
+            x[0] = str(year + 1911)
         return '-'.join(x)
 
     def date_2_mktime(self, date: datetime):
