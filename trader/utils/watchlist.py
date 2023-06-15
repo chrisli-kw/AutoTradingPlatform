@@ -124,7 +124,8 @@ class WatchListTool(TimeTool):
 
             self.remove_from_watchlist()
         else:
-            self._append_watchlist('Stocks', order, quotes, strategy_pool)
+            market = 'Stocks' if not order.octype else 'Futures'
+            self._append_watchlist(market, order, quotes, strategy_pool)
 
     def save_watchlist(self, df: pd.DataFrame):
         if db.HAS_DB:
