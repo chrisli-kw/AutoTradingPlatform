@@ -31,8 +31,8 @@ def merge_pc_ratio(df):
 
     df_pcr = df_pcr.rename(columns={'Date': 'date'})
     df_pcr.date = pd.to_datetime(df_pcr.date)
-    df_pcr.pc_ratio = df_pcr.pc_ratio.shift(1)
-    df = df.merge(df_pcr[['date', 'pc_ratio']], how='left', on='date')
+    df_pcr.PutCallRatio = df_pcr.PutCallRatio.shift(1)
+    df = df.merge(df_pcr[['date', 'PutCallRatio']], how='left', on='date')
     return df
 
 
@@ -119,7 +119,7 @@ class BacktestFigures:
             'balance': 'last',
             'nOpen': 'sum',
             'profit': 'sum',
-            'pc_ratio': 'first'
+            'PutCallRatio': 'first'
         }
         self.futures_col_maps = {
             'Open': 'first',
@@ -134,7 +134,7 @@ class BacktestFigures:
             'balance': 'last',
             'nOpen': 'sum',
             'profit': 'sum',
-            'pc_ratio': 'first'
+            'PutCallRatio': 'first'
         }
         self.Titles = (
             # tables
@@ -152,7 +152,7 @@ class BacktestFigures:
             ('TSE', 'TWSE', '#2b8de3'),
             ('OTC', 'OTC', '#91b536'),
             [
-                ('pc_ratio', 'Put/Call Ratio', '#ff9f1a'),
+                ('PutCallRatio', 'Put/Call Ratio', '#ff9f1a'),
                 ('pc115', '多空分界', '#68c035'),
             ],
             ('balance', 'Accumulated Balance', '#d3503c'),
@@ -944,7 +944,7 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
             df = df[df.date <= params['endDate']]
 
         required_cols = [
-            'name', 'date', 'isIn', 'pc_ratio',
+            'name', 'date', 'isIn', 'PutCallRatio',
             'Open', 'High', 'Low', 'Close', 'Volume'
         ]
 

@@ -8,7 +8,7 @@ from .utils.notify import Notification
 from .utils.crawler import CrawlStockData, CrawlFromHTML
 
 
-__version__ = '1.4.0'
+__version__ = '1.4.1'
 
 for f in [PATH, './logs']:
     create_folder(f)

@@ -6,12 +6,12 @@ import shioaji as sj
 from datetime import datetime
 from shioaji.account import StockAccount
 
+from .. import crawler2
 from ..config import API, PATH, TODAY, TODAY_STR
 from .time import TimeTool
-from .crawler import CrawlFromHTML
 
 
-class AccountInfo(CrawlFromHTML, TimeTool):
+class AccountInfo(TimeTool):
     def __init__(self):
         self.filename = f'{TODAY.year}_股票帳務資訊.xlsx'
         self.DEFAULT_TABLE = pd.DataFrame(
@@ -262,7 +262,8 @@ class AccountInfo(CrawlFromHTML, TimeTool):
         if stocks.shape[0]:
             is_leverage = (
                 'MarginTrading' == stocks.order_cond.apply(lambda x: x._value_))
-            leverages = [self.get_leverage(s)['融資成數']/100 for s in stocks.code]
+            leverages = [
+                crawler2.get_leverage(s)['融資成數']/100 for s in stocks.code]
             return sum(is_leverage*stocks.cost_price*stocks.quantity*leverages)
         return 0
 

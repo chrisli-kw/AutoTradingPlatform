@@ -3,12 +3,12 @@ import time
 import logging
 import numpy as np
 import pandas as pd
-from sys import platform
 from typing import Dict
+from sys import platform
+from shioaji import constant
 from collections import namedtuple
 from datetime import datetime, timedelta
 
-from shioaji import constant
 from . import __version__
 from . import notifier, picker, crawler2
 from .config import API, PATH, TODAY, TODAY_STR, holidays
@@ -16,13 +16,13 @@ from .config import FEE_RATE, TStart, TEnd, TTry, TimeStartStock, TimeStartFutur
 from .config import TimeEndFuturesDay, TimeStartFuturesNight, TimeEndFuturesNight
 from .utils import get_contract, save_table
 from .utils.kbar import KBarTool
-from .utils.accounts import AccountInfo
-from .utils.watchlist import WatchListTool
-from .utils.cipher import CipherTool
 from .utils.orders import OrderTool
+from .utils.cipher import CipherTool
+from .utils.accounts import AccountInfo
+from .utils.subscribe import Subscriber
+from .utils.watchlist import WatchListTool
 from .utils.database import db
 from .utils.database.tables import SecurityInfoStocks, SecurityInfoFutures
-from .utils.subscribe import Subscriber
 try:
     from .strategies.StrategySet import StrategySet as StrategySets
 except:
@@ -184,7 +184,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         若帳戶設定為不可融資，則全部融資成數為0
         '''
 
-        df = pd.DataFrame([self.get_leverage(s) for s in stockids])
+        df = pd.DataFrame([crawler2.get_leverage(s) for s in stockids])
         if df.shape[0]:
             df.loc[df.個股融券信用資格 == 'N', '融券成數'] = 100
             df.代號 = df.代號.astype(str)
@@ -503,7 +503,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.N_LIMIT_LS = self.StrategySet.setNStockLimitLong(KBars=self.KBars)
         self.N_LIMIT_SS = self.StrategySet.setNStockLimitShort(
             KBars=self.KBars)
-        self.punish_list = self.get_punish_list().證券代號.to_list()
+        self.punish_list = crawler2.get_punish_list().證券代號.to_list()
         self._set_leverage(all_targets)
         self._set_trade_risks()
         logging.debug(f'stocks_to_monitor: {self.stocks_to_monitor}')
@@ -1138,7 +1138,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         '''取得道瓊指數前一天的漲跌幅'''
 
         start = self._strf_timedelta(TODAY, 30)
-        dj = self.DowJones(start, TODAY_STR)
+        dj = crawler2.DowJones(start, TODAY_STR)
         if len(dj):
             return 100*round(dj[0]/dj[1] - 1, 4)
         return 0

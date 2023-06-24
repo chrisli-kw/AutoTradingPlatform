@@ -102,7 +102,7 @@ TimeEndFuturesNight = pd.to_datetime('05:00:00') + timedelta(days=1)
 holidays = get_holidays()
 
 # 選股相關
-SelectMethods = get_settings('SELECT', 'methods', dataType='list')
+SelectMethods = get_settings('SELECT', 'METHODS', dataType='list')
 
 # 爬蟲相關
 ConvertScales = get_settings('CRAWLER', 'SCALES', dataType='list')
