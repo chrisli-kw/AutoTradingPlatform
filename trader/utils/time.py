@@ -3,7 +3,8 @@ import time
 import pandas as pd
 from typing import Union
 from datetime import datetime, timedelta
-from .. import TODAY_STR, holidays
+
+from ..config import TODAY_STR, holidays
 
 
 class TimeTool:
@@ -101,10 +102,11 @@ class TimeTool:
             x[0] = str(year + 1911)
         return '-'.join(x)
 
-    def date_2_mktime(self, date: datetime):
+    def date_2_mktime(self, date: str):
         '''將日期轉為浮點數格式'''
 
-        date = date.replace('-', '').replace('/', '').replace(' ', '').replace(':', '')
+        date = date.replace('-', '').replace('/', '')
+        date = date.replace(' ', '').replace(':', '')
         date = datetime(int(date[:4]), int(date[4:6]), int(date[6:8]), 8)
         return int(time.mktime(date.timetuple()))
 
@@ -144,7 +146,8 @@ class TimeTool:
             N = int((target - now).total_seconds())
 
         for i in range(N, 0, -1):
-            print(f"Time remaining: {int(i/60)}min {i % 60}s", end="\r", flush=True)
+            print(
+                f"Time remaining: {int(i/60)}min {i % 60}s", end="\r", flush=True)
             time.sleep(1)
 
         print("Time remaining: 0min 0s", end="\r", flush=True)

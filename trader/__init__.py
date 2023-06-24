@@ -1,37 +1,14 @@
-import os
-import logging
-import pandas as pd
-from datetime import datetime, timedelta
-import shioaji as sj
+from concurrent.futures import ThreadPoolExecutor
 
-__version__ = '1.3.8'
-API = sj.Shioaji()
-TODAY = datetime.today()
-TODAY_STR = TODAY.strftime("%Y-%m-%d")
-PATH = './data'
+from .config import PATH
+from .strategies.select import SelectStock
+from .utils import create_folder
+from .utils.kbar import TickDataProcesser
+from .utils.notify import Notification
+from .utils.crawler import CrawlStockData, CrawlFromHTML
 
 
-def create_folder(path):
-    if not os.path.exists(path):
-        os.makedirs(path)
-
-
-def get_holidays():
-    try:
-        df = pd.read_csv('./lib/政府行政機關辦公日曆表.csv')
-        df.date = pd.to_datetime(df.date)
-        df.name = df.name.fillna(df.holidayCategory)
-        holidays = df.set_index('date').name.to_dict()
-
-        eves = {k: v for k, v in holidays.items() if v == '農曆除夕'}
-        for i in range(2):
-            days = {d - timedelta(days=i+1) if d - timedelta(days=i+1)
-                    not in holidays else d - timedelta(days=i+2): '年前封關' for d in eves}
-            holidays.update(days)
-        return holidays
-    except:
-        logging.warning('Run trader without holiday data.')
-
+__version__ = '1.4.0'
 
 for f in [PATH, './logs']:
     create_folder(f)
@@ -45,4 +22,9 @@ create_folder(f'{PATH}/ticks/futures')
 create_folder(f'{PATH}/selections/history')
 
 
-holidays = get_holidays()
+executor = ThreadPoolExecutor(max_workers=5)
+notifier = Notification()
+picker = SelectStock()
+crawler1 = CrawlStockData()
+crawler2 = CrawlFromHTML()
+tdp = TickDataProcesser()

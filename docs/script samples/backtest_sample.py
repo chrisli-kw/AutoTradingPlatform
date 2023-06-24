@@ -2,7 +2,7 @@ import pandas as pd
 from datetime import timedelta
 from collections import namedtuple
 
-from trader import TODAY_STR
+from trader.config import TODAY_STR
 from trader.backtest import BackTester, merge_pc_ratio
 from trader.strategies.select import SelectStock
 

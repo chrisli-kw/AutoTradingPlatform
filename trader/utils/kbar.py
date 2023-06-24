@@ -6,7 +6,7 @@ import pandas as pd
 from typing import List, Dict
 from datetime import datetime, timedelta
 
-from .. import API, PATH, TODAY, TODAY_STR
+from ..config import API, PATH, TODAY, TODAY_STR
 from . import progress_bar, get_contract, save_table
 from .time import TimeTool
 from ..indicators.signals import TechnicalSignals

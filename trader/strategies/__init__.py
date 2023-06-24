@@ -3,7 +3,8 @@ import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
-from .. import PATH, TODAY_STR
+from ..config import PATH, TODAY_STR
+from ..config import StrategyLong, StrategyShort, StrategyLongDT, StrategyShortDT
 from ..utils.database import db
 from ..utils.database.tables import PutCallRatioList, ExDividendTable
 
@@ -19,8 +20,8 @@ class StrategyTool:
         self.stock_limit_short = kwargs['stock_limit_short']
         self.futures_limit = kwargs['futures_limit']
         self.Action = namedtuple(
-            typename="Action", 
-            field_names=['position', 'reason', 'msg', 'price'], 
+            typename="Action",
+            field_names=['position', 'reason', 'msg', 'price'],
             defaults=[0, '', '', 0]
         )
         self.pc_ratio = self.get_put_call_ratio()
@@ -63,7 +64,7 @@ class StrategyTool:
 
     def update_indicators(self, now: datetime, kbars: dict):
         pass
-    
+
     def setNStockLimitLong(self, KBars: dict = None):
         '''
         Set the number limit of securities of a portfolio can hold 
@@ -75,7 +76,7 @@ class StrategyTool:
         elif self.stock_limit_type != 'constant':
             return self.stock_limit_long
         return self.stock_limit_long
-    
+
     def setNStockLimitShort(self, KBars: dict = None):
         '''
         Set the number limit of securities of a portfolio can hold 
@@ -87,11 +88,11 @@ class StrategyTool:
         elif self.stock_limit_type != 'constant':
             return self.stock_limit_short
         return self.stock_limit_short
-    
+
     def setNFuturesLimit(self, KBars: dict = None):
         '''Set the number limit of securities of a portfolio can hold'''
         return 0
-    
+
     def _get_value(self, df: pd.DataFrame, stockid: str, col: str):
         tb = df[df.name == stockid]
 
@@ -120,13 +121,26 @@ class StrategyTool:
         if db.HAS_DB:
             pc_ratio = db.query(PutCallRatioList.PutCallRatio)
             if pc_ratio.shape[0]:
-                return pc_ratio.PutCallRatio.values[-1] 
+                return pc_ratio.PutCallRatio.values[-1]
             return 100
-        
+
         try:
             pc_ratio = pd.read_csv(f'{PATH}/put_call_ratio.csv')
             pc_ratio = pc_ratio.sort_values('Date')
             return pc_ratio.PutCallRatio.values[-1]
         except:
-            logging.warning('==========put_call_ratio.csv不存在，無前一交易日的Put/Call Ratio==========')
+            logging.warning(
+                '==========put_call_ratio.csv不存在，無前一交易日的Put/Call Ratio==========')
             return 100
+
+    def isLong(self, strategy: str):
+        '''Check if a strategy is a long strategy.'''
+        return strategy in StrategyLong + StrategyLongDT
+
+    def isShort(self, strategy: str):
+        '''Check if a strategy is a short strategy.'''
+        return strategy in StrategyShort + StrategyShortDT
+
+    def isDayTrade(self, strategy: str):
+        '''Check if a strategy is a day-trade strategy.'''
+        return strategy in StrategyShortDT + StrategyLongDT

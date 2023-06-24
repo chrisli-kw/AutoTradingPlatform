@@ -7,7 +7,12 @@ import pandas as pd
 from io import BytesIO
 from zipfile import ZipFile
 
-from .. import API, create_folder
+from ..config import API
+
+
+def create_folder(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
 
 
 def print_error_msg(excp, time_str=None):
@@ -106,7 +111,8 @@ def rpt_2_df(file):
     '''RPT轉DataFrame'''
 
     f = file.readlines()
-    f = [t.decode('big5').rstrip('\r\n') if isinstance(t, bytes) else t.rstrip('\n') for t in f]
+    f = [
+        t.decode('big5').rstrip('\r\n') if isinstance(t, bytes) else t.rstrip('\n') for t in f]
     f = [t.replace(' ', '').split(',') for t in f]
     return pd.DataFrame(f[1:], columns=f[0])
 
@@ -114,7 +120,10 @@ def rpt_2_df(file):
 def unzip_file(filename: str, filters: list = [], filepath=''):
     '''解壓縮檔案並匯出'''
 
-    folders = ZipFile(filename) if isinstance(filename, BytesIO) else ZipFile(f'{filename}.zip')
+    if isinstance(filename, BytesIO):
+        folders = ZipFile(filename)
+    else:
+        folders = ZipFile(f'{filename}.zip')
     names = folders.namelist()
     N = len(names)
 

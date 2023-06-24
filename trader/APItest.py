@@ -2,7 +2,7 @@ import time
 import shioaji as sj
 from dotenv import dotenv_values
 
-from . import TODAY
+from .config import TODAY
 from .utils.time import TimeTool
 
 

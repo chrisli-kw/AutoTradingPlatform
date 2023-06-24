@@ -9,8 +9,8 @@ from collections import namedtuple
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from .. import TODAY_STR, PATH, create_folder
-from ..utils import progress_bar
+from ..config import PATH, TODAY_STR
+from ..utils import progress_bar, create_folder
 from ..utils.kbar import KBarTool
 from ..utils.time import TimeTool
 from ..utils.database import db
@@ -21,13 +21,14 @@ from ..strategies.select import SelectStock
 sys.path.append(os.path.abspath(os.path.join('./', os.pardir)))
 create_folder(f'{PATH}/backtest')
 
+
 def merge_pc_ratio(df):
     # merge put call ratio data
     if db.HAS_DB:
         df_pcr = db.query(PutCallRatioList)
     else:
         df_pcr = pd.read_csv(f'{PATH}/put_call_ratio.csv')
-    
+
     df_pcr = df_pcr.rename(columns={'Date': 'date'})
     df_pcr.date = pd.to_datetime(df_pcr.date)
     df_pcr.pc_ratio = df_pcr.pc_ratio.shift(1)
@@ -46,9 +47,9 @@ def read_statement(acctName):
         df = pd.read_csv(f'./data/stock_pool/statement_stocks_{acctName}.csv')
     df = df[df.account_id == 'simulate'].drop_duplicates()
     df = df.astype({
-        'price': float, 
-        'quantity': float, 
-        'amount': float, 
+        'price': float,
+        'quantity': float,
+        'amount': float,
         'leverage': float
     })
     df = df.rename(columns={
@@ -172,26 +173,30 @@ class BacktestFigures:
 
     def _replaceString(self, x: str):
         return str(x).replace(' ', '<br>').replace('00.000000000', '00')
-    
+
     def _daily_info_processor(self, TestResult: object):
-        profit = TestResult.Statement.groupby('CloseDate').profit.sum().to_dict()
-        
+        profit = TestResult.Statement.groupby('CloseDate').profit.sum()
+        profit = profit.to_dict()
+
         daily_info = TestResult.DailyInfo
         daily_info['profit'] = daily_info.index.map(profit).fillna(0).values
 
         col_maps = self.stock_col_maps if self.Market == 'Stocks' else self.futures_col_maps
-        daily_info = daily_info.resample('1D', closed='left', label='left').apply(col_maps).dropna()
-        daily_info['profits'] = (daily_info.profit*(daily_info.profit > 0)).cumsum()
-        daily_info['losses'] = (daily_info.profit*(daily_info.profit <= 0)).cumsum()
+        daily_info = daily_info.resample(
+            '1D', closed='left', label='left').apply(col_maps).dropna()
+        daily_info['profits'] = (
+            daily_info.profit*(daily_info.profit > 0)).cumsum()
+        daily_info['losses'] = (
+            daily_info.profit*(daily_info.profit <= 0)).cumsum()
         daily_info['pc115'] = 115
         return daily_info
-    
+
     def subplot_add_table(self, fig: make_subplots, table: pd.DataFrame, row: int, col: int, **cellargs):
         fig.add_trace(
             go.Table(
                 header=dict(
-                    values=list(table.columns), 
-                    font=dict(size=15), 
+                    values=list(table.columns),
+                    font=dict(size=15),
                     align="center"
                 ),
                 cells=dict(
@@ -208,82 +213,82 @@ class BacktestFigures:
 
     def _add_trace(self, fig: make_subplots, df: pd.DataFrame, row: int, *args, **kwargs):
 
-            if self.Market == 'Stocks':
-                candle = args[0] if args[0] in ['TSE', 'OTC'] else None
-                open = f'{candle}open'
-                high = f'{candle}high'
-                low = f'{candle}low'
-                close = f'{candle}close'
-                name = f'{candle}volume'
-            else:
-                candle = None
-                open = 'Open'
-                high = 'High'
-                low = 'Low'
-                close = 'Close'
-                name = 'Volume'
+        if self.Market == 'Stocks':
+            candle = args[0] if args[0] in ['TSE', 'OTC'] else None
+            open = f'{candle}open'
+            high = f'{candle}high'
+            low = f'{candle}low'
+            close = f'{candle}close'
+            name = f'{candle}volume'
+        else:
+            candle = None
+            open = 'Open'
+            high = 'High'
+            low = 'Low'
+            close = 'Close'
+            name = 'Volume'
 
-            if candle:
-                d = 10
-                fig.add_trace(
-                    go.Candlestick(
-                        x=df.index,
-                        open=df[open],
-                        high=df[high],
-                        low=df[low],
-                        close=df[close],
-                        name=candle,
-                        increasing=dict(line=dict(color='#e63746')),
-                        decreasing=dict(line=dict(color='#42dd31'))
-                    ),
-                    row=row,
-                    col=1,
-                    secondary_y=True
-                )
+        if candle:
+            d = 10
+            fig.add_trace(
+                go.Candlestick(
+                    x=df.index,
+                    open=df[open],
+                    high=df[high],
+                    low=df[low],
+                    close=df[close],
+                    name=candle,
+                    increasing=dict(line=dict(color='#e63746')),
+                    decreasing=dict(line=dict(color='#42dd31'))
+                ),
+                row=row,
+                col=1,
+                secondary_y=True
+            )
 
-                fig.add_trace(
-                    go.Scatter(
-                        x=df.index,
-                        y=df[close].rolling(d).mean().values,
-                        mode='lines',
-                        marker_color='#E377C2',
-                        name=f'{candle}_{d}MA',
-                    ),
-                    row=row,
-                    col=1,
-                    secondary_y=True
-                )
+            fig.add_trace(
+                go.Scatter(
+                    x=df.index,
+                    y=df[close].rolling(d).mean().values,
+                    mode='lines',
+                    marker_color='#E377C2',
+                    name=f'{candle}_{d}MA',
+                ),
+                row=row,
+                col=1,
+                secondary_y=True
+            )
 
-                colors = [
-                    '#d3efd2' if o >= c else '#efd2d8' for o, c in zip(df[open], df[close])
-                ]
-                fig.add_trace(
-                    go.Bar(
-                        x=df.index, 
-                        y=df[name], 
-                        marker_color=colors, 
-                        name=name
-                    ),
-                    row=row,
-                    col=1,
-                    secondary_y=False
-                )
-            else:
-                fig.add_trace(
-                    go.Scatter(
-                        x=df.index, 
-                        y=df[args[0]], 
-                        mode='lines', 
-                        name=args[1], 
-                        marker_color=args[2], 
-                        **kwargs
-                    ),
-                    row=row,
-                    col=1
-                )
+            colors = [
+                '#d3efd2' if o >= c else '#efd2d8' for o, c in zip(df[open], df[close])
+            ]
+            fig.add_trace(
+                go.Bar(
+                    x=df.index,
+                    y=df[name],
+                    marker_color=colors,
+                    name=name
+                ),
+                row=row,
+                col=1,
+                secondary_y=False
+            )
+        else:
+            fig.add_trace(
+                go.Scatter(
+                    x=df.index,
+                    y=df[args[0]],
+                    mode='lines',
+                    name=args[1],
+                    marker_color=args[2],
+                    **kwargs
+                ),
+                row=row,
+                col=1
+            )
 
-            return fig
-    
+        return fig
+
     def plot_backtest_result(self, TestResult: object, title="Backtest Report"):
         '''將回測結果畫成圖表'''
 
@@ -295,9 +300,9 @@ class BacktestFigures:
 
         N = len(self.Titles)
         n_tables = 3
-        spec1 = [[{"type": "table"}]]*n_tables # 3張表
-        spec2 = [[{'secondary_y': True}]]*2 # TSE & OTC K線圖
-        spec3 = [[{"type": "scatter"}]]*(N-n_tables-2)# 其餘折線走勢圖
+        spec1 = [[{"type": "table"}]]*n_tables  # 3張表
+        spec2 = [[{'secondary_y': True}]]*2  # TSE & OTC K線圖
+        spec3 = [[{"type": "scatter"}]]*(N-n_tables-2)  # 其餘折線走勢圖
         fig = make_subplots(
             rows=N,
             cols=1,
@@ -307,7 +312,8 @@ class BacktestFigures:
             specs=spec1 + spec2 + spec3,
             row_heights=[0.1, 0.2, 0.15] + [0.45/(N-n_tables)]*(N-n_tables)
         )
-        fig = self.subplot_add_table(fig, TestResult.Configuration, row=1, col=1)
+        fig = self.subplot_add_table(
+            fig, TestResult.Configuration, row=1, col=1)
         fig = self.subplot_add_table(fig, TestResult.Summary, row=2, col=1)
         fig = self.subplot_add_table(fig, statement, row=3, col=1, height=40)
         for i, args in enumerate(self.TraceSettings):
@@ -316,7 +322,8 @@ class BacktestFigures:
                 fig = self._add_trace(fig, daily_info, row, *args)
             elif i == 4:
                 for j, args_ in enumerate(args):
-                    fig = self._add_trace(fig, daily_info, row+j, *args_, fill='tozeroy')
+                    fig = self._add_trace(
+                        fig, daily_info, row+j, *args_, fill='tozeroy')
             else:
                 j = 0 if i == 2 else 1
                 for args_ in args:
@@ -345,7 +352,8 @@ class BacktestFigures:
             'stock').OpenDate.transform(lambda x: x.min() - timedelta(days=5))
         statement['end'] = statement.groupby(
             'stock').CloseDate.transform(lambda x: x.max() + timedelta(days=5))
-        tb = df[cols][(df.Time >= statement.start.min()) & (df.Time <= statement.end.max())]
+        tb = df[cols][
+            (df.Time >= statement.start.min()) & (df.Time <= statement.end.max())]
 
         # figures = FigureInOut
         stocks = statement.stock.unique()
@@ -357,10 +365,12 @@ class BacktestFigures:
             end = df1.end.values[0]
             df2 = tb[(tb.name == s) & (tb.Time >= start) & (tb.Time <= end)]
 
-            ins = df2[df2.Time.isin(df1.OpenDate)].set_index('Time').Low.to_dict()
+            ins = df2[df2.Time.isin(df1.OpenDate)]
+            ins = ins.set_index('Time').Low.to_dict()
             df1['Ins'] = df1.OpenDate.map(ins)
 
-            outs = df2[df2.Time.isin(df1.CloseDate)].set_index('Time').High.to_dict()
+            outs = df2[df2.Time.isin(df1.CloseDate)]
+            outs = outs.set_index('Time').High.to_dict()
             df1['Outs'] = df1.CloseDate.map(outs)
 
             fig = go.Figure(
@@ -379,7 +389,10 @@ class BacktestFigures:
                     go.Scatter(
                         x=df1.OpenDate,
                         y=df1.Ins*0.96,
-                        customdata=np.stack((df1.OpenReason, df1.Ins), axis=-1),
+                        customdata=np.stack(
+                            (df1.OpenReason, df1.Ins),
+                            axis=-1
+                        ),
                         hovertemplate='%{x} <br>%{customdata[0]} <br>%{customdata[1]} 進場',
                         name='進場',
                         mode='markers',
@@ -394,7 +407,8 @@ class BacktestFigures:
                     go.Scatter(
                         x=df1.CloseDate,
                         y=df1.Outs*1.04,
-                        customdata=df1[['CloseReason', 'Outs', 'profit', 'returns']].values,
+                        customdata=df1[
+                            ['CloseReason', 'Outs', 'profit', 'returns']].values,
                         hovertemplate='%{x} <br>%{customdata[0]} <br>出場: %{customdata[1]} <br>獲利: %{customdata[2]} (%{customdata[3]}%)',
                         name='出場',
                         mode='markers',
@@ -423,7 +437,7 @@ class BacktestFigures:
             progress_bar(N, i)
 
         return self.Figures
-    
+
     def save_figure(self, fig: object, filename='回測圖表'):
         '''輸出回測圖表'''
 
@@ -453,7 +467,7 @@ class BacktestFigures:
 class BacktestPerformance:
     def __init__(self) -> None:
         self.TestResult = namedtuple(
-            typename="TestResult", 
+            typename="TestResult",
             field_names=['Configuration', 'Summary', 'Statement', 'DailyInfo']
         )
 
@@ -461,7 +475,7 @@ class BacktestPerformance:
         start = df[target1].values[0]
         end = df[target2].values[-1]
         return round(100*(end/start - 1), 2)
-    
+
     def compute_profits(self, tb):
         total_profit = tb.profit.sum()
         df_profit = tb[tb.profit > 0]
@@ -499,7 +513,7 @@ class BacktestPerformance:
             })
 
         return profits
-    
+
     def computeWinLoss(self, df: pd.DataFrame):
         '''Count wins and losses'''
         win_loss = (df.profit > 0).value_counts().to_dict()
@@ -508,7 +522,7 @@ class BacktestPerformance:
 
         if False not in win_loss:
             win_loss[False] = 0
-        
+
         return win_loss
 
     def processDailyInfo(self, df: pd.DataFrame, **result):
@@ -540,12 +554,12 @@ class BacktestPerformance:
 
             if not counts.shape[0]:
                 return {
-                    'start': '1900-01-01', 
-                    'end': '1900-01-01', 
-                    'n': 0, 
+                    'start': '1900-01-01',
+                    'end': '1900-01-01',
+                    'n': 0,
                     'amount': 0
                 }
-            
+
             count_max = counts[counts == counts.max()].index[0]
             result = profits[profits.labels == count_max]
             return {
@@ -575,10 +589,10 @@ class BacktestPerformance:
 
         profits['labels'] = labels
 
-        max_positives = count_profits(is_profit = 1)
-        max_negagives = count_profits(is_profit = 0)
+        max_positives = count_profits(is_profit=1)
+        max_negagives = count_profits(is_profit=0)
         return max_positives, max_negagives
-    
+
     def get_backtest_result(self, **result):
         '''取得回測報告'''
 
@@ -601,7 +615,8 @@ class BacktestPerformance:
                 netOpenAmount = (df.OpenAmount + df.OpenFee)
                 netCloseAmount = (df.CloseAmount - df.CloseFee - df.Tax)
                 df['profit'] = (netCloseAmount - netOpenAmount).astype('int64')
-                df['returns'] = (100*(df.CloseAmount/df.OpenAmount - 1)).round(2)
+                df['returns'] = (
+                    100*(df.CloseAmount/df.OpenAmount - 1)).round(2)
             else:
                 sign = 1 if result['isLong'] else -1
 
@@ -628,10 +643,12 @@ class BacktestPerformance:
             result['daily_info'] = self.processDailyInfo(df, **result)
 
             # TSE 漲跌幅
-            tse_return = self.computeReturn(result['daily_info'], 'TSEopen', 'TSEclose')
+            tse_return = self.computeReturn(
+                result['daily_info'], 'TSEopen', 'TSEclose')
 
             # OTC 漲跌幅
-            otc_return = self.computeReturn(result['daily_info'], 'OTCopen', 'OTCclose')
+            otc_return = self.computeReturn(
+                result['daily_info'], 'OTCopen', 'OTCclose')
 
             # 總報酬率
             profits = self.compute_profits(df)
@@ -639,7 +656,8 @@ class BacktestPerformance:
             total_return = balance/result['init_position']
 
             # 年化報酬率
-            anaualized_return = total_return**(365/(df.CloseDate.max() - df.OpenDate.min()).days)
+            anaualized_return = total_return**(
+                365/(df.CloseDate.max() - df.OpenDate.min()).days)
 
             # 回測摘要
             summary = pd.DataFrame([{
@@ -689,9 +707,11 @@ class BacktestPerformance:
         p = len(openReasons)
 
         df.insert(p+1, 'total_count', df.fillna(0).iloc[:, 1:p+1].sum(axis=1))
-        df.insert(2*p+2, 'total_win', df.fillna(0).iloc[:, p+2:2*p+2].sum(axis=1))
+        df.insert(
+            2*p+2, 'total_win', df.fillna(0).iloc[:, p+2:2*p+2].sum(axis=1))
         for i in range(p):
-            df.insert(2*p+3+i, f'win_{openReasons[i]}', 100*df.iloc[:, p+2+i]/df.iloc[:, 1+i])
+            df.insert(
+                2*p+3+i, f'win_{openReasons[i]}', 100*df.iloc[:, p+2+i]/df.iloc[:, 1+i])
 
         df = df.fillna(0)
 
@@ -765,7 +785,7 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
         self.TAX_RATE_STOCK = .003
         self.TAX_RATE_FUTURES = .00002
         self.TimeCol = 'date' if self.scale == '1D' else 'Time'
-        
+
         self.nStocksLimit = 0
         self.nStocks_high = 20
         self.day_trades = []
@@ -776,14 +796,14 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
         self.balance = 1000000
         self.init_balance = 1000000
         self.buyOrder = None
-        self.raiseQuota = False # 加碼參數
+        self.raiseQuota = False  # 加碼參數
         self.market_value = 0
         self.Action = namedtuple(
-            typename="Action", 
-            field_names=['position', 'reason', 'msg', 'price'], 
+            typename="Action",
+            field_names=['position', 'reason', 'msg', 'price'],
             defaults=[0, '', '', 0]
         )
-        
+
     def load_data(self, backtestScript: object):
         print('Loading data...')
         if backtestScript.market == 'Stocks':
@@ -870,7 +890,7 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
         def wrapper(func):
             self.setVolumeProp = func
         return wrapper
-    
+
     def set_scripts(self, testScript: object):
         '''設定回測腳本'''
 
@@ -903,12 +923,12 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
             @self.on_computeOpenUnit()
             def open_unit(inputs):
                 return testScript.computeOpenUnit(inputs)
-        
+
         if hasattr(testScript, 'setVolumeProp'):
             @self.on_setVolumeProp()
             def open_unit(market_value):
                 return testScript.setVolumeProp(market_value)
-            
+
     def filter_data(self, df: pd.DataFrame, **params):
         '''
         過濾要回測的數據，包括起訖日、所需欄位
@@ -924,7 +944,7 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
             df = df[df.date <= params['endDate']]
 
         required_cols = [
-            'name', 'date', 'isIn', 'pc_ratio', 
+            'name', 'date', 'isIn', 'pc_ratio',
             'Open', 'High', 'Low', 'Close', 'Volume'
         ]
 
@@ -940,7 +960,8 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
         target_columns = params['target_columns']
         if any(c not in target_columns for c in required_cols):
             cols = [c for c in required_cols if c not in target_columns]
-            raise KeyError(f'Some required columns are not in the table: {cols}')
+            raise KeyError(
+                f'Some required columns are not in the table: {cols}')
 
         df = df[target_columns]
         df = df[df.Open != 0]
@@ -952,24 +973,26 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
         if self.stocks:
             amount = sum([
                 self.computeCloseAmount(
-                    s['openPrice'], s['price'], s['quantity'])[1] 
+                    s['openPrice'], s['price'], s['quantity'])[1]
                 for s in self.stocks.values()
             ])
         else:
             amount = 0
-        
+
         self.market_value = self.balance + amount
 
     def _updateStatement(self, **kwargs):
         '''更新交易紀錄'''
         price = kwargs['price']
-        quantity = kwargs['quantity']  
+        quantity = kwargs['quantity']
         data = self.stocks[kwargs['stockid']]
         openPrice = data['openPrice']
-        openamount, amount = self.computeCloseAmount(openPrice, price, quantity)
+        openamount, amount = self.computeCloseAmount(
+            openPrice, price, quantity)
         openfee = self.computeFee(openamount)
         closefee = self.computeFee(amount)
-        interest = self.computeLeverageInterest(kwargs['day'], data['day'], openamount)
+        interest = self.computeLeverageInterest(
+            kwargs['day'], data['day'], openamount)
         tax = self.computeTax(openPrice, price, quantity)
 
         if self.isLong:
@@ -1030,7 +1053,7 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
                 })
             else:
                 self.computeAveragePrice(quantity, price)
-            
+
         else:
             quantity = self.computeCloseUnit(stockid, kwargs['position'])
             kwargs['quantity'] = quantity
@@ -1077,7 +1100,7 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
         else:
             closeAmount = openAmount + profit*self.multipler*self.sign
         return openAmount, closeAmount
-    
+
     def computeCloseUnit(self, stockid: str, prop: float):
         '''從出場的比例%推算出場量(張/口)'''
         q_balance = self.stocks[stockid]['quantity']
@@ -1112,11 +1135,11 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
         if self.Market == 'Stocks':
             return round((openPrice*quantity)*self.TAX_RATE_STOCK)
         return round(closePrice*quantity*self.multipler*self.TAX_RATE_FUTURES)
-    
+
     def computeLeverageInterest(self, day1: Union[str, datetime], day2: Union[str, datetime], amount: float):
         if self.leverage == 1:
             return 0
-        
+
         d = self.date_diff(day1, day2)
         return amount*(1 - self.leverage)*self.LEVERAGE_INTEREST*d/365
 
@@ -1139,8 +1162,8 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
             unit = self.checkOpenUnitLimit(unit, inputs['volume_ma'])
 
         openInfo = self.examineOpen(
-            inputs, 
-            market_value=self.market_value, 
+            inputs,
+            market_value=self.market_value,
             day_trades=self.day_trades
         )
 
@@ -1148,7 +1171,8 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
 
             if inputs['name'] in self.stocks:
                 # 加碼部位
-                quantity = 1000*(self.stocks[inputs['name']]['quantity']/1000)/3
+                quantity = 1000 * \
+                    (self.stocks[inputs['name']]['quantity']/1000)/3
             elif self.Market == 'Stocks':
                 quantity = 1000*unit
             else:
@@ -1174,7 +1198,7 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
     def checkMarginCall(self, name: str, closePrice: float):
         if self.leverage == 1:
             return False
-        
+
         openPrice = self.stocks[name]['openPrice']
         margin = closePrice/(openPrice*(1 - self.leverage))
         return margin < 1.35
@@ -1190,12 +1214,12 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
         })
 
         closeInfo = self.examineClose(
-            stocks=self.stocks, 
-            inputs=inputs, 
-            today=day, 
+            stocks=self.stocks,
+            inputs=inputs,
+            today=day,
             stocksClosed=stocksClosed
         )
-        
+
         margin_call = self.checkMarginCall(s, closeInfo.price)
         if closeInfo.position or margin_call:
             self.execute(
@@ -1215,7 +1239,8 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
 
         # by 族群＆成交值
         elif self.buyOrder == 'category':
-            name_count = df[df.isIn == True].groupby('category').name.count().to_dict()
+            name_count = df[df.isIn == True].groupby('category').name.count()
+            name_count = name_count.to_dict()
             df['n_category'] = df.category.map(name_count).fillna(0)
             df = df.sort_values(['n_category'], ascending=False)
         else:
@@ -1270,10 +1295,14 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
             # 取出當天(或某小時)所有股票資訊
             if self.scale == '1D' or (temp.nth_bar.min() == 1):
                 chance = temp.isIn.sum()
-                self.nStocksLimit = self.computeStocksLimit(head, chance=chance)
+                self.nStocksLimit = self.computeStocksLimit(
+                    head, chance=chance)
                 self.day_trades = []
 
-            temp = temp[((temp.isIn == 1) | (temp.name.isin(self.stocks.keys())))]
+            temp = temp[(
+                (temp.isIn == 1) |
+                (temp.name.isin(self.stocks.keys()))
+            )]
 
             # 檢查進場 & 出場
             rows = np.array(temp.to_dict('records'))
@@ -1311,21 +1340,19 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
         self.daily_info[day].update({'nClose': self.nClose})
 
         params.update({
-                'statement': self.statements,
-                'startDate': pd.to_datetime(params['startDate']) if 'startDate' in params else df.date.min(),
-                'endDate': pd.to_datetime(params['endDate']) if 'endDate' in params else df.date.max(),
-                'daily_info': pd.DataFrame(self.daily_info).T, 
-                
-            })
+            'statement': self.statements,
+            'startDate': pd.to_datetime(params['startDate']) if 'startDate' in params else df.date.min(),
+            'endDate': pd.to_datetime(params['endDate']) if 'endDate' in params else df.date.max(),
+            'daily_info': pd.DataFrame(self.daily_info).T,
+
+        })
         del df
         return self.get_backtest_result(
-            **params, 
+            **params,
             market=self.Market,
             mode=self.mode,
             scale=self.scale,
-            leverage=self.leverage, 
-            isLong=self.isLong, 
+            leverage=self.leverage,
+            isLong=self.isLong,
             multipler=self.multipler
         )
-
-    

@@ -1,4 +1,3 @@
-import os
 import ssl
 import time
 import logging
@@ -10,8 +9,9 @@ from collections import namedtuple
 from datetime import datetime, timedelta
 
 from shioaji import constant
-from . import API, PATH, TODAY, TODAY_STR, __version__, holidays
-from .config import StrategyLong, StrategyShort, StrategyLongDT, StrategyShortDT
+from . import __version__
+from . import notifier, picker, crawler2
+from .config import API, PATH, TODAY, TODAY_STR, holidays
 from .config import FEE_RATE, TStart, TEnd, TTry, TimeStartStock, TimeStartFuturesDay
 from .config import TimeEndFuturesDay, TimeStartFuturesNight, TimeEndFuturesNight
 from .utils import get_contract, save_table
@@ -19,13 +19,10 @@ from .utils.kbar import KBarTool
 from .utils.accounts import AccountInfo
 from .utils.watchlist import WatchListTool
 from .utils.cipher import CipherTool
-from .utils.notify import Notification
 from .utils.orders import OrderTool
 from .utils.database import db
-from .utils.database.tables import SelectedStocks
 from .utils.database.tables import SecurityInfoStocks, SecurityInfoFutures
 from .utils.subscribe import Subscriber
-from .utils.crawler import CrawlFromHTML
 try:
     from .strategies.StrategySet import StrategySet as StrategySets
 except:
@@ -127,7 +124,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             stock_limit_short=self.N_LIMIT_SS,
             futures_limit=self.N_FUTURES_LIMIT,
         )
-        self.notifier = Notification()
         self.set_kbar_scripts(kbar_script)
 
     def getENV(self, key: str, _type: str = 'text'):
@@ -229,7 +225,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             c5 = len(stock) == 4
 
             if order['account']['account_id'] == self.account_id_stock:
-                self.notifier.post_tftOrder(stat, msg)
+                notifier.post_tftOrder(stat, msg)
 
                 if c3 and c5 and stock not in self.stock_bought:
                     self.stock_bought.append(stock)
@@ -295,7 +291,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 'bst': datetime.now(),
                 'cost_price': msg['price']
             })
-            self.notifier.post_tftDeal(stat, msg)
+            notifier.post_tftDeal(stat, msg)
 
             if msg['order_lot'] == 'Common':
                 msg['quantity'] *= 1000
@@ -346,7 +342,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             operation = msg['operation']
 
             if order['account']['account_id'] == self.account_id_futopt:
-                self.notifier.post_fOrder(stat, msg)
+                notifier.post_fOrder(stat, msg)
                 if operation['op_code'] == '00' or operation['op_msg'] == '':
                     self._update_futures_deal_list(symbol, order['oc_type'])
 
@@ -377,7 +373,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     self.update_monitor_lists(operation['op_type'], msg)
 
         elif stat == constant.OrderState.FuturesDeal:
-            self.notifier.post_fDeal(stat, msg)
+            notifier.post_fDeal(stat, msg)
 
     def login_and_activate(self):
         # 登入
@@ -466,7 +462,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
     def _log_and_notify(self, msg: str):
         '''將訊息加入log並推播'''
         logging.info(msg)
-        self.notifier.post(f'\n{msg}', msgType='Monitor')
+        notifier.post(f'\n{msg}', msgType='Monitor')
 
     def init_stocks(self):
         '''初始化股票資訊'''
@@ -505,7 +501,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.n_stocks_long = self.stocks[buy_condition].shape[0]
         self.n_stocks_short = self.stocks[~buy_condition].shape[0]
         self.N_LIMIT_LS = self.StrategySet.setNStockLimitLong(KBars=self.KBars)
-        self.N_LIMIT_SS = self.StrategySet.setNStockLimitShort(KBars=self.KBars)
+        self.N_LIMIT_SS = self.StrategySet.setNStockLimitShort(
+            KBars=self.KBars)
         self.punish_list = self.get_punish_list().證券代號.to_list()
         self._set_leverage(all_targets)
         self._set_trade_risks()
@@ -587,7 +584,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         action = order.action if not order.octype else order.octype
         target = order.target
         position = order.pos_target
-        is_day_trade = strategies[target] in StrategyShortDT + StrategyLongDT
+        is_day_trade = self.StrategySet.isDayTrade(strategies[target])
 
         # update monitor list position
         if order.action_type == 'Close':
@@ -622,8 +619,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         for stock, stra in stocks_pool.items():
             if (
-                (self.can_buy and (stra in StrategyLong + StrategyLongDT)) or
-                (self.can_sell and (stra in StrategyShort + StrategyShortDT))
+                (self.can_buy and self.StrategySet.isLong(stra)) or
+                (self.can_sell and self.StrategySet.isShort(stra))
             ) and (stock not in self.stocks_to_monitor):
                 self.stocks_to_monitor.update({stock: None})
 
@@ -683,8 +680,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             inputs = self.Quotes.NowTargets[target].copy()
             data = self.stocks_to_monitor[target]
             strategy = strategies[target]
-            isLongStrategy = strategy in StrategyLong + StrategyLongDT
-            isDTStrategy = strategy in StrategyShortDT + StrategyLongDT
+            isLongStrategy = self.StrategySet.isLong(strategy)
+            isDTStrategy = self.StrategySet.isDayTrade(strategy)
             isSell = (
                 # long selling
                 (data and 'action' in data and data['action'] == 'Buy') or
@@ -716,14 +713,15 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             is_day_trade = isDTStrategy and inDeal and (not inStocks)
             isOpen = actionType == 'Open' and enoughOpen
             isClose = (
-                (not isDTStrategy) and (not inDeal) and inStocks and 
+                (not isDTStrategy) and (not inDeal) and inStocks and
                 (actionType == 'Close')
             )
             isDTClose = (is_day_trade and (actionType == 'Close'))
-            
+
             if quantity and (isOpen or isClose or isDTClose):
                 tradeType = '當沖' if is_day_trade else '非當沖'
-                func = self.StrategySet.mapFunction(actionType, tradeType, strategy)
+                func = self.StrategySet.mapFunction(
+                    actionType, tradeType, strategy)
 
                 if data:
                     inputs.update(data)
@@ -757,7 +755,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             inputs = self.Quotes.NowTargets[target].copy()
             data = self.futures_to_monitor[target]
             strategy = strategies[target]
-            isLongStrategy = strategy in StrategyLong + StrategyLongDT
+            isLongStrategy = self.StrategySet.isLong(strategy)
 
             # 建倉
             if data is None:
@@ -785,9 +783,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 inputs['datetime'])
             c2 = octype == 'Cover'
             if quantity and (c1 or c2):
-                is_day_trade = strategy in StrategyShortDT + StrategyLongDT
+                is_day_trade = self.StrategySet.isDayTrade(strategy)
                 tradeType = '當沖' if is_day_trade else '非當沖'
-                func = self.StrategySet.mapFunction(actionType, tradeType, strategy)
+                func = self.StrategySet.mapFunction(
+                    actionType, tradeType, strategy)
 
                 if data:
                     inputs.update(data)
@@ -894,7 +893,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 self.update_monitor_lists(content.action, order_data)
 
                 logging.debug('Place simulate order complete.')
-                self.notifier.post(log_msg, msgType='Order')
+                notifier.post(log_msg, msgType='Order')
 
             elif self.simulation and market == 'Futures':
                 price = self.Quotes.NowTargets[target]['price']
@@ -931,7 +930,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 self.update_monitor_lists(content.octype, order_data)
 
                 logging.debug('Place simulate order complete.')
-                self.notifier.post(log_msg, msgType='Order')
+                notifier.post(log_msg, msgType='Order')
             else:
                 # #ff0000 批次下單的張數 (股票>1000股的單位為【張】) #ff0000
                 q = 5 if order_lot == 'Common' else quantity
@@ -1000,24 +999,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
             df = self.get_openpositions()
         return df
-    
-    def get_selection_files(self):
-        '''取得選股清單'''
-
-        filename = f'{PATH}/selections/all.csv'
-        day = self.last_business_day()
-
-        if db.HAS_DB:
-            df = db.query(SelectedStocks, SelectedStocks.date == day)
-        elif os.path.exists(filename):
-            df = pd.read_csv(filename)
-            df.date = pd.to_datetime(df.date)
-            df.code = df.code.astype(str)
-            df = df[df.date == day]
-        else:
-            df = pd.DataFrame()
-
-        return df
 
     def get_margin_table(self):
         '''取得保證金清單'''
@@ -1046,11 +1027,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         pools = {}
 
-        df = self.get_selection_files()
+        df = picker.get_selection_files()
         if df.shape[0]:
             # 排除不交易的股票
             # ### 全額交割股不買
-            day_filter_out = CrawlFromHTML().get_CashSettle()
+            day_filter_out = crawler2.get_CashSettle()
             df = df[~df.code.isin(day_filter_out.股票代碼.values)]
             df = df[~df.code.isin(self.FILTER_OUT)]
 
@@ -1073,12 +1054,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             else:
                 sort_order = ['short_weight', 'long_weight']
             strategies = self.StrategySet.STRATEGIES.sort_values(
-                    sort_order, ascending=False).name.to_list()
+                sort_order, ascending=False).name.to_list()
 
             for s in strategies:
                 if s in df.Strategy.values and s in self.STRATEGY_STOCK:
                     stockids = df[df.Strategy == s].code
-                    pools.update({stock:s for stock in stockids})
+                    pools.update({stock: s for stock in stockids})
                     df = df[~df.code.isin(stockids)]
 
         return pools
@@ -1096,7 +1077,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             '做多大台': [f'TXF{due_year_month}'],
         }
         pools.update({
-            symbol:st for st in self.STRATEGY_FUTURES for symbol in indexes[st]
+            symbol: st for st in self.STRATEGY_FUTURES for symbol in indexes[st]
         })
         return pools
 
@@ -1112,7 +1093,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         quantity, quantity_limit = quantityFunc(
             inputs=inputs, kbars=self.KBars)
         leverage = self.check_leverage(target, order_cond)
-        
+
         quantity = int(min(quantity, quantity_limit)/(1 - leverage))
         quantity = min(quantity, 499)
 
@@ -1268,14 +1249,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         is_holiday = TODAY in holidays
         if self.can_futures:
             close1 = (
-                (now > TimeEndFuturesNight) and 
+                (now > TimeEndFuturesNight) and
                 (now < TimeStartFuturesDay + timedelta(days=1))
             )
             close2 = now > TimeEndFuturesDay and now < TimeStartFuturesNight
             if self.TRADING_PERIOD != 'Day':
                 # trader only closes during 05:00 ~ 08:45
                 close2 = False
-            
+
             return is_holiday or close1 or close2
 
         return is_holiday or not (now <= TEnd)
@@ -1343,7 +1324,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         text += f"\n【操盤模式】{self.MODE}\n【操盤策略】{self.STRATEGY_STOCK}"
         text += f"\n【前日行情】Put/Call: {self.StrategySet.pc_ratio}"
         text += f"\n【美股行情】道瓊({self.pct_chg_DowJones}%)"
-        self.notifier.post(text, msgType='Monitor')
+        notifier.post(text, msgType='Monitor')
 
         # 開始監控
         while True:
@@ -1436,7 +1417,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         else:
             df.to_pickle(
                 f'{PATH}/stock_pool/simulation_{market}_{self.ACCOUNT_NAME}.pkl')
-            
+
     def __save_simulate_securityInfo(self):
         '''儲存模擬交易模式下的股票庫存表'''
         if self.simulation:
@@ -1463,7 +1444,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
             if df.shape[0]:
                 self.simulator_update_securityInfo(df, SecurityInfoStocks)
-    
+
     def __save_simulate_futuresInfo(self):
         '''儲存模擬交易模式下的期貨庫存表'''
         if self.simulation:
@@ -1489,7 +1470,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 for c in self.df_futuresInfo.columns:
                     if c not in df.columns:
                         if c in [
-                            'ContractAverPrice', 'SettlePrice', 
+                            'ContractAverPrice', 'SettlePrice',
                             'RealPrice', 'FlowProfitLoss',
                             'SettleProfitLoss', 'OTAMT', 'MTAMT'
                         ]:

@@ -2,7 +2,7 @@ import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
-from .. import PATH, TODAY
+from ..config import PATH
 from . import save_table, get_contract
 from .time import TimeTool
 from .database import db

@@ -1,10 +1,12 @@
+import os
 import numpy as np
 import pandas as pd
 from datetime import timedelta
 
-from .. import PATH, TODAY_STR, TODAY
-from ..utils import save_table
+from ..config import PATH, TODAY_STR, TODAY
 from .conditions import SelectConditions
+from ..utils import save_table
+from ..utils.time import TimeTool
 from ..utils.database import db
 from ..utils.database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T, SelectedStocks
 
@@ -17,7 +19,7 @@ def map_BKD(OTCclose, OTChigh, add_days=10):
     return None
 
 
-class SelectStock(SelectConditions):
+class SelectStock(SelectConditions, TimeTool):
     def __init__(self, d_shift=0, dma=5, mode='select', scale='1D'):
         self.d_shift = d_shift
         self.dma = dma
@@ -185,7 +187,7 @@ class SelectStock(SelectConditions):
         df = df[df.Strategy != '']
 
         df = df.reset_index(drop=True).drop('isMatch', axis=1)
-        df = df.rename(columns={'name':'code'})
+        df = df.rename(columns={'name': 'code'})
         df = df.sort_values(['Strategy', 'code'])
 
         return df
@@ -196,3 +198,21 @@ class SelectStock(SelectConditions):
         else:
             save_table(df, f'{PATH}/selections/all.csv')
             save_table(df, f'{PATH}/selections/history/{TODAY_STR}-all.csv')
+
+    def get_selection_files(self):
+        '''取得選股清單'''
+
+        filename = f'{PATH}/selections/all.csv'
+        day = self.last_business_day()
+
+        if db.HAS_DB:
+            df = db.query(SelectedStocks, SelectedStocks.date == day)
+        elif os.path.exists(filename):
+            df = pd.read_csv(filename)
+            df.date = pd.to_datetime(df.date)
+            df.code = df.code.astype(str)
+            df = df[df.date == day]
+        else:
+            df = pd.DataFrame()
+
+        return df

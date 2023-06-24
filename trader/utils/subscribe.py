@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Union
 
-from .. import API
+from ..config import API
 from . import get_contract
 
 
@@ -20,9 +20,12 @@ class Subscriber:
 
     def _set_target_quote_default(self, targets: str):
         '''初始化股票/期權盤中資訊'''
-        keys = ['price', 'amount', 'total_amount', 'volume', 'total_volume', 'tick_type']
+        keys = [
+            'price', 'amount', 'total_amount',
+            'volume', 'total_volume', 'tick_type'
+        ]
         self.Quotes.AllTargets = {s: {k: [] for k in keys} for s in targets}
-    
+
     def _set_index_quote_default(self):
         '''初始化指數盤中資訊'''
         self.Quotes.AllIndex = {'TSE001': [], 'OTC101': []}
@@ -79,8 +82,10 @@ class Subscriber:
     def unsubscribe_index(self):
         '''取消訂閱指數盤中資訊'''
 
-        API.quote.unsubscribe(API.Contracts.Indexs.TSE.TSE001, quote_type='tick')
-        API.quote.unsubscribe(API.Contracts.Indexs.OTC.OTC101, quote_type='tick')
+        API.quote.unsubscribe(
+            API.Contracts.Indexs.TSE.TSE001, quote_type='tick')
+        API.quote.unsubscribe(
+            API.Contracts.Indexs.OTC.OTC101, quote_type='tick')
 
     def subscribe_targets(self, targets: list, quote_type: str = 'tick'):
         '''訂閱股票/期貨盤中資訊'''

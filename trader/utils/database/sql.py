@@ -31,7 +31,7 @@ class SQLDatabase:
                 echo=False
             )
             self.sessionmaker_ = sessionmaker(bind=self.engine)
-        
+
     def get_session(self):
         return scoped_session(self.sessionmaker_)
 
@@ -65,10 +65,10 @@ class SQLDatabase:
             if c in result.columns:
                 result = result.drop(['pk_id', 'create_time'], axis=1)
         return result
-    
-    def update(self, table, update_content:dict, *filterBy):
+
+    def update(self, table, update_content: dict, *filterBy):
         '''Update data in table'''
-        
+
         session = self.get_session()
         session.execute(
             update(table).where(*filterBy).values(update_content)

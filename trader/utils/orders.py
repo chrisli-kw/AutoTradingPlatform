@@ -4,7 +4,7 @@ import logging
 import pandas as pd
 from collections import namedtuple
 
-from .. import API, PATH
+from ..config import API, PATH
 from . import save_table
 from .database import db
 from .database.tables import TradingStatement

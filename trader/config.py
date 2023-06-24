@@ -1,6 +1,14 @@
+import logging
 import pandas as pd
 import configparser
-from datetime import timedelta
+from datetime import datetime, timedelta
+import shioaji as sj
+
+
+API = sj.Shioaji()
+TODAY = datetime.today()
+TODAY_STR = TODAY.strftime("%Y-%m-%d")
+PATH = './data'
 
 config = configparser.ConfigParser()
 config.read('./lib/config.ini', encoding='utf8')
@@ -12,19 +20,38 @@ def getList(section, option):
         return content.replace(' ', '').split(',')
     return []
 
+
 def get_settings(section, option, dataType='str'):
     funcs = {
         'str': config.get,
         'int': config.getint,
         'float': config.getfloat,
         'bool': config.getboolean,
-        'list':getList
+        'list': getList
     }
     if section in config.sections():
         options = config.options(section)
         if options and option.lower() in options:
             return funcs[dataType](section, option)
     return ''
+
+
+def get_holidays():
+    try:
+        df = pd.read_csv('./lib/政府行政機關辦公日曆表.csv')
+        df.date = pd.to_datetime(df.date)
+        df.name = df.name.fillna(df.holidayCategory)
+        holidays = df.set_index('date').name.to_dict()
+
+        eves = {k: v for k, v in holidays.items() if v == '農曆除夕'}
+        for i in range(2):
+            days = {d - timedelta(days=i+1) if d - timedelta(days=i+1)
+                    not in holidays else d - timedelta(days=i+2): '年前封關' for d in eves}
+            holidays.update(days)
+        return holidays
+    except:
+        logging.warning('Run trader without holiday data.')
+        return {}
 
 
 # 使用者相關
@@ -72,6 +99,7 @@ TimeStartFuturesDay = pd.to_datetime('08:45:00')
 TimeEndFuturesDay = pd.to_datetime('13:45:00')
 TimeStartFuturesNight = pd.to_datetime('15:00:00')
 TimeEndFuturesNight = pd.to_datetime('05:00:00') + timedelta(days=1)
+holidays = get_holidays()
 
 # 選股相關
 SelectMethods = get_settings('SELECT', 'methods', dataType='list')

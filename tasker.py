@@ -6,18 +6,15 @@ import pandas as pd
 from datetime import datetime
 from dotenv import dotenv_values
 from argparse import ArgumentParser
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
 
 from trader import __version__ as ver
-from trader import API, PATH, TODAY_STR, holidays
+from trader import executor, notifier, picker, crawler1, crawler2, tdp
+from trader.config import API, PATH, TODAY_STR, holidays
 from trader.config import ACCOUNTS, TEnd, SelectMethods, ConvertScales
-from trader.strategies.select import SelectStock
 from trader.utils import save_table
-from trader.utils.notify import Notification
 from trader.utils.database import redis_tick
 from trader.utils.subscribe import Subscriber
-from trader.utils.kbar import TickDataProcesser
-from trader.utils.crawler import CrawlStockData, CrawlFromHTML
 from trader.utils.accounts import AccountInfo
 from trader.executor import StrategyExecutor
 from trader.backtest import convert_statement
@@ -140,7 +137,6 @@ def runCrawlStockData():
     target = pd.to_datetime('15:05:00')
     config = dotenv_values(f'./lib/envs/{account}.env')
     aInfo = AccountInfo()
-    crawler = CrawlStockData()
 
     try:
         now = datetime.now()
@@ -160,31 +156,30 @@ def runCrawlStockData():
 
         # 更新股票清單
         logging.info('Updating stock list')
-        stock_list = crawler.get_security_list(stock_only=True)
-        crawler.export_security_list(stock_list)
+        stock_list = crawler1.get_security_list(stock_only=True)
+        crawler1.export_security_list(stock_list)
 
         # 爬當天股價資料
-        crawler.crawl_from_sinopac(stockids='all', update=True)
-        crawler.merge_stockinfo()
+        crawler1.crawl_from_sinopac(stockids='all', update=True)
+        crawler1.merge_stockinfo()
 
         # 更新歷史資料
         for scale in ConvertScales:
-            crawler.add_new_data(scale, save=True, start=TODAY_STR)
+            crawler1.add_new_data(scale, save=True, start=TODAY_STR)
 
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
     except:
         logging.exception('Catch an exception:')
         notifier.post(f"\n【Error】【爬蟲程式】股價爬蟲發生異常", msgType='Tasker')
-        if len(crawler.StockData):
-            pd.concat(crawler.StockData).to_pickle(
-                f'{crawler.folder_path}/stock_data_1T.pkl')
+        if len(crawler1.StockData):
+            pd.concat(crawler1.StockData).to_pickle(
+                f'{crawler1.folder_path}/stock_data_1T.pkl')
     finally:
         logging.info(f'登出系統: {API.logout()}')
 
 
 def runSelectStock():
-    picker = SelectStock()
     try:
         picker.set_select_methods(SelectMethods)
         df = picker.pick(3, 1.8, 3)
@@ -203,9 +198,6 @@ def runSelectStock():
 
 
 def runCrawlFromHTML():
-    crawler2 = CrawlFromHTML()
-    tdp = TickDataProcesser()
-
     try:
         # update PutCallRatio
         step = 'PutCallRatio'
@@ -342,8 +334,6 @@ args = parse_args()
 task = args.task
 account = args.account
 filename = account if task == 'auto_trader' else task
-notifier = Notification()
-executor = ThreadPoolExecutor(max_workers=5)
 
 logging.basicConfig(
     level=logging.DEBUG,

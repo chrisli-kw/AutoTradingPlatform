@@ -17,7 +17,7 @@ from . import progress_bar, create_queue, delete_selection_files, save_table
 from .notify import Notification
 from .kbar import KBarTool
 from .time import TimeTool
-from .. import API, PATH, TODAY_STR, TODAY
+from ..config import API, PATH, TODAY_STR, TODAY
 from .database import db
 from .database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T
 from .database.tables import SecurityList, PutCallRatioList, ExDividendTable
@@ -52,10 +52,10 @@ class CrawlStockData:
         self.scale = scale
         self.StockData = []
         self.tables = {
-            '1D':KBarData1D, 
-            '1T':KBarData1T,
-            '30T':KBarData30T,
-            '60T':KBarData60T
+            '1D': KBarData1D,
+            '1T': KBarData1T,
+            '30T': KBarData30T,
+            '60T': KBarData60T
         }
 
     def get_security_list(self, stock_only: bool = True):
@@ -63,22 +63,24 @@ class CrawlStockData:
         自 Shioaji 取得股票清單
         只保留普通股股票且不需要權證: stock_only = True 
         '''
-        stock_list = [{**stock} for exchange in API.Contracts.Stocks for stock in exchange]
+        stock_list = [
+            {**stock} for exchange in API.Contracts.Stocks for stock in exchange]
         df = pd.DataFrame(stock_list)
         df = df[(df.update_date == df.update_date.max())]
 
         if stock_only:
             df.update_date = pd.to_datetime(df.update_date)
-            df = df[~(df.category.isin(['00', '  '])) & (df.code.apply(len) == 4)]
+            df = df[
+                ~(df.category.isin(['00', '  '])) & (df.code.apply(len) == 4)]
 
         return df
-    
+
     def export_security_list(self, df: pd.DataFrame):
         '''Export security data either to local or to DB'''
 
         if db.HAS_DB:
             codes = db.query(SecurityList.code).code.values
-            
+
             # add new data
             tb = df[~df.code.isin(codes)].copy()
             db.dataframe_to_DB(tb, SecurityList)
@@ -89,13 +91,13 @@ class CrawlStockData:
             db.delete(SecurityList, condition)
         else:
             df.to_excel(f'{PATH}/selections/stock_list.xlsx', index=False)
-    
+
     def export_kbar_data(self, df: pd.DataFrame, scale: str):
         '''Export kbar data either to local or to DB'''
 
         if db.HAS_DB:
             db.dataframe_to_DB(df, self.tables[scale])
-        
+
         if scale == '1T':
             day = self.folder_path.split('/')[-1]
             save_table(df, f'{self.folder_path}/{day}-stock_data_1T.csv')
@@ -112,18 +114,20 @@ class CrawlStockData:
         if type(stockids) == str and stockids == 'all':
             stockids = pd.read_excel(f'{PATH}/selections/stock_list.xlsx')
             stockids.code = stockids.code.astype(int).astype(str)
-            stockids = stockids[stockids.exchange.isin(['OTC', 'TSE'])].code.values
+            stockids = stockids[
+                stockids.exchange.isin(['OTC', 'TSE'])].code.values
 
         elif type(stockids) == str:
             stockids = stockids.split(',')
         logging.info(f"Target list size: {len(stockids)}")
 
         # get crawled list
+        filename = f'{self.folder_path}/crawled_list.pkl'
         if 'crawled_list.pkl' in os.listdir(self.folder_path):
-            self.crawled_list = pd.read_pickle(f'{self.folder_path}/crawled_list.pkl')
+            self.crawled_list = pd.read_pickle(filename)
         else:
             self.crawled_list = pd.DataFrame({'stockid': []})
-            self.crawled_list.to_pickle(f'{self.folder_path}/crawled_list.pkl')
+            self.crawled_list.to_pickle(filename)
         logging.info(f"Crawled size: {self.crawled_list.shape[0]}")
 
         return create_queue(stockids, self.crawled_list.stockid.values)
@@ -181,7 +185,8 @@ class CrawlStockData:
                         self.crawled_list,
                         pd.DataFrame([{'stockid': stockid}])
                     ])
-                    self.crawled_list.to_pickle(f'{self.folder_path}/crawled_list.pkl')
+                    self.crawled_list.to_pickle(
+                        f'{self.folder_path}/crawled_list.pkl')
 
             except:
                 logging.exception(f"Put back into queue: {stockid}")
@@ -214,10 +219,12 @@ class CrawlStockData:
             logging.info('Merging stockinfo...')
             for i, f in enumerate(files):
                 try:
-                    tb = pd.read_csv(f'{self.folder_path}/{f}').sort_values('date')
+                    tb = pd.read_csv(
+                        f'{self.folder_path}/{f}').sort_values('date')
                 except:
                     logging.exception('Catch an exception (merge_stockinfo):')
-                    self.notifier.post(f"\n【Error】讀取檔案發生異常:{f}", msgType='Crawler')
+                    self.notifier.post(
+                        f"\n【Error】讀取檔案發生異常:{f}", msgType='Crawler')
                     tb = pd.DataFrame()
 
                 if tb.shape[0]:
@@ -247,8 +254,10 @@ class CrawlStockData:
         if isinstance(self.StockData, pd.DataFrame) and self.StockData.shape[0]:
             df = self.StockData.copy()
         elif db.HAS_DB:
-            condition1 = KBarData1T.date >= text(start) if start else text('1901-01-01')
-            condition2 = KBarData1T.date <= text(end) if end else text(TODAY_STR)
+            condition1 = KBarData1T.date >= text(
+                start) if start else text('1901-01-01')
+            condition2 = KBarData1T.date <= text(
+                end) if end else text(TODAY_STR)
             df = db.query(KBarData1T, condition1, condition2)
         else:
             folders = os.listdir(f'{PATH}/Kbars/1min')
@@ -388,7 +397,8 @@ class CrawlFromHTML(TimeTool):
                 try:
                     df = requests.get(url, headers=self.headers).text
                     df = pd.read_html(df)[0]
-                    df = df.dropna().rename(columns={period: 'period'}).iloc[:-1, :]
+                    df = df.dropna().rename(
+                        columns={period: 'period'}).iloc[:-1, :]
                     return df
                 except:
                     logging.exception('Catch an exception (get_punish_list):')
@@ -413,11 +423,14 @@ class CrawlFromHTML(TimeTool):
         df = pd.concat([df1, df2])
         df.period = df.period.apply(lambda x: re.findall('[\d+/]+', x))
         df.證券代號 = df.證券代號.astype(str)
-        df['startDate'] = df.period.apply(lambda x: x[0].replace(x[0][:3], str(int(x[0][:3])+1911)))
+        df['startDate'] = df.period.apply(
+            lambda x: x[0].replace(x[0][:3], str(int(x[0][:3])+1911)))
         df['startDate'] = pd.to_datetime(df['startDate'])
-        df['endDate'] = df.period.apply(lambda x: x[1].replace(x[1][:3], str(int(x[1][:3])+1911)))
+        df['endDate'] = df.period.apply(
+            lambda x: x[1].replace(x[1][:3], str(int(x[1][:3])+1911)))
         df['endDate'] = pd.to_datetime(df['endDate'])
-        df = df.sort_values('startDate').drop_duplicates('證券代號', keep='last').drop('period', axis=1)
+        df = df.sort_values('startDate')
+        df = df.drop_duplicates('證券代號', keep='last').drop('period', axis=1)
         df = df[df.endDate >= TODAY_STR]
 
         return df
@@ -433,7 +446,8 @@ class CrawlFromHTML(TimeTool):
 
         s = start
         while True:
-            e = str((pd.to_datetime(s) + timedelta(days=30)).date()).replace('-', '/')
+            e = str(
+                (pd.to_datetime(s) + timedelta(days=30)).date()).replace('-', '/')
             logging.info(f'Period: {s} - {e}')
 
             url = f'{self.url_pc_ratio}?queryStartDate={s}&queryEndDate={e}'
@@ -443,22 +457,23 @@ class CrawlFromHTML(TimeTool):
             if pd.to_datetime(e) >= pd.to_datetime(end):
                 break
 
-            s = str((pd.to_datetime(e) + timedelta(days=1)).date()).replace('-', '/')
+            s = str(
+                (pd.to_datetime(e) + timedelta(days=1)).date()).replace('-', '/')
             time.sleep(10)
 
         df = df.rename(columns={
             '日期': 'Date',
             '賣權成交量': 'PutVolume',
             '買權成交量': 'CallVolume',
-            '買賣權成交量比率%': 'PutCallVolumeRatio', 
-            '賣權未平倉量': 'PutOpenInterest', 
+            '買賣權成交量比率%': 'PutCallVolumeRatio',
+            '賣權未平倉量': 'PutOpenInterest',
             '買權未平倉量': 'CallOpenInterest',
             '買賣權未平倉量比率%': 'PutCallRatio'
         })
         df.Date = pd.to_datetime(df.Date)
 
         return df.sort_values('Date').reset_index(drop=True)
-    
+
     def export_put_call_ratio(self, df: pd.DataFrame):
         if db.HAS_DB:
             dates = db.query(PutCallRatioList.Date).Date
@@ -467,15 +482,15 @@ class CrawlFromHTML(TimeTool):
             filename = f'{PATH}/put_call_ratio.csv'
             df_pcr = read_and_concat(filename, df)
             save_table(df_pcr, f'{PATH}/put_call_ratio.csv')
-    
+
     def export_futures_kbar(self, df: pd.DataFrame):
         if db.HAS_DB:
             db.dataframe_to_DB(df, KBarData1T)
-        
+
         filename = f'{PATH}/Kbars/futures_data_1T.pkl'
         df = read_and_concat(filename, df)
         df.to_pickle(filename)
-    
+
     def export_ex_dividend_list(self, df: pd.DataFrame):
         if db.HAS_DB:
             df_old = db.query(ExDividendTable)
@@ -494,7 +509,7 @@ class CrawlFromHTML(TimeTool):
         except:
             df = pd.read_csv(
                 self.url_ex_dividend, encoding='big5', on_bad_lines='skip')
-        
+
         df = df.reset_index()
         df.columns = df.iloc[0, :]
         df = df.rename(columns={
@@ -509,7 +524,7 @@ class CrawlFromHTML(TimeTool):
             '詳細資料': 'Details',
             '參考價試算': 'Reference',
             '最近一次申報資料 季別/日期': 'Quarter',
-            '最近一次申報每股 (單位)淨值': 'NetValue', 
+            '最近一次申報每股 (單位)淨值': 'NetValue',
             '最近一次申報每股 (單位)盈餘': 'EPS'
         })
         df = df.iloc[1:, :-1]
@@ -546,9 +561,11 @@ class CrawlFromHTML(TimeTool):
         url = self.above_one_url('SymbolWinBroker_InputRadio', date, stockid)
         content = requests.get(url, headers=self.headers)
         soup = BeautifulSoup(content.text, "lxml")
-        soup = soup.find("table", {"class": "TProStkChips/SymbolWinBroker_InputRadio_css"})
+        soup = soup.find(
+            "table", {"class": "TProStkChips/SymbolWinBroker_InputRadio_css"})
         soup = soup.find_all('td')
-        soup = [td.text.replace('▼➀', '').replace('%', '') for td in soup if len(td.text)]
+        soup = [td.text.replace('▼➀', '').replace('%', '')
+                for td in soup if len(td.text)]
 
         columns = soup[:3]
         soup = np.reshape(soup[3:], (int(len(soup[3:])/3), 3))
@@ -616,4 +633,3 @@ class CrawlFromHTML(TimeTool):
         except:
             logging.warning('查無全額交割股清單')
             return pd.DataFrame(columns=['股票代碼'])
-        
