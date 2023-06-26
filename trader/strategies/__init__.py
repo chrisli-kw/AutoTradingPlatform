@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
-from ..config import PATH, TODAY_STR
+from ..config import PATH, TODAY_STR, TimeTransferFutures
 from ..config import StrategyLong, StrategyShort, StrategyLongDT, StrategyShortDT
 from ..utils.database import db
 from ..utils.database.tables import PutCallRatioList, ExDividendTable
@@ -133,6 +133,13 @@ class StrategyTool:
                 '==========put_call_ratio.csv不存在，無前一交易日的Put/Call Ratio==========')
             return 100
 
+    def transfer_position(self, inputs: dict, kbars: dict, **kwargs):
+        target = inputs['symbol']
+        now = datetime.now()
+        if now > TimeTransferFutures:
+            return self.Action(100, '轉倉', f'{target} 轉倉-Cover')
+        return self.Action()
+    
     def isLong(self, strategy: str):
         '''Check if a strategy is a long strategy.'''
         return strategy in StrategyLong + StrategyLongDT

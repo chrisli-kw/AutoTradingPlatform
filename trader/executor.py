@@ -100,6 +100,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         # 期貨可進場籌碼 (進場時判斷用)
         self.futures_opened = []
         self.futures_closed = []
+        self.futures_transferred = {}
         self.n_futures = 0
         self.futures = pd.DataFrame()
         self.Futures_Code_List = {}
@@ -531,6 +532,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 orders = orders.rename(
                     columns={'Volume': 'quantity', 'OrderBS': 'action'})
                 df['order'] = orders.to_dict('records')
+
+                day = TODAY_STR.replace('-', '/')
+                df['isDue'] = df.CodeName.apply(
+                    lambda x:day == get_contract(x).delivery_date)
             return df
 
         if not self.can_futures:
@@ -779,14 +784,34 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     quantity = data['Volume']
                     action = data['OrderBS']
 
+            if target in self.futures_transferred:
+                msg = f'{target} 轉倉-New'
+                infos = dict(
+                    action_type=actionType,
+                    action=action,
+                    target=target,
+                    quantity=self.futures_transferred[target],
+                    octype=octype,
+                    pos_target=100,
+                    pos_balance=0,
+                    reason=msg
+                )
+                self._log_and_notify(msg)
+                self.futures_transferred.pop(target)
+                return self.OrderInfo(**infos)
+            
             c1 = octype == 'New' and enoughOpen and not self.is_not_trade_day(
                 inputs['datetime'])
             c2 = octype == 'Cover'
             if quantity and (c1 or c2):
                 is_day_trade = self.StrategySet.isDayTrade(strategy)
                 tradeType = '當沖' if is_day_trade else '非當沖'
-                func = self.StrategySet.mapFunction(
-                    actionType, tradeType, strategy)
+                isTransfer = (actionType == 'Close') and 'isDue' in data and data['isDue']
+                if isTransfer:
+                    func = self.StrategySet.transfer_position
+                else:
+                    func = self.StrategySet.mapFunction(
+                        actionType, tradeType, strategy)
 
                 if data:
                     inputs.update(data)
@@ -798,6 +823,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     allQuotes=self.Quotes.AllTargets,
                 )
                 if actionInfo.position:
+                    if isTransfer:
+                        new_target = f'{target[:3]}{self.GetDueMonth(TODAY)}'
+                        self.futures_transferred.update({new_target: quantity})
+                        
                     infos = dict(
                         action_type=actionType,
                         action=action,

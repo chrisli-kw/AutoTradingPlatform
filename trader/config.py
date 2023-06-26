@@ -99,6 +99,7 @@ TimeStartFuturesDay = pd.to_datetime('08:45:00')
 TimeEndFuturesDay = pd.to_datetime('13:45:00')
 TimeStartFuturesNight = pd.to_datetime('15:00:00')
 TimeEndFuturesNight = pd.to_datetime('05:00:00') + timedelta(days=1)
+TimeTransferFutures = pd.to_datetime('13:00:00')
 holidays = get_holidays()
 
 # 選股相關
