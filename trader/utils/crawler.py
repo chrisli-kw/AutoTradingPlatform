@@ -97,12 +97,11 @@ class CrawlStockData:
         if db.HAS_DB:
             db.dataframe_to_DB(df, self.tables[scale])
 
+        filename = f'{PATH}/Kbars/{scale}/{TODAY_STR}-stock_data_{scale}'
         if scale == '1T':
-            day = self.folder_path.split('/')[-1]
-            save_table(df, f'{self.folder_path}/{day}-stock_data_{scale}.csv')
+            save_table(df, f'{filename}.csv')
         else:
-            filename = f'{PATH}/Kbars/{scale}/{day}-stock_data_{scale}.pkl'
-            df.to_pickle(filename)
+            df.to_pickle(f'{filename}.pkl')
             return df
 
     def _load_data_into_queue(self, stockids: list):
