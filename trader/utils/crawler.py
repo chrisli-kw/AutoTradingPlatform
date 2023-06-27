@@ -13,7 +13,7 @@ from sqlalchemy import text
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
-from . import progress_bar, create_queue, delete_selection_files, save_table
+from . import progress_bar, create_queue, delete_selection_files, save_table, create_folder
 from .notify import Notification
 from .kbar import KBarTool
 from .time import TimeTool
@@ -38,12 +38,11 @@ def read_and_concat(filename: str, df: pd.DataFrame):
 class CrawlStockData:
     def __init__(self, folder_path: str = '', scale='1D'):
         if not folder_path:
-            self.folder_path = f'{PATH}/Kbars/1min/{TODAY_STR}'
+            self.folder_path = f'{PATH}/Kbars/1T/{TODAY_STR}'
         else:
             self.folder_path = folder_path
 
-        if not os.path.exists(self.folder_path):
-            os.makedirs(self.folder_path)
+        create_folder(self.folder_path)
 
         self.notifier = Notification()
         self.timetool = TimeTool()
@@ -100,12 +99,11 @@ class CrawlStockData:
 
         if scale == '1T':
             day = self.folder_path.split('/')[-1]
-            save_table(df, f'{self.folder_path}/{day}-stock_data_1T.csv')
+            save_table(df, f'{self.folder_path}/{day}-stock_data_{scale}.csv')
         else:
-            filename = f'{PATH}/Kbars/{self.filename}_{scale}.pkl'
-            temp = read_and_concat(filename, df)
-            temp.to_pickle(filename)
-            return temp
+            filename = f'{PATH}/Kbars/{scale}/{day}-stock_data_{scale}.pkl'
+            df.to_pickle(filename)
+            return df
 
     def _load_data_into_queue(self, stockids: list):
         '''創建股票待爬清單(queue)'''
@@ -260,7 +258,7 @@ class CrawlStockData:
                 end) if end else text(TODAY_STR)
             df = db.query(KBarData1T, condition1, condition2)
         else:
-            folders = os.listdir(f'{PATH}/Kbars/1min')
+            folders = os.listdir(f'{PATH}/Kbars/1T')
             folders = [fd for fd in folders if '.' not in fd]
 
             if start:
@@ -273,7 +271,7 @@ class CrawlStockData:
             df = np.array([None]*N)
             for i, fd in enumerate(folders):
                 tb = pd.read_csv(
-                    f'{PATH}/Kbars/1min/{fd}/{fd}-stock_data_1T.csv')
+                    f'{PATH}/Kbars/1T/{fd}/{fd}-stock_data_1T.csv')
                 tb = tb.sort_values('date')
 
                 if tb.shape[0]:

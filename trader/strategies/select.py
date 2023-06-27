@@ -81,28 +81,32 @@ class SelectStock(SelectConditions, TimeTool):
                 df = db.query(self.tables[self.scale], condition)
             else:
                 df = db.query(self.tables[self.scale])
-            df = df.drop_duplicates()
         else:
-            df = pd.read_pickle(
-                f'{PATH}/Kbars/company_stock_data_{self.scale}.pkl')
+            dir_path = f'{PATH}/Kbars/{self.scale}'
+            files = os.listdir(dir_path)
+            df = pd.DataFrame()
+            for f in files:
+                tb = pd.read_pickle(f'{dir_path}/{f}')
+                df = pd.concat([df, tb])
+            df = df.reset_index(drop=True)
 
-        if self.scale == '1D':
-            self.time_col = 'date'
-            df = df.drop(['Time', 'hour', 'minute'], axis=1)
+        df = df.drop(['date', 'hour', 'minute'], axis=1)
+        df = df.drop_duplicates(['name', 'Time'], keep='last')
+        df = df.sort_values(['name', 'Time'])
+        return df
 
-            for col in ['Open', 'High', 'Low', 'Close']:
-                df.loc[
-                    (df.name == '8070') & (df.date < '2020-08-17'), col] /= 10
-                df.loc[
-                    (df.name == '6548') & (df.date < '2019-09-09'), col] /= 10
-        else:
-            self.time_col = 'Time'
-            df = df.drop(['date', 'hour', 'minute'], axis=1)
+    def preprocess(self, df: pd.DataFrame):
+        df.name = df.name.astype(int).astype(str)
+        if self.mode == 'select':
+            df = df.groupby('name').tail(365).reset_index(drop=True)
 
+        df.Close = df.Close.replace(0, np.nan).fillna(method='ffill')
+
+        # process OTC data
         ohlcva = ['Open', 'High', 'Low', 'Close', 'Volume', 'Amount']
         otc = df[df.name == '101'].rename(
             columns={c: f'OTC{c.lower()}' for c in ohlcva}).drop(['name'], axis=1)
-        otc[self.time_col] = pd.to_datetime(otc[self.time_col])
+        otc['Time'] = pd.to_datetime(otc['Time'])
         otc[f'otc_{self.dma}ma'] = otc.OTCclose.shift(
             self.d_shift).rolling(self.dma).mean()
         otc['otcbkd30'] = [window.to_list()
@@ -110,30 +114,25 @@ class SelectStock(SelectConditions, TimeTool):
         otc['otcbkd30'] = otc.apply(lambda x: map_BKD(
             x.OTCclose, x.otcbkd30, 30), axis=1)
         otc.otcbkd30 = otc.otcbkd30.fillna(method='ffill')
-
+        
+        # process TSE data
         tse = df[df.name == '1'].rename(
             columns={c: f'TSE{c.lower()}' for c in ohlcva}).drop(['name'], axis=1)
-        tse[self.time_col] = pd.to_datetime(tse[self.time_col])
+        tse['Time'] = pd.to_datetime(tse['Time'])
         tse[f'tse_{self.dma}ma'] = tse.TSEclose.shift(
             self.d_shift).rolling(self.dma).mean()
-
-        df = df.merge(otc, how='left', on=self.time_col)
-        df = df.merge(tse, how='left', on=self.time_col)
-        return df.sort_values(['name', self.time_col]).dropna()
-
-    def preprocess(self, df: pd.DataFrame):
-        df = df[df.name != 'TX']
-        df.name = df.name.astype(int).astype(str)
-        if self.mode == 'select':
-            df = df.sort_values(['name', self.time_col])
-            df = df.groupby('name').tail(365).reset_index(drop=True)
-        else:
-            df = df.sort_values(['name', self.time_col])
-
-        df.Close = df.Close.replace(0, np.nan).fillna(method='ffill')
-        group = df.groupby('name')
+        
+        df = df.merge(otc, how='left', on='Time')
+        df = df.merge(tse, how='left', on='Time')
 
         if self.scale == '1D':
+            for col in ['Open', 'High', 'Low', 'Close']:
+                df.loc[
+                    (df.name == '8070') & (df.Time < '2020-08-17'), col] /= 10
+                df.loc[
+                    (df.name == '6548') & (df.Time < '2019-09-09'), col] /= 10
+                
+            group = df.groupby('name')
             df['volume_ma'] = group.Volume.transform(
                 lambda x: x.shift(1).rolling(22).mean())
             df['volume_std'] = group.Volume.transform(
@@ -142,6 +141,9 @@ class SelectStock(SelectConditions, TimeTool):
             df['y2Close'] = group.Close.transform(lambda x: x.shift(2))
             df['ma_1_20'] = group.Close.transform(
                 lambda x: x.shift(1).rolling(20).mean())
+
+        if self.scale == '1D':
+            df = df.rename(columns={'Time':'date'})
 
         return df
 
