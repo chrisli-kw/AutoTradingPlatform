@@ -94,6 +94,7 @@ class KBarTool(TechnicalSignals, TimeTool):
             kbars = API.kbars(contract, start=start, end=end, timeout=60000)
         except AttributeError:
             logging.exception(f'tbKBar({stockid}) Catch an Exception:')
+            kbars = {'ts':[]}
 
         tb = pd.DataFrame({**kbars})
         tb.ts = pd.to_datetime(tb.ts)

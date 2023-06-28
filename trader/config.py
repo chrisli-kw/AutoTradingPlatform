@@ -76,10 +76,18 @@ TOKEN_MONITOR = get_settings('LINENOTIFY', 'TOKEN_MONITOR')
 TOKEN_INFO = get_settings('LINENOTIFY', 'TOKEN_INFO')
 
 # 策略相關
-StrategyLong = get_settings('STRATEGY', 'Long', dataType='list')
-StrategyShort = get_settings('STRATEGY', 'Short', dataType='list')
-StrategyLongDT = get_settings('STRATEGY', 'LongDT', dataType='list')
-StrategyShortDT = get_settings('STRATEGY', 'ShortDT', dataType='list')
+class StrategyNameList:
+    StrategyLongNDT = get_settings('STRATEGY', 'Long', dataType='list')
+    StrategyShortNDT = get_settings('STRATEGY', 'Short', dataType='list')
+    StrategyLongDT = get_settings('STRATEGY', 'LongDT', dataType='list')
+    StrategyShortDT = get_settings('STRATEGY', 'ShortDT', dataType='list')
+
+    All = StrategyLongNDT + StrategyLongDT + StrategyShortNDT + StrategyShortDT
+    Long = StrategyLongNDT + StrategyLongDT
+    Short = StrategyShortNDT + StrategyShortDT
+    DayTrade = StrategyLongDT + StrategyShortDT
+
+StrategyList = StrategyNameList()
 
 # 交易相關
 FEE_RATE = .01

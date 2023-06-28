@@ -315,7 +315,7 @@ def runSimulationChecker():
                     notifier.post(text, msgType='Monitor')
 
                 # update performance statement
-                df = se.read_statement(f'simulation-{account}')
+                df = se.read_statement(f'simulate-{account}')
                 df = convert_statement(df)
                 save_table(
                     df,

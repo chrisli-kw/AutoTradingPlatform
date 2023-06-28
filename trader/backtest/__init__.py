@@ -9,10 +9,11 @@ from collections import namedtuple
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from ..config import PATH, TODAY_STR
+from ..config import PATH, TODAY_STR, StrategyList
 from ..utils import progress_bar, create_folder
 from ..utils.kbar import KBarTool
 from ..utils.time import TimeTool
+from ..utils.orders import OrderTool
 from ..utils.database import db
 from ..utils.database.tables import PutCallRatioList, TradingStatement
 from ..strategies.select import SelectStock
@@ -40,55 +41,52 @@ def AccountingNumber(number: float):
     return f"{'{:,}'.format(number)}"
 
 
-def read_statement(acctName):
-    if db.HAS_DB:
-        df = db.query(TradingStatement)
-    else:
-        df = pd.read_csv(f'./data/stock_pool/statement_stocks_{acctName}.csv')
-    df = df[df.account_id == 'simulate'].drop_duplicates()
-    df = df.astype({
-        'price': float,
-        'quantity': float,
-        'amount': float,
-        'leverage': float
-    })
-    df = df.rename(columns={
-        'code': 'stock',
-        'price': 'Price',
-        'quantity': 'Quantity',
-        'msg': 'Reason'
-    })
-
-    df.Time = pd.to_datetime(df.Time)
-    df['Date'] = df.Time.dt.date
-    df['Amount'] = (df.Price*df.Quantity).abs()
-    return df
-
-
 def convert_statement(df):
+    def extract_strategy(msg):
+        for s in StrategyList.All:
+            if s in msg:
+                return s
+        return 'Unknown'
+    
     df = df.rename(columns={
-        'code': 'stock',
+        'code': 'Code',
         'price': 'Price',
         'quantity': 'Quantity',
-        'msg': 'Reason'
+        'msg': 'Reason',
+        'amount': 'Amount'
     })
-    target_columns = ['stock', 'Time', 'Price', 'Quantity', 'Reason']
-    tb1 = df[df.action == 'Buy'][target_columns]
-    tb1.columns = ['stock'] + ['Buy' + c for c in tb1.columns[1:]]
+    df['Strategy'] = df.Reason.apply(extract_strategy)
+    df['isLong'] = df.Strategy.apply(lambda x:x in StrategyList.Long)
+    df['isShort'] = df.isLong == False
+    df['isOpen'] = (
+        ((df.isLong == True) & (df.action == 'Buy')) | 
+        ((df.isShort == True) & (df.action == 'Sell'))
+    )
 
-    tb2 = df[df.action == 'Sell'][target_columns]
-    tb2.columns = ['stock'] + ['Sell' + c for c in tb2.columns[1:]]
+    target_columns1 = ['Strategy', 'Code', 'isLong', 'isShort']
+    target_columns2 = ['Time', 'Price', 'Quantity', 'Amount', 'Reason']
+    tb1 = df[df.isOpen == True][target_columns1 + target_columns2]
+    tb1.columns = target_columns1 + ['Open' + c for c in target_columns2]
+
+    tb2 = df[df.isOpen == False][target_columns1 + target_columns2]
+    tb2.columns = target_columns1 + ['Close' + c for c in target_columns2]
 
     tb = pd.concat([tb1, tb2]).sort_index()
-    tb.BuyQuantity = tb.BuyQuantity.fillna(tb.SellQuantity)
-    for c in ['Time', 'Price', 'Reason']:
-        tb[f'Buy{c}'] = tb.groupby('stock')[f'Buy{c}'].fillna(method='ffill')
-
+    tb.CloseAmount = tb.CloseAmount.abs()
+    tb.OpenQuantity = tb.OpenQuantity.fillna(tb.CloseQuantity)
+    for c in ['Time', 'Price', 'Amount', 'Reason']:
+        tb[f'Open{c}'] = tb.groupby('Code')[f'Open{c}'].fillna(method='ffill')
+    
+    tb['OpenAmount'] = tb.OpenPrice*tb.OpenQuantity
+    tb['CloseAmount'] = (tb.ClosePrice*tb.CloseQuantity).abs()
+    tb['profit'] = tb.CloseAmount - tb.OpenAmount
+    tb['returns'] = 100*(tb.profit/tb.OpenAmount).round(4)
     tb = tb.dropna()
-    tb.insert(4, 'BuyAmount', tb.BuyPrice*tb.BuyQuantity)
-    tb.insert(9, 'SellAmount', (tb.SellPrice*tb.SellQuantity).abs())
-    tb['profit'] = tb.SellAmount - tb.BuyAmount
-    tb['returns'] = 100*(tb.profit/tb.BuyAmount).round(4)
+
+    for index, row in tb.iterrows():
+        sub_string = f'【{row.Code}】{row.Strategy}'
+        tb.at[index, 'OpenReason'] = row.OpenReason.replace(sub_string, '')
+        tb.at[index, 'CloseReason'] = row.CloseReason.replace(sub_string, '')
     return tb
 
 

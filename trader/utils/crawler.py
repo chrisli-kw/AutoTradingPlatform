@@ -244,6 +244,7 @@ class CrawlStockData:
 
         df = df.sort_values(['name', 'date', 'Time']).reset_index(drop=True)
         self.export_kbar_data(df, '1T')
+        os.rmdir(self.folder_path)
 
     def add_new_data(self, scale: str, save=True, start=None, end=None):
         '''加入新資料到舊K棒資料中'''

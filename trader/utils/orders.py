@@ -103,10 +103,20 @@ class OrderTool:
                 TradingStatement.account_id == account
             )
         else:
-            filename = f"{PATH}/stock_pool/statement_stocks_{account.split('-')[-1]}.csv"
+            filename = f"{PATH}/stock_pool/statement_{account.split('-')[-1]}.csv"
             if os.path.exists(filename):
                 df = pd.read_csv(filename)
             else:
                 df = self.OrderTable
+            
+            df = df[df.account_id == account]
+            df = df.astype({
+                'price': float,
+                'quantity': float,
+                'amount': float,
+                'leverage': float
+            })
+            df.Time = pd.to_datetime(df.Time)
 
+        df = df.drop_duplicates()
         return df

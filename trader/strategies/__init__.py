@@ -3,8 +3,7 @@ import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
-from ..config import PATH, TODAY_STR, TimeTransferFutures
-from ..config import StrategyLong, StrategyShort, StrategyLongDT, StrategyShortDT
+from ..config import PATH, TODAY_STR, TimeTransferFutures, StrategyList
 from ..utils.database import db
 from ..utils.database.tables import PutCallRatioList, ExDividendTable
 
@@ -142,12 +141,12 @@ class StrategyTool:
     
     def isLong(self, strategy: str):
         '''Check if a strategy is a long strategy.'''
-        return strategy in StrategyLong + StrategyLongDT
+        return strategy in StrategyList.Long
 
     def isShort(self, strategy: str):
         '''Check if a strategy is a short strategy.'''
-        return strategy in StrategyShort + StrategyShortDT
+        return strategy in StrategyList.Short
 
     def isDayTrade(self, strategy: str):
         '''Check if a strategy is a day-trade strategy.'''
-        return strategy in StrategyShortDT + StrategyLongDT
+        return strategy in StrategyList.DayTrade
