@@ -63,7 +63,7 @@ pip install -r requirements.txt
   |-- templates
   |-- trader                         (Python trading modules, details as below:)
     |-- indicators                   (trading indicators)
-    |-- strategies                   (folder for putting CUSTOMIZED TRADING SCRIPTS)
+    |-- scripts                      (folder for putting CUSTOMIZED TRADING SCRIPTS)
       |-- ...
     |-- ...
   |-- lib                            (keys, settings, ..., etc)
@@ -131,10 +131,10 @@ python create_env.py
 Then, go to http://127.0.0.1:5000/. Press the "Submit" button after filling out the forms, an env file will be created in ```./lib/envs```
 
 #### Step 3: Create long/short stragety
-Go to ```./trader/strategies``` and follow the [instructions](./trader/strategies/readme.md#longshort-strategies) to create your own trading strategy before starting the auto-trader.
+Go to ```./trader/scripts``` and follow the [instructions](./trader/scripts/readme.md#longshort-strategies) to create your own trading strategy before starting the auto-trader.
 
 #### Step 4: Create your own K-bar features
-Go to ```./trader/strategies``` and follow the [instructions](./trader/strategies/readme.md#k-bar-features) to create k-bar feature scripts before starting the auto-trader.
+Go to ```./trader/scripts``` and follow the [instructions](./trader/scripts/readme.md#k-bar-features) to create k-bar feature scripts before starting the auto-trader.
 
 
 ## Execute Commands
@@ -147,7 +147,7 @@ python tasker.py -TASK auto_trader -ACCT YourAccountName
 ```
 
 #### 2. Stock selection  
-This task will run stock data crawler (using API) and then select stock. Details of establishing selection scripts see the [instructions](./trader/strategies/readme.md#stock-selection).
+This task will run stock data crawler (using API) and then select stock. Details of establishing selection scripts see the [instructions](./trader/scripts/readme.md#stock-selection).
 ```
 python tasker.py -TASK update_and_select_stock
 ```

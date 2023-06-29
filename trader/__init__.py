@@ -1,14 +1,14 @@
 from concurrent.futures import ThreadPoolExecutor
 
 from .config import PATH
-from .strategies.select import SelectStock
+from .utils.select import SelectStock
 from .utils import create_folder
 from .utils.kbar import TickDataProcesser
 from .utils.notify import Notification
 from .utils.crawler import CrawlStockData, CrawlFromHTML
 
 
-__version__ = '1.4.5'
+__version__ = '1.5.0'
 
 for f in [PATH, './logs']:
     create_folder(f)

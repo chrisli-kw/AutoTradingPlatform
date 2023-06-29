@@ -5,9 +5,12 @@ This backtesting module is a framework designed for building flexible trading st
 - [AutoTradingPlatform Backtester](#autotradingplatform-backtester)
   - [Customize Backtest Scripts](#customize-backtest-scripts)
   - [Data Prepareation](#data-prepareation)
+    - [1. Database](#1-database)
+    - [2. Local Directories](#2-local-directories)
+      - [Default data names:](#default-data-names)
+      - [Default path to the datasets:](#default-path-to-the-datasets)
   - [Backtest Results](#backtest-results)
   - [Backtesting Methodology](#backtesting-methodology)
-  - [Backtesting Script Example](#backtesting-script-example)
 
 ## Customize Backtest Scripts
 The backtest scripts that the framework supports are as follows:
@@ -20,13 +23,25 @@ The backtest scripts that the framework supports are as follows:
 7. trade by Cash/Margin Leverage
 
 ## Data Prepareation
-Default data names: 
-1. stock data: ```company_stock_data_{kbar_scale}```
-2. futures data: ```futures_data_1T```
+Datasets are stored either in a *database* or in local directories.
+### 1. Database
+Based on the kbar frequency you select, we have 3 tables for backtesting:
+1. KBarData1D
+2. KBarData60T
+3. KBarData30T
 
-Default path to the datasets:
-1. stock data: ```./data/Kbars/company_stock_data_{kbar_scale}.pkl```
-2. futures data: ```./data/Kbars/futures_data_1T.pkl```
+### 2. Local Directories
+#### Default data names: 
+1. stock data (monthly): ```{YYYY}-{MM}-stock_data_{kbar_freq}```
+2. stock data (daily): ```{YYYY}-{MM}-{DD}-stock_data_{kbar_freq}```
+3. futures data: ```futures_data_1T```  
+
+PS: The stock datasets are merged at the end of each month (after daily crawler finishes). Therefore, there are 2 kinds of file names of the stock data.
+
+#### Default path to the datasets:
+1. stock data (monthly): ```./data/Kbars/{kbar_freq}/{YYYY}-{MM}-stock_data_{kbar_freq}.pkl```
+2. stock data (daily): ```./data/Kbars/{kbar_freq}/{YYYY}-{MM}-{DD}-stock_data_{kbar_freq}.pkl```
+3. futures data: ```./data/Kbars/futures_data_1T.pkl```
 
 ## Backtest Results
 After running the backtest module, you can get the following results:
@@ -44,11 +59,4 @@ The results above can be exported as a .html file.
 ## Backtesting Methodology
 Once you have a basic strategy concept, you can write the strategy framework in the form of a Python class script. This class object should include the [7 kinds of Customize Backtest Scripts](#customize-backtest-scripts) above. After completing the script, create a BackTester object, then call the set_scripts function to configure the script, and you can begin the backtesting process.
 
-## Backtesting Script Example
-```lua
-.  
-  |-- trader
-    |-- backtest
-      |-- __BacktestScripts__.py   <---
-```
-Create a python file named ```__BacktestScripts__.py``` and then add scripts to it. For detailed script writing instructions, please refer to the [sample backtesting script](../../docs/script%20samples/backtest_sample.py)
+

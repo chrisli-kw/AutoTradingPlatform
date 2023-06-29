@@ -143,11 +143,8 @@ logs/
 test.py
 dev.py
 python_practice.py
-trader/strategies/long.py
-trader/strategies/short.py
-trader/strategies/StrategySet.py
-trader/strategies/conditions.py
-trader/strategies/features.py
-trader/indicators/indexes.py
-trader/backtest/__BacktestScripts__.py
+trader/scripts/StrategySet.py
+trader/scripts/conditions.py
+trader/scripts/features.py
+trader/scripts/__BacktestScripts__.py
 

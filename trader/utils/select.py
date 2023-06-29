@@ -4,11 +4,11 @@ import pandas as pd
 from datetime import timedelta
 
 from ..config import PATH, TODAY_STR, TODAY
-from .conditions import SelectConditions
-from ..utils import save_table
-from ..utils.time import TimeTool
-from ..utils.database import db
-from ..utils.database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T, SelectedStocks
+from ..scripts.conditions import SelectConditions
+from . import save_table
+from .time import TimeTool
+from .database import db
+from .database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T, SelectedStocks
 
 
 def map_BKD(OTCclose, OTChigh, add_days=10):

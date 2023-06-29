@@ -17,8 +17,8 @@ from trader.utils.database import redis_tick
 from trader.utils.subscribe import Subscriber
 from trader.utils.accounts import AccountInfo
 from trader.executor import StrategyExecutor
-from trader.backtest import convert_statement
-from trader.strategies.features import KBarFeatureTool
+from trader.performance.base import convert_statement
+from trader.scripts.features import KBarFeatureTool
 
 
 def parse_args():
@@ -319,7 +319,7 @@ def runSimulationChecker():
                 df = convert_statement(df)
                 save_table(
                     df,
-                    f'{PATH}/stock_pool/simulation_performance_{account}.xlsx',
+                    f'{PATH}/stock_pool/trading_performance_{account}.xlsx',
                     saveEmpty=True
                 )
     except FileNotFoundError as e:

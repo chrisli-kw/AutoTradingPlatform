@@ -1,8 +1,8 @@
 import logging
 import pandas as pd
 import configparser
-from datetime import datetime, timedelta
 import shioaji as sj
+from datetime import datetime, timedelta
 
 
 API = sj.Shioaji()

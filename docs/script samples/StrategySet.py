@@ -1,6 +1,6 @@
 import pandas as pd
 from datetime import datetime
-from trader.strategies import StrategyTool
+from trader.utils.strategy import StrategyTool
 
 
 class StrategySet(StrategyTool):

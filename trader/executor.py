@@ -24,9 +24,9 @@ from .utils.watchlist import WatchListTool
 from .utils.database import db
 from .utils.database.tables import SecurityInfoStocks, SecurityInfoFutures
 try:
-    from .strategies.StrategySet import StrategySet as StrategySets
+    from .scripts.StrategySet import StrategySet as StrategySets
 except:
-    from .strategies import StrategyTool as StrategySets
+    from .utils.strategy import StrategyTool as StrategySets
 
 
 ssl._create_default_https_context = ssl._create_unverified_context

@@ -3,8 +3,8 @@ from datetime import timedelta
 from collections import namedtuple
 
 from trader.config import TODAY_STR
-from trader.backtest import BackTester, merge_pc_ratio
-from trader.strategies.select import SelectStock
+from trader.performance.backtest import BackTester, merge_pc_ratio
+from trader.utils.select import SelectStock
 
 
 def kbar_1D_processor(df1d, df):
