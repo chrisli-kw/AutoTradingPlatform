@@ -9,10 +9,9 @@ from argparse import ArgumentParser
 from concurrent.futures import as_completed
 
 from trader import __version__ as ver
-from trader import executor, notifier, picker, crawler1, crawler2, tdp
+from trader import executor, notifier, picker, crawler1, crawler2, tdp, file_handler
 from trader.config import API, PATH, TODAY_STR, holidays
 from trader.config import ACCOUNTS, TEnd, SelectMethods, ConvertScales
-from trader.utils import save_table
 from trader.utils.database import redis_tick
 from trader.utils.subscribe import Subscriber
 from trader.utils.accounts import AccountInfo
@@ -166,6 +165,7 @@ def runCrawlStockData():
         # 更新歷史資料
         for scale in ConvertScales:
             crawler1.add_new_data(scale, save=True, start=TODAY_STR)
+            crawler1.merge_daily_data(TODAY_STR, scale, save=True)
 
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
@@ -317,7 +317,7 @@ def runSimulationChecker():
                 # update performance statement
                 df = se.read_statement(f'simulate-{account}')
                 df = convert_statement(df)
-                save_table(
+                file_handler.save_table(
                     df,
                     f'{PATH}/stock_pool/trading_performance_{account}.xlsx',
                     saveEmpty=True

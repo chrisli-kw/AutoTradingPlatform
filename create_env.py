@@ -1,7 +1,6 @@
-import os
 from flask import Flask, request, render_template
 
-from trader import create_folder
+from trader import file_handler
 
 
 def _create_env(inputs):
@@ -23,8 +22,7 @@ def _create_env(inputs):
 
     account_name = inputs['ACCOUNT_NAME']
 
-    users = [int(u.split('_')[-1].rstrip('.env'))
-             for u in os.listdir('./lib/envs') if account_name in u]
+    users = file_handler.listdir('./lib/envs', account_name)
     if users:
         nth_account = max(users) + 1
     else:
@@ -173,7 +171,7 @@ def account_result():
 
 
 if __name__ == '__main__':
-    create_folder('./lib')
-    create_folder('./lib/envs')
-    create_folder('./lib/schedules')
+    file_handler.create_folder('./lib')
+    file_handler.create_folder('./lib/envs')
+    file_handler.create_folder('./lib/schedules')
     app.run()

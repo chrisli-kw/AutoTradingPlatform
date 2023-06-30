@@ -1,11 +1,10 @@
-import os
 import numpy as np
 import pandas as pd
 from datetime import timedelta
 
 from ..config import PATH, TODAY_STR, TODAY
 from ..scripts.conditions import SelectConditions
-from . import save_table
+from .file import FileHandler
 from .time import TimeTool
 from .database import db
 from .database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T, SelectedStocks
@@ -19,7 +18,7 @@ def map_BKD(OTCclose, OTChigh, add_days=10):
     return None
 
 
-class SelectStock(SelectConditions, TimeTool):
+class SelectStock(SelectConditions, TimeTool, FileHandler):
     def __init__(self, d_shift=0, dma=5, mode='select', scale='1D'):
         self.d_shift = d_shift
         self.dma = dma
@@ -83,12 +82,7 @@ class SelectStock(SelectConditions, TimeTool):
                 df = db.query(self.tables[self.scale])
         else:
             dir_path = f'{PATH}/Kbars/{self.scale}'
-            files = os.listdir(dir_path)
-            df = pd.DataFrame()
-            for f in files:
-                tb = pd.read_pickle(f'{dir_path}/{f}')
-                df = pd.concat([df, tb])
-            df = df.reset_index(drop=True)
+            df = self.read_tables_in_folder(dir_path)
 
         df = df.drop(['date', 'hour', 'minute'], axis=1)
         df = df.drop_duplicates(['name', 'Time'], keep='last')
@@ -198,8 +192,8 @@ class SelectStock(SelectConditions, TimeTool):
         if db.HAS_DB:
             db.dataframe_to_DB(df, SelectedStocks)
         else:
-            save_table(df, f'{PATH}/selections/all.csv')
-            save_table(df, f'{PATH}/selections/history/{TODAY_STR}-all.csv')
+            self.save_table(df, f'{PATH}/selections/all.csv')
+            self.save_table(df, f'{PATH}/selections/history/{TODAY_STR}-all.csv')
 
     def get_selection_files(self):
         '''取得選股清單'''
@@ -209,12 +203,17 @@ class SelectStock(SelectConditions, TimeTool):
 
         if db.HAS_DB:
             df = db.query(SelectedStocks, SelectedStocks.date == day)
-        elif os.path.exists(filename):
-            df = pd.read_csv(filename)
+        else:
+            df = self.read_table(
+                filename=filename,
+                df_default=pd.DataFrame(columns=[
+                    'code', 'company_name', 'category', 'date', 
+                    'Open', 'High', 'Low', 'Close', 
+                    'Volume', 'Amount', 'Strategy'
+                ])
+            )
             df.date = pd.to_datetime(df.date)
             df.code = df.code.astype(str)
             df = df[df.date == day]
-        else:
-            df = pd.DataFrame()
-
+            
         return df

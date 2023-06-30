@@ -13,38 +13,21 @@ from sqlalchemy import text
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
-from . import progress_bar, create_queue, delete_selection_files, save_table, create_folder
-from .notify import Notification
+from . import progress_bar, create_queue
 from .kbar import KBarTool
 from .time import TimeTool
+from .file import FileHandler
 from ..config import API, PATH, TODAY_STR, TODAY
 from .database import db
 from .database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T
 from .database.tables import SecurityList, PutCallRatioList, ExDividendTable
 
 
-def read_and_concat(filename: str, df: pd.DataFrame):
-    if os.path.exists(filename):
-        if '.pkl' in filename:
-            tb = pd.read_pickle(filename)
-        else:
-            tb = pd.read_csv(filename)
-    else:
-        tb = pd.DataFrame()
-    tb = pd.concat([tb, df]).reset_index(drop=True)
-    return tb
+class CrawlStockData(FileHandler):
+    def __init__(self, folder_path: str = f'{PATH}/Kbars/1T/{TODAY_STR}', scale='1D'):
+        self.folder_path = folder_path
+        self.create_folder(self.folder_path)
 
-
-class CrawlStockData:
-    def __init__(self, folder_path: str = '', scale='1D'):
-        if not folder_path:
-            self.folder_path = f'{PATH}/Kbars/1T/{TODAY_STR}'
-        else:
-            self.folder_path = folder_path
-
-        create_folder(self.folder_path)
-
-        self.notifier = Notification()
         self.timetool = TimeTool()
         self.kbartool = KBarTool()
         self.filename = 'company_stock_data'
@@ -99,7 +82,7 @@ class CrawlStockData:
 
         filename = f'{PATH}/Kbars/{scale}/{TODAY_STR}-stock_data_{scale}'
         if scale == '1T':
-            save_table(df, f'{filename}.csv')
+            self.save_table(df, f'{filename}.csv')
         else:
             df.to_pickle(f'{filename}.pkl')
             return df
@@ -109,10 +92,17 @@ class CrawlStockData:
 
         # get stock id list
         if type(stockids) == str and stockids == 'all':
-            stockids = pd.read_excel(f'{PATH}/selections/stock_list.xlsx')
-            stockids.code = stockids.code.astype(int).astype(str)
-            stockids = stockids[
-                stockids.exchange.isin(['OTC', 'TSE'])].code.values
+            markets = ['OTC', 'TSE']
+            if db.HAS_DB:
+                stockids = db.query(
+                    SecurityList.code,
+                    SecurityList.exchange.in_(markets)
+                ).code.values
+            else:
+                stockids = pd.read_excel(f'{PATH}/selections/stock_list.xlsx')
+                stockids.code = stockids.code.astype(int).astype(str)
+                stockids = stockids[
+                    stockids.exchange.isin(markets)].code.values
 
         elif type(stockids) == str:
             stockids = stockids.split(',')
@@ -120,18 +110,11 @@ class CrawlStockData:
 
         # get crawled list
         filename = f'{self.folder_path}/crawled_list.pkl'
-        if 'crawled_list.pkl' in os.listdir(self.folder_path):
-            self.crawled_list = pd.read_pickle(filename)
-        else:
-            self.crawled_list = pd.DataFrame({'stockid': []})
-            self.crawled_list.to_pickle(filename)
+        df_default = pd.DataFrame({'stockid': []})
+        self.crawled_list = self.read_table(filename, df_default)
         logging.info(f"Crawled size: {self.crawled_list.shape[0]}")
 
         return create_queue(stockids, self.crawled_list.stockid.values)
-
-    def _listfiles(self, folder_path: str):
-        files = os.listdir(folder_path)
-        return [f for f in files if '.csv' in f]
 
     def crawl_from_sinopac(self, stockids: Union[str, list] = 'all', update=False, start=None, end=None):
 
@@ -151,10 +134,11 @@ class CrawlStockData:
                         last_end = self.timetool.last_business_day()
                 else:
                     filename = f'{PATH}/Kbars/{self.filename}_{self.scale}.pkl'
-                    if os.path.exists(filename):
-                        last_end = pd.read_pickle(filename).date.max()
-                    else:
-                        last_end = self.timetool.last_business_day()
+                    ref = self.timetool.last_business_day()
+                    last_end = self.read_table(
+                        filename=filename, 
+                        df_default=pd.DataFrame({'date':[ref]})
+                    ).date.max()
                 start = self.timetool._strf_timedelta(last_end, -1)
             else:
                 start = '2017-01-01'
@@ -209,38 +193,15 @@ class CrawlStockData:
             df.name = df.name.astype(int).astype(str)
             self.StockData = df
         else:
-            files = self._listfiles(self.folder_path)
-            N = len(files)
-            df = np.array([None]*N)
+            df = self.read_tables_in_folder(self.folder_path, pattern='.csv')
+            if df.shape[0]:
+                for col in ['date', 'Time']:
+                    if col in df.columns:
+                        df[col] = pd.to_datetime(df[col])
 
-            logging.info('Merging stockinfo...')
-            for i, f in enumerate(files):
-                try:
-                    tb = pd.read_csv(
-                        f'{self.folder_path}/{f}').sort_values('date')
-                except:
-                    logging.exception('Catch an exception (merge_stockinfo):')
-                    self.notifier.post(
-                        f"\n【Error】讀取檔案發生異常:{f}", msgType='Crawler')
-                    tb = pd.DataFrame()
+                df.name = df.name.astype(int)
 
-                if tb.shape[0]:
-                    for col in ['date', 'Time']:
-                        if col in tb.columns:
-                            tb[col] = pd.to_datetime(tb[col])
-
-                    tb.name = tb.name.astype(int)
-
-                    df[i] = tb
-
-                n = i+1
-                progress = f"\r|{'█'*int(n*50/N)}{' '*(50-int(n*50/N))} | [{files[i]}] {n}/{N} ({round(n/N*100, 2)}%)"
-                print(progress, end='')
-            print('')
-
-            df = pd.concat(df)
-
-            delete_selection_files(self.folder_path, files=files)
+            self.remove_files(self.folder_path, pattern='.csv')
 
         df = df.sort_values(['name', 'date', 'Time']).reset_index(drop=True)
         self.export_kbar_data(df, '1T')
@@ -258,7 +219,7 @@ class CrawlStockData:
                 end) if end else text(TODAY_STR)
             df = db.query(KBarData1T, condition1, condition2)
         else:
-            folders = os.listdir(f'{PATH}/Kbars/1T')
+            folders = self.listdir(f'{PATH}/Kbars/1T')
             folders = [fd for fd in folders if '.' not in fd]
 
             if start:
@@ -296,9 +257,26 @@ class CrawlStockData:
             df = self.export_kbar_data(df, scale)
 
         return df
+    
+    def merge_daily_data(self, day: datetime, scale: str, save=True):
+        if not isinstance(day, datetime):
+            day = pd.to_datetime(day)
+            
+        last_day = self.timetool.last_business_day(day)
+        if last_day.month != day.month:
+            dir_path = f'{PATH}/Kbars/{scale}'
+            year_month = self.timetool.datetime_to_str(last_day)[:-3]
+            df = self.read_tables_in_folder(dir_path, pattern=year_month)
+            df = df.sort_values(['name', 'date', 'Time'])
+            df = df.reset_index(drop=True)
+
+            if save:
+                filename = f'{dir_path}/{year_month}-stock_data_{scale}.pkl'
+                self.remove_files(dir_path, pattern=year_month)
+                self.save_table(df, filename)
 
 
-class CrawlFromHTML(TimeTool):
+class CrawlFromHTML(TimeTool, FileHandler):
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -478,15 +456,15 @@ class CrawlFromHTML(TimeTool):
             db.dataframe_to_DB(df[~df.Date.isin(dates)], PutCallRatioList)
         else:
             filename = f'{PATH}/put_call_ratio.csv'
-            df_pcr = read_and_concat(filename, df)
-            save_table(df_pcr, f'{PATH}/put_call_ratio.csv')
+            df_pcr = self.read_and_concat(filename, df)
+            self.save_table(df_pcr, f'{PATH}/put_call_ratio.csv')
 
     def export_futures_kbar(self, df: pd.DataFrame):
         if db.HAS_DB:
             db.dataframe_to_DB(df, KBarData1T)
 
         filename = f'{PATH}/Kbars/futures_data_1T.pkl'
-        df = read_and_concat(filename, df)
+        df = self.read_and_concat(filename, df)
         df.to_pickle(filename)
 
     def export_ex_dividend_list(self, df: pd.DataFrame):
@@ -496,7 +474,7 @@ class CrawlFromHTML(TimeTool):
 
             db.dataframe_to_DB(df, ExDividendTable)
         else:
-            save_table(df, f'{PATH}/exdividends.csv')
+            self.save_table(df, f'{PATH}/exdividends.csv')
 
     def ex_dividend_list(self):
         '''爬蟲:證交所除權息公告表'''

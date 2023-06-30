@@ -1,27 +1,8 @@
-import os
-import sys
 import queue
-import traceback
+import logging
 import numpy as np
-import pandas as pd
-from io import BytesIO
-from zipfile import ZipFile
 
 from ..config import API
-
-
-def create_folder(path):
-    if not os.path.exists(path):
-        os.makedirs(path)
-
-
-def print_error_msg(excp, time_str=None):
-    error_class = excp.__class__.__name__
-    _, _, tb = sys.exc_info()
-    file, line, func, code = traceback.extract_tb(tb)[-1]
-    print(
-        f'{time_str}[File "{file}"][{func}][line {line}][{code}][{error_class}: {excp.args[0]}]')
-    traceback.print_exc()
 
 
 def reduce_mem_usage(df, verbose=True):
@@ -63,7 +44,7 @@ def progress_bar(N, i, status=''):
 
 def create_queue(target_list, crawled_list=[]):
     '''put candidate companies not crawled into queue'''
-    print("Put targets in queue...", flush=True)
+    logging.info("Put targets in queue...")
     q = queue.Queue(0)
 
     target_list = list(set(target_list)-set(crawled_list))
@@ -73,18 +54,8 @@ def create_queue(target_list, crawled_list=[]):
         q.put(company)
         progress_bar(N, i)
 
-    print("\nTargets in queue:", q.qsize(), flush=True)
-
+    logging.info(f"Targets in queue: {q.qsize()}")
     return (q)
-
-
-def delete_selection_files(dirpath: str, files=None):
-    if not files:
-        files = [f for f in os.listdir(dirpath) if '.csv' in f]
-
-    if files:
-        for f in files:
-            os.remove(f'{dirpath}/{f}')
 
 
 def get_contract(target: str):
@@ -96,54 +67,3 @@ def get_contract(target: str):
         return API.Contracts.Options[target[:3]][target]
     return API.Contracts.Stocks[target]
 
-
-def save_table(df: pd.DataFrame, filename: str, saveEmpty=False):
-    if df.shape[0] or saveEmpty:
-        if '.csv' in filename:
-            df.to_csv(filename, index=False, encoding='utf-8-sig')
-        elif '.xlsx' in filename:
-            df.to_excel(filename, index=False, encoding='utf-8-sig')
-        else:
-            df.to_pickle(filename)
-
-
-def rpt_2_df(file):
-    '''RPT轉DataFrame'''
-
-    f = file.readlines()
-    f = [
-        t.decode('big5').rstrip('\r\n') if isinstance(t, bytes) else t.rstrip('\n') for t in f]
-    f = [t.replace(' ', '').split(',') for t in f]
-    return pd.DataFrame(f[1:], columns=f[0])
-
-
-def unzip_file(filename: str, filters: list = [], filepath=''):
-    '''解壓縮檔案並匯出'''
-
-    if isinstance(filename, BytesIO):
-        folders = ZipFile(filename)
-    else:
-        folders = ZipFile(f'{filename}.zip')
-    names = folders.namelist()
-    N = len(names)
-
-    if N > 1 and isinstance(filename, str):
-        create_folder(filename)
-
-    for i, folder in enumerate(names):
-        if folder in filters or folder.rstrip('/') in filters or folder[:4] in filters:
-            continue
-
-        if '.zip' in folder:
-            folderPath = f"{filename}/{folder.replace('.zip', '')}"
-            print(f"\n{folder.replace('.zip', '')}")
-            create_folder(folderPath)
-            zfiledata = BytesIO(folders.read(folder))
-            unzip_file(zfiledata, filepath=folderPath)
-
-        elif '.rpt' in folder:
-            file = BytesIO(folders.read(folder))
-            file = rpt_2_df(file)
-            folderPath = filepath if filepath else (filename if N > 1 else '.')
-            save_table(file, f"{folderPath}/{folder.replace('.rpt', '.csv')}")
-            progress_bar(N, i)

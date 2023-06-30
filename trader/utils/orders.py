@@ -1,16 +1,15 @@
-import os
 import time
 import logging
 import pandas as pd
 from collections import namedtuple
 
 from ..config import API, PATH
-from . import save_table
+from .file import FileHandler
 from .database import db
 from .database.tables import TradingStatement
 
 
-class OrderTool:
+class OrderTool(FileHandler):
     OrderInfo = namedtuple(
         typename="OrderInfo",
         field_names=[
@@ -87,12 +86,8 @@ class OrderTool:
             self.OrderTable.op_type.fillna('', inplace=True)
             db.dataframe_to_DB(self.OrderTable, TradingStatement)
         else:
-            if os.path.exists(filename):
-                statement = pd.read_csv(filename)
-            else:
-                statement = pd.DataFrame()
-            statement = pd.concat([statement, self.OrderTable])
-            save_table(statement, filename)
+            statement = self.read_and_concat(filename, self.OrderTable)
+            self.save_table(statement, filename)
 
     def read_statement(self, account: str = ''):
         '''Import trading statement'''
@@ -104,11 +99,7 @@ class OrderTool:
             )
         else:
             filename = f"{PATH}/stock_pool/statement_{account.split('-')[-1]}.csv"
-            if os.path.exists(filename):
-                df = pd.read_csv(filename)
-            else:
-                df = self.OrderTable
-            
+            df = self.read_table(filename, df_default=self.OrderTable)
             df = df[df.account_id == account]
             df = df.astype({
                 'price': float,

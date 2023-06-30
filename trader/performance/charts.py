@@ -1,12 +1,12 @@
-import os
 import numpy as np
 import pandas as pd
 from datetime import timedelta
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from .. import file_handler
 from ..config import PATH, TODAY_STR
-from ..utils import progress_bar, create_folder
+from ..utils import progress_bar
 
 
 class FigureInOut:
@@ -359,15 +359,14 @@ class BacktestFigures:
         '''輸出回測圖表'''
 
         folder_path = f'{self.DATAPATH}/回測報告/{TODAY_STR}-{filename}'
-        create_folder(folder_path)
+        file_handler.create_folder(folder_path)
         fig.BacktestResult.write_html(f'{folder_path}/回測結果.html')
 
         figures = [f for f in fig.__dict__ if 'fig' in f]
         for f in figures:
             fig.__dict__[f].write_html(f'{folder_path}/{f}.html')
 
-        files = os.listdir(folder_path)
-        files = [f for f in files if '.html' in f]
+        files = file_handler.listdir(folder_path, pattern='.html')
         for file in files:
             try:
                 f = open(f'{folder_path}/{file}', "r+")

@@ -14,7 +14,7 @@ from . import notifier, picker, crawler2
 from .config import API, PATH, TODAY, TODAY_STR, holidays
 from .config import FEE_RATE, TStart, TEnd, TTry, TimeStartStock, TimeStartFuturesDay
 from .config import TimeEndFuturesDay, TimeStartFuturesNight, TimeEndFuturesNight
-from .utils import get_contract, save_table
+from .utils import get_contract
 from .utils.kbar import KBarTool
 from .utils.orders import OrderTool
 from .utils.cipher import CipherTool
@@ -1031,8 +1031,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
     def get_margin_table(self):
         '''取得保證金清單'''
-        df = pd.read_csv('./lib/indexMarging.csv',
-                         encoding='big5').reset_index()
+        df = self.read_table('./lib/indexMarging.csv').reset_index()
         df.columns = list(df.iloc[0, :])
         df = df.iloc[1:, :-2]
         df.原始保證金 = df.原始保證金.astype(int)
@@ -1444,8 +1443,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     condition = table.Code == target, match_account
                 db.update(table, values, *condition)
         else:
-            df.to_pickle(
-                f'{PATH}/stock_pool/simulation_{market}_{self.ACCOUNT_NAME}.pkl')
+            self.save_table(
+                df=df,
+                filename=f'{PATH}/stock_pool/simulation_{market}_{self.ACCOUNT_NAME}.pkl'
+            )
 
     def __save_simulate_securityInfo(self):
         '''儲存模擬交易模式下的股票庫存表'''
@@ -1527,7 +1528,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             for freq, df in self.KBars.items():
                 if freq != '1D':
                     filename = f'{PATH}/Kbars/k{freq[:-1]}min_{self.ACCOUNT_NAME}.csv'
-                    save_table(df, filename)
+                    self.save_table(df, filename)
 
         if self.can_stock:
             self.__save_simulate_securityInfo()

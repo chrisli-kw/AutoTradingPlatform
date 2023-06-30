@@ -3,13 +3,14 @@ from datetime import datetime
 from collections import namedtuple
 
 from ..config import PATH
-from . import save_table, get_contract
+from . import get_contract
 from .time import TimeTool
+from .file import FileHandler
 from .database import db
 from .database.tables import Watchlist
 
 
-class WatchListTool(TimeTool):
+class WatchListTool(TimeTool, FileHandler):
 
     def __init__(self, account_name):
         self.account_name = account_name
@@ -23,15 +24,13 @@ class WatchListTool(TimeTool):
             df = db.query(Watchlist, Watchlist.account == self.account_name)
             return df
 
-        try:
-            df = pd.read_csv(f'{PATH}/stock_pool/{self.watchlist_file}.csv')
-        except:
-            df = pd.DataFrame(columns=[
+        df = self.read_table(
+            filename=f'{PATH}/stock_pool/{self.watchlist_file}.csv',
+            df_default=pd.DataFrame(columns=[
                 'account', 'market', 'code', 'buyday',
                 'bsh', 'position', 'strategy'
             ])
-            self.save_watchlist(df)
-
+        )
         df.code = df.code.astype(str)
         df.buyday = pd.to_datetime(df.buyday.astype(str))
         df.position = df.position.fillna(100)
@@ -133,7 +132,7 @@ class WatchListTool(TimeTool):
             tb = df[~df.code.isin(codes)]
             db.dataframe_to_DB(tb, Watchlist)
         else:
-            save_table(
+            self.save_table(
                 df=df,
                 filename=f'{PATH}/stock_pool/{self.watchlist_file}.csv',
                 saveEmpty=True

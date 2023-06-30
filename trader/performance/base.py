@@ -48,7 +48,7 @@ def convert_statement(df):
     tb['CloseAmount'] = (tb.ClosePrice*tb.CloseQuantity).abs()
     tb['profit'] = tb.CloseAmount - tb.OpenAmount
     tb['returns'] = 100*(tb.profit/tb.OpenAmount).round(4)
-    tb = tb.dropna()
+    tb = tb.dropna().reset_index(drop=True)
 
     for index, row in tb.iterrows():
         sub_string = f'【{row.Code}】{row.Strategy}'

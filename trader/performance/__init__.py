@@ -2,8 +2,8 @@ import os
 import sys
 
 from ..config import PATH
-from ..utils import create_folder
+from .. import file_handler
 
 
 sys.path.append(os.path.abspath(os.path.join('./', os.pardir)))
-create_folder(f'{PATH}/backtest')
+file_handler.create_folder(f'{PATH}/backtest')

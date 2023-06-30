@@ -1,4 +1,3 @@
-import os
 import re
 import logging
 import numpy as np
@@ -6,14 +5,15 @@ import pandas as pd
 from typing import List, Dict
 from datetime import datetime, timedelta
 
-from ..config import API, PATH, TODAY, TODAY_STR
-from . import progress_bar, get_contract, save_table
-from .time import TimeTool
+from ..config import API, PATH, TODAY, TODAY_STR, TimeStartStock, TimeEndStock
+from ..config import K15min_feature, K30min_feature, K60min_feature
 from ..indicators.signals import TechnicalSignals
-from ..config import TimeStartStock, TimeEndStock, K15min_feature, K30min_feature, K60min_feature
+from . import progress_bar, get_contract
+from .time import TimeTool
+from .file import FileHandler
 
 
-class KBarTool(TechnicalSignals, TimeTool):
+class KBarTool(TechnicalSignals, TimeTool, FileHandler):
     def __init__(self, kbar_start_day=''):
         self.daysdata = self.__set_daysdata(kbar_start_day)
         self.maps = {
@@ -70,17 +70,6 @@ class KBarTool(TechnicalSignals, TimeTool):
                 @self.on_add_K60min_feature()
                 def _add_K60min_feature(df):
                     return featureScript.add_K60min_feature(df)
-
-    def load_kbar_file(self, filename: str):
-        '''讀取k棒歷史資料csv'''
-
-        try:
-            df = pd.read_csv(f'{PATH}/{filename}')
-            df.Time = pd.to_datetime(df.Time)
-            df.name = df.name.astype(str)
-            return df
-        except:
-            return pd.DataFrame(columns=self.kbar_columns)
 
     def tbKBar(self, stockid: str, start: str, end: str = None):
         '''取得k棒資料'''
@@ -372,31 +361,18 @@ class KBarTool(TechnicalSignals, TimeTool):
                 self.KBars['1T'], df[df.Time <= t1][self.kbar_columns]
             ]).sort_values(['name', 'date']).reset_index(drop=True)
 
-    def save_OTC_5k(self):
-        filename = f'{PATH}/Kbars/OTC/{TODAY_STR}_OTC_5k.csv'
-        otc = self.KBars['5T'][self.KBars['5T'].name == '101'].copy()
-        save_table(otc, filename)
 
-
-class TickDataProcesser(TimeTool):
+class TickDataProcesser(TimeTool, FileHandler):
     '''轉換期貨逐筆交易'''
 
     def convert_daily_tick(self, date: str, scale: str):
         ymd = date.split('-')
         m = f'Daily_{ymd[0]}_{ymd[1]}'
         folder = f'{PATH}/ticks/futures/{ymd[0]}/{m}'
-        filename = f'{m}_{ymd[2]}.csv'
-
-        if filename not in os.listdir(folder):
-            return pd.DataFrame()
-
-        filename = f'{folder}/{filename}'
-        try:
-            df = pd.read_csv(filename, low_memory=False)
-        except:
-            df = pd.read_csv(filename, low_memory=False, encoding='big5')
-        df = self.preprocess_futures_tick(df)
-        df = self.convert_tick_2_kbar(df, scale, period='all')
+        df = self.read_table(f'{folder}/{m}_{ymd[2]}.csv')
+        if df.shape[0]:
+            df = self.preprocess_futures_tick(df)
+            df = self.convert_tick_2_kbar(df, scale, period='all')
         return df
 
     def merge_futures_tick_data(self, year: list, months: list = None):
@@ -408,28 +384,17 @@ class TickDataProcesser(TimeTool):
         path = f'{PATH}/ticks/futures/{year}'
 
         if not months:
-            Months = os.listdir(path)
-            Months = [m for m in Months if 'Daily' in m]
+            Months = self.listdir(path, pattern='Daily')
         else:
             Months = [f'Daily_{year}_{str(m).zfill(2)}' for m in months]
 
         df = []
         for m in Months:
-            files = os.listdir(f'{path}/{m}')
-            files = [f for f in files if 'Daily' in f]
-
-            N = len(files)
-            for i, f in enumerate(files):
-                filename = f'{path}/{m}/{f}'
-                try:
-                    temp = pd.read_csv(filename, low_memory=False)
-                except:
-                    temp = pd.read_csv(
-                        filename, low_memory=False, encoding='big5')
-                df.append(temp)
-                progress_bar(N, i, status=f'[{f}]')
-
-        return pd.concat(df)
+            temp = self.read_tables_in_folder(f'{path}/{m}', pattern='Daily')
+            df.append(temp)
+        df = pd.concat(df)
+        df = df.reset_index(drop=True)
+        return df
 
     def preprocess_futures_tick(self, df, underlying='TX'):
         df.商品代號 = df.商品代號.apply(lambda x: x.replace(' ', ''))
