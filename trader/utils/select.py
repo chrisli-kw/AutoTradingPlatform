@@ -6,8 +6,8 @@ from ..config import PATH, TODAY_STR, TODAY
 from ..scripts.conditions import SelectConditions
 from .file import FileHandler
 from .time import TimeTool
-from .database import db
-from .database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T, SelectedStocks
+from .database import db, KBarTables
+from .database.tables import SelectedStocks
 
 
 def map_BKD(OTCclose, OTChigh, add_days=10):
@@ -24,12 +24,6 @@ class SelectStock(SelectConditions, TimeTool, FileHandler):
         self.dma = dma
         self.mode = mode
         self.scale = scale
-        self.tables = {
-            '1D': KBarData1D,
-            '1T': KBarData1T,
-            '30T': KBarData30T,
-            '60T': KBarData60T
-        }
         self.categories = {
             1: '水泥工業',
             2: '食品工業',
@@ -76,10 +70,10 @@ class SelectStock(SelectConditions, TimeTool, FileHandler):
         if db.HAS_DB:
             if self.mode == 'select':
                 start = TODAY - timedelta(days=365*2)
-                condition = self.tables[self.scale].date >= start
-                df = db.query(self.tables[self.scale], condition)
+                condition = KBarTables[self.scale].date >= start
+                df = db.query(KBarTables[self.scale], condition)
             else:
-                df = db.query(self.tables[self.scale])
+                df = db.query(KBarTables[self.scale])
         else:
             dir_path = f'{PATH}/Kbars/{self.scale}'
             df = self.read_tables_in_folder(dir_path)

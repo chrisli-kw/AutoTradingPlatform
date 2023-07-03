@@ -27,3 +27,12 @@ redis_tick = RedisTools(redisKey='TickData')
 if db.HAS_DB:
     create_schema(DB_NAME)
     Base.metadata.create_all(db.engine)
+
+    KBarTables = {
+        '1D': KBarData1D,
+        '1T': KBarData1T,
+        '30T': KBarData30T,
+        '60T': KBarData60T
+    }
+else:
+    KBarTables = {}

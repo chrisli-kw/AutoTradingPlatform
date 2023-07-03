@@ -9,10 +9,17 @@ from ..config import PATH, TODAY_STR
 from ..utils import progress_bar
 from ..utils.kbar import KBarTool
 from ..utils.time import TimeTool
-from ..utils.database import db
-from ..utils.database.tables import PutCallRatioList
+from ..utils.file import FileHandler
 from ..utils.select import SelectStock
-from .base import AccountingNumber, compute_profits, computeReturn, computeWinLoss
+from ..utils.database import db, KBarTables
+from ..utils.database.tables import PutCallRatioList
+from .base import (
+    AccountingNumber, 
+    compute_profits, 
+    computeReturn, 
+    computeWinLoss, 
+    convert_statement
+)
 from .charts import BacktestFigures
 
 
@@ -30,8 +37,16 @@ def merge_pc_ratio(df):
     return df
 
 
-class BacktestPerformance:
-    def __init__(self) -> None:
+class BacktestPerformance(FileHandler):
+    def __init__(self, config) -> None:
+        self.Market = config.market
+        self.scale = config.scale
+        self.LEVERAGE_INTEREST = 0.075*(config.leverage != 1)
+        self.leverage = 1/config.leverage
+        self.margin = config.margin
+        self.multipler = config.multipler
+        self.mode = config.mode.lower()
+
         self.DATAPATH = f'{PATH}/backtest'
         self.TestResult = namedtuple(
             typename="TestResult",
@@ -40,20 +55,20 @@ class BacktestPerformance:
 
     def process_daily_info(self, df: pd.DataFrame, **result):
         '''update daily info table'''
-        profit = df.groupby('CloseDate').profit.sum().to_dict()
-        nOpen = df.groupby('OpenDate').stock.count().to_dict()
+        profit = df.groupby('CloseTime').profit.sum().to_dict()
+        nOpen = df.groupby('OpenTime').Code.count().to_dict()
 
         daily_info = result['daily_info'].copy()
         profit = pd.Series(daily_info.index).map(profit).fillna(0).cumsum()
         daily_info['balance'] = result['init_position'] + profit.values
         daily_info['nOpen'] = daily_info.index.map(nOpen).fillna(0)
         daily_info = daily_info.dropna()
-        if result['market'] != 'Stocks':
+        if self.Market != 'Stocks':
             for c in ['TSEopen', 'TSEclose', 'OTCopen', 'OTCclose']:
                 daily_info[c] = 1
         return daily_info
 
-    def get_max_profit_loss_days(self, statement: pd.DataFrame, scale: str):
+    def get_max_profit_loss_days(self, statement: pd.DataFrame):
         '''
         計算最大連續獲利/損失天數
         參數:
@@ -76,18 +91,18 @@ class BacktestPerformance:
             count_max = counts[counts == counts.max()].index[0]
             result = profits[profits.labels == count_max]
             return {
-                'start': str(result.CloseDate.min()).split(' ')[0],
-                'end': str(result.CloseDate.max()).split(' ')[0],
+                'start': str(result.CloseTime.min()).split(' ')[0],
+                'end': str(result.CloseTime.max()).split(' ')[0],
                 'n': result.shape[0],
                 'amount': result.profit.sum()
             }
 
         profits = statement.copy()
 
-        if scale != '1D':
-            profits.CloseDate = profits.CloseDate.dt.date
+        if self.scale != '1D':
+            profits.CloseTime = profits.CloseTime.dt.date
 
-        profits = profits.groupby('CloseDate').profit.sum().reset_index()
+        profits = profits.groupby('CloseTime').profit.sum().reset_index()
         profits['is_profit'] = (profits.profit > 0).astype(int)
 
         isprofit = profits.is_profit.values
@@ -110,67 +125,80 @@ class BacktestPerformance:
         '''取得回測報告'''
 
         configs = {
-            '做多/做空': result['mode'],
-            '槓桿倍數': 1/result['leverage'],
+            '做多/做空': self.mode,
+            '槓桿倍數': self.leverage,
             '起始資金': AccountingNumber(result['init_position']),
             '股數因子': result['unit'],
             '進場順序': result['buyOrder']
         }
-        if result['statement']:
-            # 將交易明細轉為表格
+        if isinstance(result['statement'], list):
             df = pd.DataFrame(result['statement'])
+            df = convert_statement(
+                df,
+                mode='backtest',
+                **result,
+                market=self.Market,
+                multipler=self.multipler
+            )
+        else:
+            df = result['statement']
+            df['KRun'] = -1  # TODO
 
-            df.OpenAmount = df.OpenAmount.astype('int64')
-            df.CloseAmount = df.CloseAmount.astype('int64')
-            df.ClosePrice = df.ClosePrice.round(2)
+        if df.shape[0]:
 
-            if result['market'] == 'Stocks':
-                netOpenAmount = (df.OpenAmount + df.OpenFee)
-                netCloseAmount = (df.CloseAmount - df.CloseFee - df.Tax)
-                df['profit'] = (netCloseAmount - netOpenAmount).astype('int64')
-                df['returns'] = (
-                    100*(df.CloseAmount/df.OpenAmount - 1)).round(2)
-            else:
-                sign = 1 if result['isLong'] else -1
-
-                df['profit'] = (df.ClosePrice - df.OpenPrice)*df.CloseQuantity
-                totalExpense = (df.OpenFee + df.CloseFee + df.Tax)*sign
-                df.profit = df.profit*result['multipler'] - totalExpense
-                df['returns'] = (
-                    sign*100*((df.ClosePrice/df.OpenPrice)**sign - 1)).round(2)
-
-            df.profit = df.profit.round()
-            df['iswin'] = df.profit > 0
-
-            if not result['isLong']:
-                df.profit *= -1
-                df.returns *= -1
-            df['balance'] = result['init_position'] + df.profit.cumsum()
-
-            configs.update({
-                '回測期間': f"{str(df.OpenDate.min().date())} - {str(df.CloseDate.max().date())}",
-            })
+            start = str(df.OpenTime.min().date())
+            end = str(df.CloseTime.max().date())
 
             win_loss = computeWinLoss(df)
-            days_p, days_n = self.get_max_profit_loss_days(df, result['scale'])
-            result['daily_info'] = self.process_daily_info(df, **result)
+            days_p, days_n = self.get_max_profit_loss_days(df)
 
-            # TSE 漲跌幅
-            tse_return = computeReturn(
-                result['daily_info'], 'TSEopen', 'TSEclose')
+            if 'daily_info' in result:
+                result['daily_info'] = self.process_daily_info(df, **result)
 
-            # OTC 漲跌幅
-            otc_return = computeReturn(
-                result['daily_info'], 'OTCopen', 'OTCclose')
+                # TSE 漲跌幅
+                tse_return = computeReturn(
+                    result['daily_info'], 'TSEopen', 'TSEclose')
 
+                # OTC 漲跌幅
+                otc_return = computeReturn(
+                    result['daily_info'], 'OTCopen', 'OTCclose')
+            else:
+                result['daily_info'] = None
+                if 1 > 2:
+                    table = KBarTables[self.scale]
+                    df_TSE = db.query(
+                        table,
+                        table.name == '1',
+                        table.date >= start,
+                        table.date <= end
+                    )
+                    df_OTC = db.query(
+                        table,
+                        table.name == '101',
+                        table.date >= start,
+                        table.date <= end
+                    )
+                else:
+                    dir_path = f'{PATH}/KBars/{self.scale}'
+                    table = self.read_tables_in_folder(dir_path)
+                    table = table[
+                        (table.date >= start) & 
+                        (table.date <= end)
+                    ]
+                    df_TSE = table[table.name == '1']
+                    df_OTC = table[table.name == '101']
+                
+                tse_return = computeReturn(df_TSE, 'Open', 'Close')
+                otc_return = computeReturn(df_OTC, 'Open', 'Close')
+                
             # 總報酬率
             profits = compute_profits(df)
             balance = result['init_position'] + profits['TotalProfit']
             total_return = balance/result['init_position']
 
             # 年化報酬率
-            anaualized_return = total_return**(
-                365/(df.CloseDate.max() - df.OpenDate.min()).days)
+            days = (df.CloseTime.max() - df.OpenTime.min()).days
+            anaualized_return = 100*round(total_return**(365/days) - 1, 2)
 
             # 回測摘要
             summary = pd.DataFrame([{
@@ -189,7 +217,7 @@ class BacktestPerformance:
                 '虧損平均持倉K線數': profits['KRunLoss'],
                 '淨值波動度': round(df.balance.rolling(5).std().median()),
                 '總報酬(與大盤比較)': f"{round(100*(total_return - 1), 2)}% (TSE {tse_return}%; OTC {otc_return}%)",
-                '年化報酬率': f"{round(100*(anaualized_return - 1), 2)}%",
+                '年化報酬率': f"{AccountingNumber(anaualized_return)}%",
                 '獲利/虧損/總交易筆數': f"{win_loss[True]}/{win_loss[False]}/{df.shape[0]}",
                 '勝率': f"{round(100*win_loss[True]/df.shape[0], 2)}%",
                 '獲利因子': profits['ProfitFactor'],
@@ -199,11 +227,11 @@ class BacktestPerformance:
 
         else:
             print('無回測交易紀錄')
-            configs.update({
-                '回測期間': f"{str(result['startDate'].date())} - {str(result['endDate'].date())}"
-            })
+            start = str(result['startDate'].date())
+            end = str(result['endDate'].date())
             summary, df = None, None
 
+        configs.update({'回測期間': f"{start} - {end}"})
         configs = pd.DataFrame([configs]).T.reset_index()
         configs.columns = ['Content', 'Description']
         return self.TestResult(configs, summary, df, result['daily_info'])
@@ -211,7 +239,7 @@ class BacktestPerformance:
     def generate_tb_reasons(self, statement):
         '''進出場原因統計表'''
 
-        aggs = {'stock': 'count', 'iswin': 'sum', 'profit': ['sum', 'mean']}
+        aggs = {'Code': 'count', 'iswin': 'sum', 'profit': ['sum', 'mean']}
         df = statement.groupby(['OpenReason', 'CloseReason']).agg(aggs)
         df = df.unstack(0).reset_index()
         df = df.T.reset_index(level=[0, 1], drop=True).T
@@ -249,9 +277,9 @@ class BacktestPerformance:
 
     def generate_win_rates(self, statement):
         '''個股勝率統計'''
-        group = statement.groupby('stock')
+        group = statement.groupby('Code')
         win_rates = group.iswin.sum().reset_index()
-        win_rates['total_deals'] = group.stock.count().values
+        win_rates['total_deals'] = group.Code.count().values
         win_rates['win_rate'] = win_rates.iswin/win_rates.total_deals
         return win_rates
 
@@ -282,15 +310,8 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
             mode=config.mode,
             scale=config.scale
         )
-        BacktestPerformance.__init__(self)
+        BacktestPerformance.__init__(self, config)
         BacktestFigures.__init__(self, config.market)
-
-        self.scale = config.scale
-        self.LEVERAGE_INTEREST = 0.075*(config.leverage != 1)
-        self.leverage = 1/config.leverage
-        self.margin = config.margin
-        self.multipler = config.multipler
-        self.mode = config.mode.lower()
 
         self.isLong = self.mode == 'long'
         self.sign = 1 if self.isLong else -1
@@ -515,14 +536,14 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
 
         self.balance += (amount - closefee - interest - tax)
         self.statements.append({
-            'stock': kwargs['stockid'],
-            'OpenDate': data['day'],
+            'Code': kwargs['stockid'],
+            'OpenTime': data['day'],
             'OpenReason': data['openReason'],
             'OpenPrice': openPrice,
             'OpenQuantity': quantity,
             'OpenAmount': openamount,
             'OpenFee': openfee,
-            'CloseDate': kwargs['day'],
+            'CloseTime': kwargs['day'],
             'CloseReason': kwargs['reason'],
             'ClosePrice': price,
             'CloseQuantity': quantity,
@@ -862,10 +883,5 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
         del df
         return self.get_backtest_result(
             **params,
-            market=self.Market,
-            mode=self.mode,
-            scale=self.scale,
-            leverage=self.leverage,
             isLong=self.isLong,
-            multipler=self.multipler
         )

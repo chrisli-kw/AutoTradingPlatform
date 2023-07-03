@@ -18,9 +18,8 @@ from .kbar import KBarTool
 from .time import TimeTool
 from .file import FileHandler
 from ..config import API, PATH, TODAY_STR, TODAY
-from .database import db
-from .database.tables import KBarData1D, KBarData1T, KBarData30T, KBarData60T
-from .database.tables import SecurityList, PutCallRatioList, ExDividendTable
+from .database import db, KBarTables
+from .database.tables import KBarData1T, SecurityList, PutCallRatioList, ExDividendTable
 
 
 class CrawlStockData(FileHandler):
@@ -33,12 +32,6 @@ class CrawlStockData(FileHandler):
         self.filename = 'company_stock_data'
         self.scale = scale
         self.StockData = []
-        self.tables = {
-            '1D': KBarData1D,
-            '1T': KBarData1T,
-            '30T': KBarData30T,
-            '60T': KBarData60T
-        }
 
     def get_security_list(self, stock_only: bool = True):
         '''
@@ -78,7 +71,7 @@ class CrawlStockData(FileHandler):
         '''Export kbar data either to local or to DB'''
 
         if db.HAS_DB:
-            db.dataframe_to_DB(df, self.tables[scale])
+            db.dataframe_to_DB(df, KBarTables[scale])
 
         filename = f'{PATH}/Kbars/{scale}/{TODAY_STR}-stock_data_{scale}'
         if scale == '1T':
@@ -127,7 +120,7 @@ class CrawlStockData(FileHandler):
         if not start:
             if update:
                 if db.HAS_DB:
-                    dates = db.query(self.tables[self.scale].date)
+                    dates = db.query(KBarTables[self.scale].date)
                     if dates.shape[0]:
                         last_end = dates.date.max()
                     else:
