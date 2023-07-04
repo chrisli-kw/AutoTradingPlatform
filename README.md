@@ -125,7 +125,7 @@ SCALES = 1D, 30T, 60T
 #### Step 2: Create user settings (.env file)
 It is necessary to create an env file for a whole-new AutoTradingPlatform. Firstly, run the following command in a terminal:  
 ```
-python create_env.py
+python run.py -TASK create_env
 ```  
 
 Then, go to http://127.0.0.1:5000/. Press the "Submit" button after filling out the forms, an env file will be created in ```./lib/envs```

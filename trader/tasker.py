@@ -5,7 +5,8 @@ from datetime import datetime
 from dotenv import dotenv_values
 from concurrent.futures import as_completed
 
-from . import executor, notifier, picker, crawler1, crawler2, tdp
+from . import executor, notifier, picker, crawler1, crawler2, tdp, file_handler
+from .create_env import app
 from .config import API, PATH, TODAY_STR
 from .config import ACCOUNTS, TEnd, SelectMethods, ConvertScales
 from .utils.database import redis_tick
@@ -16,6 +17,13 @@ from .performance.base import convert_statement
 from .performance.backtest import BacktestPerformance
 from .scripts.features import KBarFeatureTool
 from .scripts import __BacktestScripts__ as bts
+
+
+def runCreateENV():
+    file_handler.create_folder('./lib')
+    file_handler.create_folder('./lib/envs')
+    file_handler.create_folder('./lib/schedules')
+    app.run()
 
 
 def runAccountInfo():
@@ -363,6 +371,7 @@ def runSimulationChecker():
 
 
 Tasks = {
+    'create_env': [runCreateENV], 
     'account_info': [runAccountInfo, runSimulationChecker],
     'update_and_select_stock': [runCrawlStockData, runSelectStock, runCrawlFromHTML],
     'crawl_stock_data': [runCrawlStockData], 

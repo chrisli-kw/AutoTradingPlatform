@@ -170,8 +170,3 @@ def account_result():
     return render_template('account_result.html', result=result)
 
 
-if __name__ == '__main__':
-    file_handler.create_folder('./lib')
-    file_handler.create_folder('./lib/envs')
-    file_handler.create_folder('./lib/schedules')
-    app.run()
