@@ -92,21 +92,22 @@ class BacktestFigures:
         return str(x).replace(' ', '<br>').replace('00.000000000', '00')
 
     def _daily_info_processor(self, TestResult: object):
-        profit = TestResult.Statement.groupby('CloseDate').profit.sum()
+        profit = TestResult.Statement.groupby('CloseTime').profit.sum()
         profit = profit.to_dict()
 
-        daily_info = TestResult.DailyInfo
-        daily_info['profit'] = daily_info.index.map(profit).fillna(0).values
-
-        col_maps = self.stock_col_maps if self.Market == 'Stocks' else self.futures_col_maps
-        daily_info = daily_info.resample(
-            '1D', closed='left', label='left').apply(col_maps).dropna()
-        daily_info['profits'] = (
-            daily_info.profit*(daily_info.profit > 0)).cumsum()
-        daily_info['losses'] = (
-            daily_info.profit*(daily_info.profit <= 0)).cumsum()
-        daily_info['pc115'] = 115
-        return daily_info
+        if self.Market == 'Stocks':
+            col_maps = self.stock_col_maps
+        else:
+            col_maps = self.futures_col_maps
+        
+        df = TestResult.DailyInfo
+        df['profit'] = df.index.map(profit).fillna(0).values
+        df = df.resample('1D', closed='left', label='left').apply(col_maps)
+        df = df.dropna()
+        df['profits'] = (df.profit*(df.profit > 0)).cumsum()
+        df['losses'] = (df.profit*(df.profit <= 0)).cumsum()
+        df['pc115'] = 115
+        return df
 
     def subplot_add_table(self, fig: make_subplots, table: pd.DataFrame, row: int, col: int, **cellargs):
         fig.add_trace(
@@ -210,8 +211,8 @@ class BacktestFigures:
         '''將回測結果畫成圖表'''
 
         statement = TestResult.Statement.copy()
-        statement.OpenDate = statement.OpenDate.apply(self._replaceString)
-        statement.CloseDate = statement.CloseDate.apply(self._replaceString)
+        statement.OpenTime = statement.OpenTime.apply(self._replaceString)
+        statement.CloseTime = statement.CloseTime.apply(self._replaceString)
 
         daily_info = self._daily_info_processor(TestResult)
 
@@ -266,9 +267,9 @@ class BacktestFigures:
         cols = ['name', 'Time', 'Open', 'High', 'Low', 'Close']
         statement = testResult.Statement
         statement['start'] = statement.groupby(
-            'stock').OpenDate.transform(lambda x: x.min() - timedelta(days=5))
+            'stock').OpenTime.transform(lambda x: x.min() - timedelta(days=5))
         statement['end'] = statement.groupby(
-            'stock').CloseDate.transform(lambda x: x.max() + timedelta(days=5))
+            'stock').CloseTime.transform(lambda x: x.max() + timedelta(days=5))
         tb = df[cols][
             (df.Time >= statement.start.min()) & (df.Time <= statement.end.max())]
 
@@ -282,13 +283,13 @@ class BacktestFigures:
             end = df1.end.values[0]
             df2 = tb[(tb.name == s) & (tb.Time >= start) & (tb.Time <= end)]
 
-            ins = df2[df2.Time.isin(df1.OpenDate)]
+            ins = df2[df2.Time.isin(df1.OpenTime)]
             ins = ins.set_index('Time').Low.to_dict()
-            df1['Ins'] = df1.OpenDate.map(ins)
+            df1['Ins'] = df1.OpenTime.map(ins)
 
-            outs = df2[df2.Time.isin(df1.CloseDate)]
+            outs = df2[df2.Time.isin(df1.CloseTime)]
             outs = outs.set_index('Time').High.to_dict()
-            df1['Outs'] = df1.CloseDate.map(outs)
+            df1['Outs'] = df1.CloseTime.map(outs)
 
             fig = go.Figure(
                 data=[
@@ -304,7 +305,7 @@ class BacktestFigures:
                     ),
 
                     go.Scatter(
-                        x=df1.OpenDate,
+                        x=df1.OpenTime,
                         y=df1.Ins*0.96,
                         customdata=np.stack(
                             (df1.OpenReason, df1.Ins),
@@ -322,7 +323,7 @@ class BacktestFigures:
                     ),
 
                     go.Scatter(
-                        x=df1.CloseDate,
+                        x=df1.CloseTime,
                         y=df1.Outs*1.04,
                         customdata=df1[
                             ['CloseReason', 'Outs', 'profit', 'returns']].values,

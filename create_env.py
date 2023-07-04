@@ -125,7 +125,7 @@ def _create_bat(account_name):
 
         set SJ_LOG_PATH=%~dp0/../../../logs/shioaji.log
 
-        python tasker.py -TASK auto_trader -ACCT {account_name}
+        python run.py -TASK auto_trader -ACCT {account_name}
         """.replace('        ', ''))
 
     myBat.close()

@@ -143,13 +143,13 @@ Open a terminal and execute the following task command type:
 #### 1. Auto trader  
 parameter ACCT: account_name defined by users
 ```
-python tasker.py -TASK auto_trader -ACCT YourAccountName
+python run.py -TASK auto_trader -ACCT YourAccountName
 ```
 
 #### 2. Stock selection  
 This task will run stock data crawler (using API) and then select stock. Details of establishing selection scripts see the [instructions](./trader/scripts/readme.md#stock-selection).
 ```
-python tasker.py -TASK update_and_select_stock
+python run.py -TASK update_and_select_stock
 ```
 
 ## Releases and Contributing

@@ -48,7 +48,7 @@ class BacktestPerformance(FileHandler):
         self.mode = config.mode.lower()
 
         self.DATAPATH = f'{PATH}/backtest'
-        self.TestResult = namedtuple(
+        self.ResultInfo = namedtuple(
             typename="TestResult",
             field_names=['Configuration', 'Summary', 'Statement', 'DailyInfo']
         )
@@ -94,7 +94,7 @@ class BacktestPerformance(FileHandler):
                 'start': str(result.CloseTime.min()).split(' ')[0],
                 'end': str(result.CloseTime.max()).split(' ')[0],
                 'n': result.shape[0],
-                'amount': result.profit.sum()
+                'amount': result.profit.sum().astype(int)
             }
 
         profits = statement.copy()
@@ -125,9 +125,9 @@ class BacktestPerformance(FileHandler):
         '''取得回測報告'''
 
         configs = {
+            '起始資金': AccountingNumber(result['init_position']),
             '做多/做空': self.mode,
             '槓桿倍數': self.leverage,
-            '起始資金': AccountingNumber(result['init_position']),
             '股數因子': result['unit'],
             '進場順序': result['buyOrder']
         }
@@ -141,7 +141,7 @@ class BacktestPerformance(FileHandler):
                 multipler=self.multipler
             )
         else:
-            df = result['statement']
+            df = result['statement'].copy()
             df['KRun'] = -1  # TODO
 
         if df.shape[0]:
@@ -164,7 +164,7 @@ class BacktestPerformance(FileHandler):
                     result['daily_info'], 'OTCopen', 'OTCclose')
             else:
                 result['daily_info'] = None
-                if 1 > 2:
+                if db.HAS_DB:
                     table = KBarTables[self.scale]
                     df_TSE = db.query(
                         table,
@@ -200,25 +200,30 @@ class BacktestPerformance(FileHandler):
             days = (df.CloseTime.max() - df.OpenTime.min()).days
             anaualized_return = 100*round(total_return**(365/days) - 1, 2)
 
-            # 回測摘要
+            # 摘要
             summary = pd.DataFrame([{
                 '期末資金': AccountingNumber(round(balance)),
                 '毛利': AccountingNumber(profits['GrossProfit']),
                 '毛損': AccountingNumber(profits['GrossLoss']),
-                '單筆最大獲利': AccountingNumber(round(df.profit.max(), 0)),
-                '單筆最大虧損': AccountingNumber(round(df.profit.min(), 0)),
+                '淨利': AccountingNumber(profits['TotalProfit']),
                 '平均獲利': AccountingNumber(profits['MeanProfit']),
                 '平均虧損': AccountingNumber(profits['MeanLoss']),
-                "最大區間獲利": f"{days_p['start']} ~ {days_p['end']}，共{days_p['n']}天，${days_p['amount']}",
-                "最大區間虧損": f"{days_n['start']} ~ {days_n['end']}，共{days_n['n']}天，${days_n['amount']}",
-                '淨利': AccountingNumber(profits['TotalProfit']),
+                '淨值波動度': round(df.balance.rolling(5).std().median()),
+                '總報酬(與大盤比較)': f"{round(100*(total_return - 1), 2)}%",
+                '指數報酬(TSE/OTC)': f"{tse_return}%/{otc_return}%",
+                '年化報酬率': f"{AccountingNumber(anaualized_return)}%",
+                '最大單筆獲利': AccountingNumber(round(df.profit.max(), 0)),
+                '最大單筆虧損': AccountingNumber(round(df.profit.min(), 0)),
+                "最大區間獲利": f"{days_p['start']} ~ {days_p['end']}，共{days_p['n']}天",
+                "最大連續獲利": f"${AccountingNumber(days_p['amount'])}",
+                "最大區間虧損": f"{days_n['start']} ~ {days_n['end']}，共{days_n['n']}天",
+                "最大連續虧損": f"${AccountingNumber(days_n['amount'])}",
                 '全部平均持倉K線數': round(df.KRun.mean(), 1),
                 '獲利平均持倉K線數': profits['KRunProfit'],
                 '虧損平均持倉K線數': profits['KRunLoss'],
-                '淨值波動度': round(df.balance.rolling(5).std().median()),
-                '總報酬(與大盤比較)': f"{round(100*(total_return - 1), 2)}% (TSE {tse_return}%; OTC {otc_return}%)",
-                '年化報酬率': f"{AccountingNumber(anaualized_return)}%",
-                '獲利/虧損/總交易筆數': f"{win_loss[True]}/{win_loss[False]}/{df.shape[0]}",
+                '獲利交易筆數': win_loss[True],
+                '虧損交易筆數': win_loss[False],
+                '總交易筆數': df.shape[0],
                 '勝率': f"{round(100*win_loss[True]/df.shape[0], 2)}%",
                 '獲利因子': profits['ProfitFactor'],
                 '盈虧比': profits['ProfitRatio'],
@@ -226,15 +231,15 @@ class BacktestPerformance(FileHandler):
             summary.columns = ['Content', 'Description']
 
         else:
-            print('無回測交易紀錄')
+            print('無交易紀錄')
             start = str(result['startDate'].date())
             end = str(result['endDate'].date())
             summary, df = None, None
 
-        configs.update({'回測期間': f"{start} - {end}"})
+        configs.update({'交易開始日': start, '交易結束日': end})
         configs = pd.DataFrame([configs]).T.reset_index()
         configs.columns = ['Content', 'Description']
-        return self.TestResult(configs, summary, df, result['daily_info'])
+        return self.ResultInfo(configs, summary, df, result['daily_info'])
 
     def generate_tb_reasons(self, statement):
         '''進出場原因統計表'''

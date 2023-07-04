@@ -1,111 +1,142 @@
-# coding: utf-8
-import os
 import time
 import logging
 import pandas as pd
 from datetime import datetime
 from dotenv import dotenv_values
-from argparse import ArgumentParser
 from concurrent.futures import as_completed
 
-from trader import __version__ as ver
-from trader import executor, notifier, picker, crawler1, crawler2, tdp, file_handler
-from trader.config import API, PATH, TODAY_STR, holidays
-from trader.config import ACCOUNTS, TEnd, SelectMethods, ConvertScales
-from trader.utils.database import redis_tick
-from trader.utils.subscribe import Subscriber
-from trader.utils.accounts import AccountInfo
-from trader.executor import StrategyExecutor
-from trader.performance.base import convert_statement
-from trader.scripts.features import KBarFeatureTool
-
-
-def parse_args():
-    """
-    執行指令:$ python tasker.py -TASK auto_trader -ACCT account_name
-
-    參數說明:
-    1. task(執行的目標程式): auto_trader, account_info, update_and_select_stock
-    2. account(代號): 若 task == 'auto_trader', 需指定要執行的帳戶代號
-
-    """
-    parser = ArgumentParser()
-    parser.add_argument(
-        '--task', '-TASK', type=str, default='auto_trader', help='執行的目標程式')
-    parser.add_argument(
-        '--account', '-ACCT', type=str, default='chrisli_1', help='代號')
-    args = parser.parse_args()
-    return (args)
+from . import executor, notifier, picker, crawler1, crawler2, tdp
+from .config import API, PATH, TODAY_STR
+from .config import ACCOUNTS, TEnd, SelectMethods, ConvertScales
+from .utils.database import redis_tick
+from .utils.subscribe import Subscriber
+from .utils.accounts import AccountInfo
+from .executor import StrategyExecutor
+from .performance.base import convert_statement
+from .performance.backtest import BacktestPerformance
+from .scripts.features import KBarFeatureTool
+from .scripts import __BacktestScripts__ as bts
 
 
 def runAccountInfo():
-    account = AccountInfo()
-    df = account.create_info_table()
-    tables = {}
+
+    def concat_strategy_table(results: dict, table_name: str):
+        df = pd.DataFrame()
+        for k, v in results.items():
+            if table_name == 'Configuration':
+                temp = v.Configuration
+            else:
+                temp = v.Summary
+            temp = temp.rename(columns={'Description': k}).set_index('Content')
+            df = pd.concat([df, temp], axis=1)
+        return df.reset_index()
+
+    # account = AccountInfo()
+    # df = account.create_info_table()
+    # tables = {}
+    scripts_ = {
+        k[:-3]: v for k, v in bts.__dict__.items()
+        if ('T' in k or 'D' in k) and (k[:-3] in SelectMethods)
+    }
 
     try:
         logging.debug(f'ACCOUNTS: {ACCOUNTS}')
-        for e in ACCOUNTS:
-            logging.debug(f'Load 【{e}】 config')
-            config = dotenv_values(f'./lib/envs/{e}.env')
+        for env in ACCOUNTS:
+            logging.debug(f'Load 【{env}】 config')
+            config = dotenv_values(f'./lib/envs/{env}.env')
+            se = StrategyExecutor(config=config)
 
-            API_KEY = config['API_KEY']
-            SECRET_KEY = config['SECRET_KEY']
-            acct = config['ACCOUNT_NAME']
-            account._login(API_KEY, SECRET_KEY, acct)
-            time.sleep(1)
+            # update performance statement
+            init_position = int(config['INIT_POSITION'])
+            df = se.read_statement(f'simulate-{env}')
+            df = convert_statement(df, init_position=init_position)
 
-            row = account.query_all()
-            if row:
-                for i, data in enumerate(row):
-                    if i < 3:
-                        logging.info(f"{data}： {row[data]}")
-                    else:
-                        logging.info(f"{data}： NT$ {'{:,}'.format(row[data])}")
+            results = {}
+            for stra in df.Strategy.unique():
+                backtest_config = scripts_[stra]
+                bp = BacktestPerformance(backtest_config)
+                statement = df[df.Strategy == stra]
 
-                if hasattr(df, 'sheet_names') and acct in df.sheet_names:
-                    tb = account.update_info(df, row)
-                else:
-                    tb = pd.DataFrame([row])
+                result = dict(
+                    init_position=init_position,
+                    unit=int(init_position/100000),
+                    buyOrder='Close',
+                    statement=statement,
+                )
+                performance = bp.get_backtest_result(**result)
+                results[stra] = performance
 
-                tables[acct] = tb
+            df_config = concat_strategy_table(results, 'Configuration')
+            df_summary = concat_strategy_table(results, 'Summary')
 
-                # 推播訊息
-                account_id = API.stock_account.account_id
-                notifier.post_account_info(account_id, row)
+            filename = f'{PATH}/daily_info/{TODAY_STR}-performance-{env}.xlsx'
+            writer = pd.ExcelWriter(filename, engine='xlsxwriter')
+            for data, sheet_name in [
+                (df_config, 'Configuration'),
+                (df_summary, 'Summary'),
+                (df, 'Statement')
+            ]:
+                data.to_excel(
+                    writer, encoding='utf-8-sig', index=False, sheet_name=sheet_name)
+            writer.save()
 
-            elif hasattr(df, 'sheet_names') and account.account_name in df.sheet_names:
-                tables[acct] = pd.read_excel(
-                    df, sheet_name=account.account_name)
+        #     API_KEY = config['API_KEY']
+        #     SECRET_KEY = config['SECRET_KEY']
+        #     acct = config['ACCOUNT_NAME']
+        #     account._login(API_KEY, SECRET_KEY, acct)
+        #     time.sleep(1)
 
-            else:
-                tables[acct] = account.DEFAULT_TABLE
+        #     row = account.query_all()
+        #     if row:
+        #         for i, data in enumerate(row):
+        #             if i < 3:
+        #                 logging.info(f"{data}： {row[data]}")
+        #             else:
+        #                 logging.info(f"{data}： NT$ {'{:,}'.format(row[data])}")
 
-            # 登出
-            time.sleep(5)
-            logging.info(f'登出系統: {API.logout()}')
-            time.sleep(10)
+        #         if hasattr(df, 'sheet_names') and acct in df.sheet_names:
+        #             tb = account.update_info(df, row)
+        #         else:
+        #             tb = pd.DataFrame([row])
 
-        logging.info('儲存資訊')
-        writer = pd.ExcelWriter(
-            f'{PATH}/daily_info/{account.filename}', engine='xlsxwriter')
+        #         tables[acct] = tb
 
-        for sheet in tables:
-            try:
-                tables[sheet].to_excel(
-                    writer, encoding='utf-8-sig', index=False, sheet_name=sheet)
-            except:
-                logging.exception('Catch an exception:')
-                tables[sheet].to_excel(
-                    sheet+'.csv', encoding='utf-8-sig', index=False)
-        writer.save()
+        #         # 推播訊息
+        #         account_id = API.stock_account.account_id
+        #         notifier.post_account_info(account_id, row)
+
+        #     elif hasattr(df, 'sheet_names') and account.account_name in df.sheet_names:
+        #         tables[acct] = pd.read_excel(
+        #             df, sheet_name=account.account_name)
+
+        #     else:
+        #         tables[acct] = account.DEFAULT_TABLE
+
+        #     # 登出
+        #     time.sleep(5)
+        #     logging.info(f'登出系統: {API.logout()}')
+        #     time.sleep(10)
+
+        # logging.info('儲存資訊')
+        # writer = pd.ExcelWriter(
+        #     f'{PATH}/daily_info/{account.filename}', engine='xlsxwriter')
+
+        # for sheet in tables:
+        #     try:
+        #         tables[sheet].to_excel(
+        #             writer, encoding='utf-8-sig', index=False, sheet_name=sheet)
+        #     except:
+        #         logging.exception('Catch an exception:')
+        #         tables[sheet].to_excel(
+        #             sheet+'.csv', encoding='utf-8-sig', index=False)
+        # writer.save()
     except:
         logging.exception('Catch an exception:')
         notifier.post('\n【Error】【帳務資訊查詢】發生異常', msgType='Tasker')
         API.logout()
 
 
-def runAutoTrader():
+def runAutoTrader(account):
     try:
         config = dotenv_values(f'./lib/envs/{account}.env')
         se = StrategyExecutor(config=config, kbar_script=KBarFeatureTool())
@@ -132,7 +163,7 @@ def runAutoTrader():
     del se
 
 
-def runCrawlStockData():
+def runCrawlStockData(account):
     target = pd.to_datetime('15:05:00')
     config = dotenv_values(f'./lib/envs/{account}.env')
     aInfo = AccountInfo()
@@ -173,8 +204,8 @@ def runCrawlStockData():
         logging.exception('Catch an exception:')
         notifier.post(f"\n【Error】【爬蟲程式】股價爬蟲發生異常", msgType='Tasker')
         if len(crawler1.StockData):
-            pd.concat(crawler1.StockData).to_pickle(
-                f'{crawler1.folder_path}/stock_data_1T.pkl')
+            df = pd.concat(crawler1.StockData)
+            df.to_pickle(f'{crawler1.folder_path}/stock_data_1T.pkl')
     finally:
         logging.info(f'登出系統: {API.logout()}')
 
@@ -314,14 +345,15 @@ def runSimulationChecker():
 
                     notifier.post(text, msgType='Monitor')
 
-                # update performance statement
-                df = se.read_statement(f'simulate-{account}')
-                df = convert_statement(df)
-                file_handler.save_table(
-                    df,
-                    f'{PATH}/stock_pool/trading_performance_{account}.xlsx',
-                    saveEmpty=True
-                )
+                # # update performance statement
+                # init_position = int(config['INIT_POSITION'])
+                # df = se.read_statement(f'simulate-{account}')
+                # df = convert_statement(df, init_position=init_position)
+                # file_handler.save_table(
+                #     df,
+                #     f'{PATH}/stock_pool/trading_performance_{account}.xlsx',
+                #     saveEmpty=True
+                # )
     except FileNotFoundError as e:
         logging.warning(e)
         notifier.post(f'\n{e}', msgType='Tasker')
@@ -330,47 +362,12 @@ def runSimulationChecker():
         notifier.post('\n【Error】【模擬帳戶檢查】發生異常', msgType='Tasker')
 
 
-args = parse_args()
-task = args.task
-account = args.account
-filename = account if task == 'auto_trader' else task
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s.%(msecs)03d|%(levelname)s: %(message)s',
-    datefmt='%Y-%m-%d %a %H:%M:%S',
-    handlers=[
-            logging.FileHandler(f'./logs/{filename}.log', 'a'),
-            logging.StreamHandler()
-    ]
-)
-logging.info('—'*250)
-logging.info(f'Current trader version is {ver}')
-
-if __name__ == "__main__":
-    date = pd.to_datetime(TODAY_STR)
-    if date in holidays:
-        logging.warning(f'{holidays[date]}不開盤')
-    else:
-        if task == 'account_info':
-            # runAccountInfo()
-            runSimulationChecker()
-        elif task == 'update_and_select_stock':
-            runCrawlStockData()
-            runSelectStock()
-            runCrawlFromHTML()
-        elif task == 'crawl_stock_data':
-            runCrawlStockData()
-        elif task == 'select_stock':
-            runSelectStock()
-        elif task == 'crawl_html':
-            runCrawlFromHTML()
-        elif task == 'auto_trader':
-            runAutoTrader()
-        elif task == 'subscribe':
-            runShioajiSubscriber()
-        else:
-            logging.warning(f"The input task 【{task}】 does not exist.")
-
-    logging.debug('End of tasker')
-    os._exit(0)
+Tasks = {
+    'account_info': [runAccountInfo, runSimulationChecker],
+    'update_and_select_stock': [runCrawlStockData, runSelectStock, runCrawlFromHTML],
+    'crawl_stock_data': [runCrawlStockData], 
+    'select_stock': [runSelectStock],
+    'crawl_html': [runCrawlFromHTML],
+    'auto_trader': [runAutoTrader],
+    'subscribe': [runShioajiSubscriber],
+}

@@ -55,8 +55,8 @@ def convert_statement(df, mode='trading', **kwargs):
 
         for index, row in tb.iterrows():
             sub_string = f'【{row.Code}】{row.Strategy}'
-            tb.at[index, 'OpenReason'] = row.OpenReason.replace(sub_string, '')
-            tb.at[index, 'CloseReason'] = row.CloseReason.replace(sub_string, '')
+            tb.at[index, 'OpenReason'] = row.OpenReason.replace(sub_string, '').replace('-', '')
+            tb.at[index, 'CloseReason'] = row.CloseReason.replace(sub_string, '').replace('-', '')
         return tb
 
     else:
