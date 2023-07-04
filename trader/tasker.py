@@ -7,7 +7,7 @@ from concurrent.futures import as_completed
 
 from . import executor, notifier, picker, crawler1, crawler2, tdp, file_handler
 from .create_env import app
-from .config import API, PATH, TODAY_STR
+from .config import API, PATH, TODAY, TODAY_STR
 from .config import ACCOUNTS, TEnd, SelectMethods, ConvertScales
 from .utils.database import redis_tick
 from .utils.subscribe import Subscriber
@@ -52,12 +52,13 @@ def runAccountInfo():
         for env in ACCOUNTS:
             logging.debug(f'Load 【{env}】 config')
             config = dotenv_values(f'./lib/envs/{env}.env')
+            init_position = int(config['INIT_POSITION'])
             se = StrategyExecutor(config=config)
 
             # update performance statement
-            init_position = int(config['INIT_POSITION'])
             df = se.read_statement(f'simulate-{env}')
             df = convert_statement(df, init_position=init_position)
+            df = df[df.CloseTime.dt.month == TODAY.month]
 
             results = {}
             for stra in df.Strategy.unique():
@@ -77,7 +78,7 @@ def runAccountInfo():
             df_config = concat_strategy_table(results, 'Configuration')
             df_summary = concat_strategy_table(results, 'Summary')
 
-            filename = f'{PATH}/daily_info/{TODAY_STR}-performance-{env}.xlsx'
+            filename = f'{PATH}/daily_info/{TODAY_STR[:-3]}-performance-{env}.xlsx'
             writer = pd.ExcelWriter(filename, engine='xlsxwriter')
             for data, sheet_name in [
                 (df_config, 'Configuration'),
@@ -353,15 +354,6 @@ def runSimulationChecker():
 
                     notifier.post(text, msgType='Monitor')
 
-                # # update performance statement
-                # init_position = int(config['INIT_POSITION'])
-                # df = se.read_statement(f'simulate-{account}')
-                # df = convert_statement(df, init_position=init_position)
-                # file_handler.save_table(
-                #     df,
-                #     f'{PATH}/stock_pool/trading_performance_{account}.xlsx',
-                #     saveEmpty=True
-                # )
     except FileNotFoundError as e:
         logging.warning(e)
         notifier.post(f'\n{e}', msgType='Tasker')

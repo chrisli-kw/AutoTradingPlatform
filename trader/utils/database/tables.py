@@ -290,7 +290,7 @@ class TradingStatement(Base):
         Integer, primary_key=True, autoincrement=True, nullable=False)
 
     Time = Column(
-        TIMESTAMP(fsp=6), server_default=time_default, comment='除權除息日期')
+        TIMESTAMP(fsp=6), server_default=time_default, comment='交易日期')
     market = Column(String(10, collation), nullable=False, comment='市場別')
     account_id = Column(
         String(50, collation), default='unknown', comment='帳號別')

@@ -166,15 +166,8 @@ class BacktestPerformance(FileHandler):
                 result['daily_info'] = None
                 if db.HAS_DB:
                     table = KBarTables[self.scale]
-                    df_TSE = db.query(
+                    table = db.query(
                         table,
-                        table.name == '1',
-                        table.date >= start,
-                        table.date <= end
-                    )
-                    df_OTC = db.query(
-                        table,
-                        table.name == '101',
                         table.date >= start,
                         table.date <= end
                     )
@@ -185,8 +178,9 @@ class BacktestPerformance(FileHandler):
                         (table.date >= start) & 
                         (table.date <= end)
                     ]
-                    df_TSE = table[table.name == '1']
-                    df_OTC = table[table.name == '101']
+                
+                df_TSE = table[table.name == '1']
+                df_OTC = table[table.name == '101']
                 
                 tse_return = computeReturn(df_TSE, 'Open', 'Close')
                 otc_return = computeReturn(df_OTC, 'Open', 'Close')
@@ -200,6 +194,21 @@ class BacktestPerformance(FileHandler):
             days = (df.CloseTime.max() - df.OpenTime.min()).days
             anaualized_return = 100*round(total_return**(365/days) - 1, 2)
 
+            if df.shape[0] >= 5:
+                std = df.balance.rolling(5).std().median() 
+            else:
+                std = 0
+            
+            if days_p['n']:
+                max_win_days = f"{days_p['start']} ~ {days_p['end']}，共{days_p['n']}天"
+            else:
+                max_win_days = '無'
+                
+            if days_n['n']:
+                max_loss_days = f"{days_n['start']} ~ {days_n['end']}，共{days_n['n']}天"
+            else:
+                max_loss_days = '無'
+
             # 摘要
             summary = pd.DataFrame([{
                 '期末資金': AccountingNumber(round(balance)),
@@ -208,15 +217,15 @@ class BacktestPerformance(FileHandler):
                 '淨利': AccountingNumber(profits['TotalProfit']),
                 '平均獲利': AccountingNumber(profits['MeanProfit']),
                 '平均虧損': AccountingNumber(profits['MeanLoss']),
-                '淨值波動度': round(df.balance.rolling(5).std().median()),
+                '淨值波動度': AccountingNumber(round(std)),
                 '總報酬(與大盤比較)': f"{round(100*(total_return - 1), 2)}%",
                 '指數報酬(TSE/OTC)': f"{tse_return}%/{otc_return}%",
                 '年化報酬率': f"{AccountingNumber(anaualized_return)}%",
-                '最大單筆獲利': AccountingNumber(round(df.profit.max(), 0)),
-                '最大單筆虧損': AccountingNumber(round(df.profit.min(), 0)),
-                "最大區間獲利": f"{days_p['start']} ~ {days_p['end']}，共{days_p['n']}天",
+                '最大單筆獲利': AccountingNumber(profits['MaxProfit']),
+                '最大單筆虧損': AccountingNumber(profits['MaxLoss']),
+                "最大區間獲利": max_win_days,
                 "最大連續獲利": f"${AccountingNumber(days_p['amount'])}",
-                "最大區間虧損": f"{days_n['start']} ~ {days_n['end']}，共{days_n['n']}天",
+                "最大區間虧損": max_loss_days,
                 "最大連續虧損": f"${AccountingNumber(days_n['amount'])}",
                 '全部平均持倉K線數': round(df.KRun.mean(), 1),
                 '獲利平均持倉K線數': profits['KRunProfit'],
