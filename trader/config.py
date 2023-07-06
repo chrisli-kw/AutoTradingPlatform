@@ -86,6 +86,7 @@ class StrategyNameList:
     Long = StrategyLongNDT + StrategyLongDT
     Short = StrategyShortNDT + StrategyShortDT
     DayTrade = StrategyLongDT + StrategyShortDT
+    Code = {stra: f'Strategy{i+1}' for i, stra in enumerate(All)}
 
 StrategyList = StrategyNameList()
 

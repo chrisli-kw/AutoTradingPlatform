@@ -7,14 +7,13 @@ from concurrent.futures import as_completed
 
 from . import executor, notifier, picker, crawler1, crawler2, tdp, file_handler
 from .create_env import app
-from .config import API, PATH, TODAY, TODAY_STR
+from .config import API, PATH, TODAY_STR
 from .config import ACCOUNTS, TEnd, SelectMethods, ConvertScales
 from .utils.database import redis_tick
 from .utils.subscribe import Subscriber
 from .utils.accounts import AccountInfo
 from .executor import StrategyExecutor
-from .performance.base import convert_statement
-from .performance.backtest import BacktestPerformance
+from .performance.reports import PerformanceReporter
 from .scripts.features import KBarFeatureTool
 from .scripts import __BacktestScripts__ as bts
 
@@ -27,67 +26,20 @@ def runCreateENV():
 
 
 def runAccountInfo():
-
-    def concat_strategy_table(results: dict, table_name: str):
-        df = pd.DataFrame()
-        for k, v in results.items():
-            if table_name == 'Configuration':
-                temp = v.Configuration
-            else:
-                temp = v.Summary
-            temp = temp.rename(columns={'Description': k}).set_index('Content')
-            df = pd.concat([df, temp], axis=1)
-        return df.reset_index()
-
     # account = AccountInfo()
     # df = account.create_info_table()
     # tables = {}
-    scripts_ = {
-        k[:-3]: v for k, v in bts.__dict__.items()
-        if ('T' in k or 'D' in k) and (k[:-3] in SelectMethods)
-    }
 
     try:
         logging.debug(f'ACCOUNTS: {ACCOUNTS}')
         for env in ACCOUNTS:
             logging.debug(f'Load 【{env}】 config')
             config = dotenv_values(f'./lib/envs/{env}.env')
-            init_position = int(config['INIT_POSITION'])
-            se = StrategyExecutor(config=config)
 
-            # update performance statement
-            df = se.read_statement(f'simulate-{env}')
-            df = convert_statement(df, init_position=init_position)
-            df = df[df.CloseTime.dt.month == TODAY.month]
-
-            results = {}
-            for stra in df.Strategy.unique():
-                backtest_config = scripts_[stra]
-                bp = BacktestPerformance(backtest_config)
-                statement = df[df.Strategy == stra]
-
-                result = dict(
-                    init_position=init_position,
-                    unit=int(init_position/100000),
-                    buyOrder='Close',
-                    statement=statement,
-                )
-                performance = bp.get_backtest_result(**result)
-                results[stra] = performance
-
-            df_config = concat_strategy_table(results, 'Configuration')
-            df_summary = concat_strategy_table(results, 'Summary')
-
-            filename = f'{PATH}/daily_info/{TODAY_STR[:-3]}-performance-{env}.xlsx'
-            writer = pd.ExcelWriter(filename, engine='xlsxwriter')
-            for data, sheet_name in [
-                (df_config, 'Configuration'),
-                (df_summary, 'Summary'),
-                (df, 'Statement')
-            ]:
-                data.to_excel(
-                    writer, encoding='utf-8-sig', index=False, sheet_name=sheet_name)
-            writer.save()
+            pr = PerformanceReporter(env)
+            Tables = pr.getTables(config)
+            pr.save_tables(Tables)
+            pr.plot_performance_report(Tables, save=True)
 
         #     API_KEY = config['API_KEY']
         #     SECRET_KEY = config['SECRET_KEY']

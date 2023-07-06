@@ -50,7 +50,8 @@ class BacktestPerformance(FileHandler):
         self.DATAPATH = f'{PATH}/backtest'
         self.ResultInfo = namedtuple(
             typename="TestResult",
-            field_names=['Configuration', 'Summary', 'Statement', 'DailyInfo']
+            field_names=['Configuration', 'Summary', 'Statement', 'DailyInfo'],
+            defaults=[None]*4
         )
 
     def process_daily_info(self, df: pd.DataFrame, **result):
