@@ -1,14 +1,18 @@
+import logging
 import numpy as np
 import pandas as pd
 from datetime import timedelta
 
 from ..config import PATH, TODAY_STR, TODAY
-from ..scripts.conditions import SelectConditions
-from .file import FileHandler
 from .time import TimeTool
+from .file import FileHandler
 from .database import db, KBarTables
 from .database.tables import SelectedStocks
-
+try:
+    from ..scripts.conditions import SelectConditions
+except:
+    logging.warning('Cannot import SelectConditions from package.')
+    SelectConditions = None
 
 def map_BKD(OTCclose, OTChigh, add_days=10):
     for d in range(80, 0, -10):
@@ -18,12 +22,14 @@ def map_BKD(OTCclose, OTChigh, add_days=10):
     return None
 
 
-class SelectStock(SelectConditions, TimeTool, FileHandler):
+class SelectStock(TimeTool, FileHandler):
     def __init__(self, d_shift=0, dma=5, mode='select', scale='1D'):
         self.d_shift = d_shift
         self.dma = dma
         self.mode = mode
         self.scale = scale
+        self.Preprocess = {}
+        self.METHODS = {}
         self.categories = {
             1: '水泥工業',
             2: '食品工業',
@@ -60,13 +66,18 @@ class SelectStock(SelectConditions, TimeTool, FileHandler):
             80: '管理股票'
         }
 
-    def set_select_methods(self, methods):
-        self.Preprocess = {
-            m: getattr(self, f'preprocess_{m}') for m in methods}
-        self.METHODS = {m: getattr(self, f'condition_{m}') for m in methods}
+    def setScripts(self, methods: list=[]):
+        '''Set preprocess & stock selection scripts'''
+        
+        if SelectConditions:
+            scripts = SelectConditions()
+            self.Preprocess = {
+                m: getattr(scripts, f'preprocess_{m}') for m in methods}
+            self.METHODS = {
+                m: getattr(scripts, f'condition_{m}') for m in methods}
 
     def load_and_merge(self):
-        # TODO: 加入籌碼資料、自選資料
+        # TODO: 加入自選資料
         if db.HAS_DB:
             if self.mode == 'select':
                 start = TODAY - timedelta(days=365*2)
@@ -192,14 +203,13 @@ class SelectStock(SelectConditions, TimeTool, FileHandler):
     def get_selection_files(self):
         '''取得選股清單'''
 
-        filename = f'{PATH}/selections/all.csv'
         day = self.last_business_day()
 
         if db.HAS_DB:
             df = db.query(SelectedStocks, SelectedStocks.date == day)
         else:
             df = self.read_table(
-                filename=filename,
+                filename=f'{PATH}/selections/all.csv',
                 df_default=pd.DataFrame(columns=[
                     'code', 'company_name', 'category', 'date', 
                     'Open', 'High', 'Low', 'Close', 

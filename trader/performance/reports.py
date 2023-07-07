@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import pandas as pd
 from datetime import timedelta
@@ -5,15 +6,21 @@ from collections import namedtuple
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from trader.config import PATH, TODAY, TODAY_STR, SelectMethods, StrategyNameList
-from trader.utils.time import TimeTool
-from trader.utils.file import FileHandler
-from trader.utils.orders import OrderTool
-from trader.utils.database import db, KBarTables
-from trader.utils.database.tables import SelectedStocks
-from trader.performance.base import convert_statement
-from trader.performance.backtest import BacktestPerformance
-from trader.scripts import __BacktestScripts__ as bts
+from ..config import PATH, TODAY, TODAY_STR, SelectMethods, StrategyNameList
+from ..utils.time import TimeTool
+from ..utils.file import FileHandler
+from ..utils.orders import OrderTool
+from ..utils.database import db, KBarTables
+from ..utils.database.tables import SelectedStocks
+from ..performance.base import convert_statement
+from ..performance.backtest import BacktestPerformance
+try:
+    from ..scripts import __BacktestScripts__
+except:
+    logging.warning('Cannot import __BacktestScripts__ from package.')
+    __BacktestScripts__ = None
+
+bts = __BacktestScripts__.__dict__ if __BacktestScripts__ else {}
 
 
 class PerformanceReporter(OrderTool, TimeTool, FileHandler):
@@ -26,7 +33,7 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
             defaults=[None]*4
         )
         self.Scripts = {
-            k[:-3]: v for k, v in bts.__dict__.items()
+            k[:-3]: v for k, v in bts.items()
             if ('T' in k or 'D' in k) and (k[:-3] in SelectMethods)
         }
         self.strategies = []
@@ -189,7 +196,6 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
 
         for stra, color in zip(self.strategies, colors):
             name=StrategyNameList.Code[stra]
-            print(name)
 
             # 每日選股數
             tb1 = df_select[df_select.Strategy == stra]

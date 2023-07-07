@@ -33,7 +33,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 
 class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscriber):
-    def __init__(self, config=None, kbar_script=None):
+    def __init__(self, config=None):
         self.ct = CipherTool(decrypt=True, encrypt=False)
         self.CONFIG = config
 
@@ -125,7 +125,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             stock_limit_short=self.N_LIMIT_SS,
             futures_limit=self.N_FUTURES_LIMIT,
         )
-        self.set_kbar_scripts(kbar_script)
 
     def getENV(self, key: str, _type: str = 'text'):
         if self.CONFIG and key in self.CONFIG:

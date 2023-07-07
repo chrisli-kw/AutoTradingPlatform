@@ -14,8 +14,6 @@ from .utils.subscribe import Subscriber
 from .utils.accounts import AccountInfo
 from .executor import StrategyExecutor
 from .performance.reports import PerformanceReporter
-from .scripts.features import KBarFeatureTool
-from .scripts import __BacktestScripts__ as bts
 
 
 def runCreateENV():
@@ -100,7 +98,7 @@ def runAccountInfo():
 def runAutoTrader(account):
     try:
         config = dotenv_values(f'./lib/envs/{account}.env')
-        se = StrategyExecutor(config=config, kbar_script=KBarFeatureTool())
+        se = StrategyExecutor(config=config)
         se.login_and_activate()
         se.run()
     except KeyboardInterrupt:
@@ -173,7 +171,7 @@ def runCrawlStockData(account):
 
 def runSelectStock():
     try:
-        picker.set_select_methods(SelectMethods)
+        picker.setScripts(SelectMethods)
         df = picker.pick(3, 1.8, 3)
         df = picker.melt_table(df)
         tb = df[df.date == TODAY_STR].reset_index(drop=True)

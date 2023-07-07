@@ -8,13 +8,19 @@ from datetime import datetime, timedelta
 from ..config import API, PATH, TODAY, TODAY_STR, TimeStartStock, TimeEndStock
 from ..config import K15min_feature, K30min_feature, K60min_feature
 from ..indicators.signals import TechnicalSignals
-from . import progress_bar, get_contract
+from . import get_contract
 from .time import TimeTool
 from .file import FileHandler
+try:
+    from ..scripts.features import KBarFeatureTool
+except:
+    logging.warning('Cannot import KBarFeatureTool from package.')
+    KBarFeatureTool = None
 
 
 class KBarTool(TechnicalSignals, TimeTool, FileHandler):
     def __init__(self, kbar_start_day=''):
+        self.set_kbar_scripts()
         self.daysdata = self.__set_daysdata(kbar_start_day)
         self.maps = {
             'name': 'first',
@@ -47,10 +53,11 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
 
         return max((TODAY - kbar_start_day).days, 35)
 
-    def set_kbar_scripts(self, featureScript: object):
+    def set_kbar_scripts(self):
         '''設定K線特徵腳本'''
 
-        if featureScript:
+        if KBarFeatureTool:
+            featureScript = KBarFeatureTool()
             if hasattr(featureScript, 'add_KDay_feature'):
                 @self.on_add_KDay_feature()
                 def _add_KDay_feature(df):
