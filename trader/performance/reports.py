@@ -29,6 +29,15 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
             k[:-3]: v for k, v in bts.__dict__.items()
             if ('T' in k or 'D' in k) and (k[:-3] in SelectMethods)
         }
+        self.strategies = []
+
+    def getStrategyList(self, df: pd.DataFrame):
+        '''Get strategy list in code order'''
+        
+        strategies = pd.DataFrame([StrategyNameList.Code]).T.reset_index()
+        strategies.columns = ['name', 'code']
+        strategies = strategies[strategies.name.isin(df.Strategy)].name.values
+        return strategies
 
     def getTables(self, config):
 
@@ -49,8 +58,9 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
         df = convert_statement(df, init_position=init_position)
         df = df[df.CloseTime.dt.month == TODAY.month]
 
+        self.strategies = self.getStrategyList(df)
         results = {}
-        for stra in df.Strategy.unique():
+        for stra in self.strategies:
             backtest_config = self.Scripts[stra]
             bp = BacktestPerformance(backtest_config)
             statement = df[df.Strategy == stra]
@@ -160,7 +170,10 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
         )
         fig = make_subplots(rows=3, cols=2, subplot_titles=subplot_titles)
 
-        strategies = df.Strategy.unique()
+        
+        if self.strategies == []:
+            self.strategies = self.getStrategyList(df)
+        
         colors = [
             'rgb(22, 65, 192)',
             'rgb(16, 154, 246)',
@@ -172,10 +185,11 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
             'rgb(49, 246, 240)',
             'rgb(128, 229, 249)',
             'rgb(139, 186, 234)',
-        ][:strategies.shape[0]]
+        ][:len(self.strategies)]
 
-        for stra, color in zip(strategies, colors):
+        for stra, color in zip(self.strategies, colors):
             name=StrategyNameList.Code[stra]
+            print(name)
 
             # 每日選股數
             tb1 = df_select[df_select.Strategy == stra]
