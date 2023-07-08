@@ -45,7 +45,7 @@ logging.info(f'Current trader version is {ver}')
 
 if __name__ == "__main__":
     date = pd.to_datetime(TODAY_STR)
-    if date in holidays:
+    if task != 'create_env' and date in holidays:
         logging.warning(f'{holidays[date]}不開盤')
     elif task in Tasks:
         functions = Tasks[task]

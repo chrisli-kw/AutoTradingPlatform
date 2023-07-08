@@ -36,6 +36,7 @@ def _create_env(inputs):
         API_KEY = {inputs['API_KEY']}
         SECRET_KEY = {inputs['SECRET_KEY']}
         ACCOUNT_ID = {inputs['ACCOUNT_ID']}
+        CA_PASSWD = {inputs['CA_PASSWD']}
 
         # 崩盤日
         KBAR_START_DAYay=
@@ -117,13 +118,11 @@ def _create_env(inputs):
 def _create_bat(account_name):
     myBat = open(f'./lib/schedules/auto_trader_{account_name}.bat', 'w+')
     myBat.write(
-        f"""call %~dp0/set_conda_env.bat
+        f"""call C:/Users/%username%/anaconda3/Scripts/activate.bat
 
-        call %cond%
+        cd /d %~dp0/../..
 
-        cd /d %~dp0/../../..
-
-        set SJ_LOG_PATH=%~dp0/../../../logs/shioaji.log
+        set SJ_LOG_PATH=%~dp0/../../logs/shioaji.log
 
         python run.py -TASK auto_trader -ACCT {account_name}
         """.replace('        ', ''))
@@ -168,5 +167,3 @@ def account_result():
 
     result = {'msg': '新增成功'}
     return render_template('account_result.html', result=result)
-
-

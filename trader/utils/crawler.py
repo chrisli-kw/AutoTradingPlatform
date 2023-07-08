@@ -129,8 +129,8 @@ class CrawlStockData(FileHandler):
                     filename = f'{PATH}/Kbars/{self.filename}_{self.scale}.pkl'
                     ref = self.timetool.last_business_day()
                     last_end = self.read_table(
-                        filename=filename, 
-                        df_default=pd.DataFrame({'date':[ref]})
+                        filename=filename,
+                        df_default=pd.DataFrame({'date': [ref]})
                     ).date.max()
                 start = self.timetool._strf_timedelta(last_end, -1)
             else:
@@ -250,11 +250,11 @@ class CrawlStockData(FileHandler):
             df = self.export_kbar_data(df, scale)
 
         return df
-    
+
     def merge_daily_data(self, day: datetime, scale: str, save=True):
         if not isinstance(day, datetime):
             day = pd.to_datetime(day)
-            
+
         last_day = self.timetool.last_business_day(day)
         if last_day.month != day.month:
             dir_path = f'{PATH}/Kbars/{scale}'
@@ -518,9 +518,12 @@ class CrawlFromHTML(TimeTool, FileHandler):
             result = json.loads(result.text)
             if 'data' not in result:
                 result['data'] = {'c': []}
+        except requests.exceptions.ConnectionError as e:
+            logging.warning(e)
+            result = {'data': {'c': []}}
         except:
             logging.exception('【Error】DowJones:')
-            result['data'] = {'c': []}
+            result = {'data': {'c': []}}
 
         return result['data']['c']
 

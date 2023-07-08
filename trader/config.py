@@ -10,12 +10,12 @@ TODAY = datetime.today()
 TODAY_STR = TODAY.strftime("%Y-%m-%d")
 PATH = './data'
 
-config = configparser.ConfigParser()
-config.read('./lib/config.ini', encoding='utf8')
+SystemConfig = configparser.ConfigParser()
+SystemConfig.read('./lib/config.ini', encoding='utf8')
 
 
 def getList(section, option):
-    content = config.get(section, option)
+    content = SystemConfig.get(section, option)
     if len(content) > 0:
         return content.replace(' ', '').split(',')
     return []
@@ -23,16 +23,19 @@ def getList(section, option):
 
 def get_settings(section, option, dataType='str'):
     funcs = {
-        'str': config.get,
-        'int': config.getint,
-        'float': config.getfloat,
-        'bool': config.getboolean,
+        'str': SystemConfig.get,
+        'int': SystemConfig.getint,
+        'float': SystemConfig.getfloat,
+        'bool': SystemConfig.getboolean,
         'list': getList
     }
-    if section in config.sections():
-        options = config.options(section)
+    if section in SystemConfig.sections():
+        options = SystemConfig.options(section)
         if options and option.lower() in options:
-            return funcs[dataType](section, option)
+            try:
+                return funcs[dataType](section, option)
+            except:
+                return SystemConfig.get(section, option)
     return ''
 
 
@@ -75,7 +78,7 @@ DB_URL = f'{DB_USER}:{DB_PWD}@{DB_HOST}:{DB_PORT}' if HAS_DB else ''
 TOKEN_MONITOR = get_settings('LINENOTIFY', 'TOKEN_MONITOR')
 TOKEN_INFO = get_settings('LINENOTIFY', 'TOKEN_INFO')
 
-# 策略相關
+
 class StrategyNameList:
     StrategyLongNDT = get_settings('STRATEGY', 'Long', dataType='list')
     StrategyShortNDT = get_settings('STRATEGY', 'Short', dataType='list')
@@ -88,6 +91,8 @@ class StrategyNameList:
     DayTrade = StrategyLongDT + StrategyShortDT
     Code = {stra: f'Strategy{i+1}' for i, stra in enumerate(All)}
 
+
+# 策略相關
 StrategyList = StrategyNameList()
 
 # 交易相關

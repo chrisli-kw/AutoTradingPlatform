@@ -138,7 +138,7 @@ class StrategyTool:
         if now > TimeTransferFutures:
             return self.Action(100, '轉倉', f'{target} 轉倉-Cover')
         return self.Action()
-    
+
     def isLong(self, strategy: str):
         '''Check if a strategy is a long strategy.'''
         return strategy in StrategyList.Long

@@ -41,7 +41,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.ACCOUNT_NAME = self.getENV('ACCOUNT_NAME')
         self.__API_KEY__ = self.getENV('API_KEY')
         self.__SECRET_KEY__ = self.getENV('SECRET_KEY')
-        self.__ACCOUNT_ID__ = self.getENV('ACCOUNT_ID', 'code')
+        self.__ACCOUNT_ID__ = self.getENV('ACCOUNT_ID', 'decrypt')
+        self.__CA_PASSWD__ = self.getENV('CA_PASSWD', 'decrypt')
 
         # 股票使用者設定
         self.KBAR_START_DAYay = self.getENV('KBAR_START_DAYay', 'date')
@@ -126,24 +127,26 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             futures_limit=self.N_FUTURES_LIMIT,
         )
 
-    def getENV(self, key: str, _type: str = 'text'):
+    def getENV(self, key: str, type_: str = 'text'):
         if self.CONFIG and key in self.CONFIG:
             env = self.CONFIG[key]
 
-            if _type == 'int':
+            if type_ == 'int':
                 return int(env)
-            elif _type == 'list':
+            elif type_ == 'list':
                 if 'none' in env.lower():
                     return []
                 return env.replace(' ', '').split(',')
-            elif _type == 'date' and env:
+            elif type_ == 'date' and env:
                 return pd.to_datetime(env)
-            elif _type == 'code':
+            elif type_ == 'decrypt':
+                if not env or (not env[0].isdigit() and env[1:].isdigit()):
+                    return env
                 return self.ct.decrypt(env)
             return env
-        elif _type == 'int':
+        elif type_ == 'int':
             return 0
-        elif _type == 'list':
+        elif type_ == 'list':
             return []
         return None
 
@@ -389,9 +392,13 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         # 啟動憑證 (Mac 不需啟動)
         if platform != 'darwin':
             logging.info(f'Activate {self.ACCOUNT_NAME} CA')
+            if self.__CA_PASSWD__:
+                ca_passwd = self.__CA_PASSWD__
+            else:
+                ca_passwd = self.__ACCOUNT_ID__
             API.activate_ca(
                 ca_path=f"./lib/ekey/551/{self.__ACCOUNT_ID__}/S/Sinopac.pfx",
-                ca_passwd=self.__ACCOUNT_ID__,
+                ca_passwd=ca_passwd,
                 person_id=self.__ACCOUNT_ID__,
             )
 
@@ -534,7 +541,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
                 day = TODAY_STR.replace('-', '/')
                 df['isDue'] = df.CodeName.apply(
-                    lambda x:day == get_contract(x).delivery_date)
+                    lambda x: day == get_contract(x).delivery_date)
             return df
 
         if not self.can_futures:
@@ -798,14 +805,15 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 self._log_and_notify(msg)
                 self.futures_transferred.pop(target)
                 return self.OrderInfo(**infos)
-            
+
             c1 = octype == 'New' and enoughOpen and not self.is_not_trade_day(
                 inputs['datetime'])
             c2 = octype == 'Cover'
             if quantity and (c1 or c2):
                 is_day_trade = self.StrategySet.isDayTrade(strategy)
                 tradeType = '當沖' if is_day_trade else '非當沖'
-                isTransfer = (actionType == 'Close') and 'isDue' in data and data['isDue']
+                isTransfer = (
+                    actionType == 'Close') and 'isDue' in data and data['isDue']
                 if isTransfer:
                     func = self.StrategySet.transfer_position
                 else:
@@ -825,7 +833,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     if isTransfer:
                         new_target = f'{target[:3]}{self.GetDueMonth(TODAY)}'
                         self.futures_transferred.update({new_target: quantity})
-                        
+
                     infos = dict(
                         action_type=actionType,
                         action=action,
