@@ -14,10 +14,10 @@ from ..utils.select import SelectStock
 from ..utils.database import db, KBarTables
 from ..utils.database.tables import PutCallRatioList
 from .base import (
-    AccountingNumber, 
-    compute_profits, 
-    computeReturn, 
-    computeWinLoss, 
+    AccountingNumber,
+    compute_profits,
+    computeReturn,
+    computeWinLoss,
     convert_statement
 )
 from .charts import BacktestFigures
@@ -176,16 +176,16 @@ class BacktestPerformance(FileHandler):
                     dir_path = f'{PATH}/KBars/{self.scale}'
                     table = self.read_tables_in_folder(dir_path)
                     table = table[
-                        (table.date >= start) & 
+                        (table.date >= start) &
                         (table.date <= end)
                     ]
-                
+
                 df_TSE = table[table.name == '1']
                 df_OTC = table[table.name == '101']
-                
+
                 tse_return = computeReturn(df_TSE, 'Open', 'Close')
                 otc_return = computeReturn(df_OTC, 'Open', 'Close')
-                
+
             # 總報酬率
             profits = compute_profits(df)
             balance = result['init_position'] + profits['TotalProfit']
@@ -196,15 +196,15 @@ class BacktestPerformance(FileHandler):
             anaualized_return = 100*round(total_return**(365/days) - 1, 2)
 
             if df.shape[0] >= 5:
-                std = df.balance.rolling(5).std().median() 
+                std = df.balance.rolling(5).std().median()
             else:
                 std = 0
-            
+
             if days_p['n']:
                 max_win_days = f"{days_p['start']} ~ {days_p['end']}，共{days_p['n']}天"
             else:
                 max_win_days = '無'
-                
+
             if days_n['n']:
                 max_loss_days = f"{days_n['start']} ~ {days_n['end']}，共{days_n['n']}天"
             else:

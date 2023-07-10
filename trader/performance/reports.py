@@ -12,8 +12,9 @@ from ..utils.file import FileHandler
 from ..utils.orders import OrderTool
 from ..utils.database import db, KBarTables
 from ..utils.database.tables import SelectedStocks
-from ..performance.base import convert_statement
-from ..performance.backtest import BacktestPerformance
+from .base import convert_statement
+from .backtest import BacktestPerformance
+from .charts import add_candlestick
 try:
     from ..scripts import __BacktestScripts__
 except:
@@ -40,7 +41,7 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
 
     def getStrategyList(self, df: pd.DataFrame):
         '''Get strategy list in code order'''
-        
+
         strategies = pd.DataFrame([StrategyNameList.Code]).T.reset_index()
         strategies.columns = ['name', 'code']
         strategies = strategies[strategies.name.isin(df.Strategy)].name.values
@@ -96,7 +97,7 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
             writer, encoding='utf-8-sig', index=False, sheet_name='Statement')
 
         writer.save()
-    
+
     def getSelections(self, statement):
         start = self.last_business_day(statement.OpenTime.values[0])
         if db.HAS_DB:
@@ -115,17 +116,18 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
             statement.set_index('Strategy').isLong.to_dict()
         )
         return df
-    
+
     def getKbarTable(self, df_select: pd.DataFrame):
         start = df_select.date.min()
         end = df_select.date.max() + timedelta(days=20)
+        names = df_select.code.to_list() + ['1', '101']
         if db.HAS_DB:
             df = KBarTables['1D']
             df = db.query(
                 df,
                 df.date >= start,
                 df.date <= end,
-                df.name.in_(df_select.code)
+                df.name.in_(names)
             )
         else:
             dir_path = f'{PATH}/KBars/1D'
@@ -133,22 +135,23 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
             df = df[
                 (df.date >= start) &
                 (df.date <= end) &
-                df.name.isin(df_select.code)
+                df.name.isin(names)
             ]
         df = df.sort_values(['name', 'date']).reset_index(drop=True)
         return df
-    
-    def plot_performance_report(self, Tables: namedtuple = None, save=True):
-        if Tables is None:            
-            df = pd.read_excel(self.TablesFile, sheet_name='Statement')
 
+    def plot_performance_report(self, Tables: namedtuple = None, save=True):
+        if Tables is None:
+            df = pd.read_excel(self.TablesFile, sheet_name='Statement')
+            df_config = pd.read_excel(self.TablesFile, sheet_name='Configuration')
             df_summary = pd.read_excel(self.TablesFile, sheet_name='Summary')
             df_summary.iloc[22, 1:] = df_summary.iloc[22, 1:].apply(
                 lambda x: float(x.replace('%', '')))
         else:
             df = Tables.Statement
+            df_config = Tables.Configuration
             df_summary = Tables.Summary
-        
+
         df.OpenTime = df.OpenTime.dt.date
         df.CloseTime = df.CloseTime.dt.date
 
@@ -167,20 +170,22 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
         tb['profit'].sum()
 
         # Make Plots
-        subplot_titles=(
-            '每日選股數',
-            '累積獲利',
-            '選股後5天漲幅',
-            '實際交易獲利',
-            "交易量",
-            "獲利因子/盈虧比",
+        subplot_titles = (
+            "TWSE",
+            "OTC",
+            'Number of Daily Selections',
+            'Accumulated Profits',
+            '5-day Percentage Change After Selection',
+            'Actual Trading Profits',
+            "Trading Volume",
+            "Profit Factor/Profit Ratio",
         )
-        fig = make_subplots(rows=3, cols=2, subplot_titles=subplot_titles)
+        specs = [[{'secondary_y': True}]*2] + [[{}, {}]]*3
+        fig = make_subplots(rows=4, cols=2, subplot_titles=subplot_titles, specs=specs)
 
-        
         if self.strategies == []:
             self.strategies = self.getStrategyList(df)
-        
+
         colors = [
             'rgb(22, 65, 192)',
             'rgb(16, 154, 246)',
@@ -194,8 +199,13 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
             'rgb(139, 186, 234)',
         ][:len(self.strategies)]
 
+        # Candlesticks
+        for name, col in [['1', 1], ['101', 2]]:
+            temp = table[table.name == name]
+            fig = add_candlestick(fig, temp, 1, col)
+
         for stra, color in zip(self.strategies, colors):
-            name=StrategyNameList.Code[stra]
+            name = StrategyNameList.Code[stra]
 
             # 每日選股數
             tb1 = df_select[df_select.Strategy == stra]
@@ -214,9 +224,9 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
                     stackgroup='one',
                     text=[name if x == max_point else '' for x in tb1.code],
                     textfont=dict(color='rgb(157, 42, 44)'),
-                    textposition = 'top center',
+                    textposition='top center',
                 ),
-                row=1,
+                row=2,
                 col=1
             )
 
@@ -229,7 +239,7 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
                     marker_color=color,
                     nbinsx=50,
                 ),
-                row=2,
+                row=3,
                 col=1
             )
 
@@ -244,13 +254,14 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
                     marker_color=color,
                     mode='markers',
                 ),
-                row=2,
+                row=3,
                 col=2
             )
 
             # 累積獲利
+            init_position = int(df_config.loc[0, stra].replace(',', ''))
             tb2 = tb2.groupby('CloseTime').profit.sum().reset_index()
-            tb2['cumsum_profit'] = tb2.profit.cumsum()
+            tb2['cumsum_profit'] = 100*(tb2.profit.cumsum()/init_position)
             max_point = tb2.cumsum_profit.max()
             fig.add_trace(
                 go.Scatter(
@@ -263,19 +274,18 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
                     fill='tozeroy',
                     text=[name if x == max_point else '' for x in tb2.cumsum_profit],
                     textfont=dict(color='rgb(157, 42, 44)'),
-                    textposition = 'top left',
+                    textposition='top left',
                 ),
-                row=1,
+                row=2,
                 col=2
             )
-            fig.update_yaxes(tickvals=[0], row=1, col=2)
 
         # 交易量 & 獲利因子/盈虧比
         colors = [
             'rgb(252, 193, 74)',
-            'hsl(51, 55%, 82%)', 
-            'rgb(245, 126, 0)', 
-            'rgb(17, 76, 95)', 
+            'hsl(51, 55%, 82%)',
+            'rgb(245, 126, 0)',
+            'rgb(17, 76, 95)',
             'rgb(16, 154, 246)'
         ]
         for c, i in zip(colors, [19, 20, 21, 23, 24]):
@@ -287,7 +297,7 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
                     showlegend=False,
                     marker_color=c,
                 ),
-                row=3,
+                row=4,
                 col=1 if i < 22 else 2
             )
 
@@ -295,20 +305,19 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
         end = df.CloseTime.max()
         title = f'{start} ~ {end} Trading Performance'
         fig.update_layout(
-            title=title, 
+            title=title,
             title_x=0.5,
             title_font=dict(size=23),
-            bargap=0.15, 
-            height=1200, 
+            bargap=0.15,
+            height=1500,
             width=1000
         )
-        fig.update_yaxes(title='Profit', tickvals=[0], row=1, col=2)
-        fig.update_xaxes(title='Return(%)', row=2, col=1)
-        fig.update_yaxes(title='Count', row=2, col=1)
-        fig.update_xaxes(title='Return(%)', row=2, col=2)
-        fig.update_yaxes(title='Profit', tickvals=[0], row=2, col=2)
+        fig.update_yaxes(title='Profit(%)', row=2, col=2)
+        fig.update_xaxes(title='Return(%)', row=3, col=1)
+        fig.update_yaxes(title='Count', row=3, col=1)
+        fig.update_xaxes(title='Return(%)', row=3, col=2)
+        fig.update_yaxes(title='Profit', tickvals=[0], row=3, col=2)
 
         if save:
             fig.write_html(self.TablesFile.replace('xlsx', 'html'))
         return fig
-
