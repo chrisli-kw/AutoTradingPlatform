@@ -604,20 +604,29 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             else:
                 self.futures_to_monitor[target]['position'] -= position
 
-        # append watchlist or udpate watchlist position
-        self.update_watchlist_position(order, self.Quotes, strategies)
-
         # remove from monitor list
-        if position == 100 or position >= order.pos_balance:
-            if target in self.stocks_to_monitor and self.stocks_to_monitor[target]['position'] <= 0:
+        is_stock = target in self.stocks_to_monitor
+        is_futures = target in self.futures_to_monitor
+        c1 = position == 100 or position >= order.pos_balance
+        c2 = is_stock and self.stocks_to_monitor[target]['quantity'] <= 0
+        c3 = is_stock and self.stocks_to_monitor[target]['position'] <= 0
+        c4 = is_futures and self.futures_to_monitor[target]['order']['quantity'] <= 0
+        c5 = is_futures and self.futures_to_monitor[target]['position'] <= 0
+        if c1 or c2 or c3 or c4 or c5:
+            order = order._replace(pos_target=100)
+
+            if c2 or c3:
                 # TODO:if is_day_trade: self.stocks_to_monitor[target] = None
                 self.remove_stock_monitor_list(target)
 
-            if target in self.futures_to_monitor and self.futures_to_monitor[target]['position'] <= 0:
+            if c4 or c5:
                 if is_day_trade:
                     self.futures_to_monitor[target] = None
                 else:
                     self.remove_futures_monitor_list(target)
+
+        # append watchlist or udpate watchlist position
+        self.update_watchlist_position(order, self.Quotes, strategies)
 
     def update_stocks_to_monitor(self, stocks_pool: Dict[str, list]):
         '''更新買進/賣出股票監控清單'''
