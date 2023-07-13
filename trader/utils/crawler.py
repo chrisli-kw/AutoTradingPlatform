@@ -25,8 +25,6 @@ from .database.tables import KBarData1T, SecurityList, PutCallRatioList, ExDivid
 class CrawlStockData(FileHandler):
     def __init__(self, folder_path: str = f'{PATH}/Kbars/1T/{TODAY_STR}', scale='1D'):
         self.folder_path = folder_path
-        self.create_folder(self.folder_path)
-
         self.timetool = TimeTool()
         self.kbartool = KBarTool()
         self.filename = 'company_stock_data'
@@ -111,6 +109,7 @@ class CrawlStockData(FileHandler):
 
     def crawl_from_sinopac(self, stockids: Union[str, list] = 'all', update=False, start=None, end=None):
 
+        self.create_folder(self.folder_path)
         q = self._load_data_into_queue(stockids)
         if isinstance(stockids, str) and stockids == 'all':
             q.put('TSE001')

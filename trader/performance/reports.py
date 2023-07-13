@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from ..config import PATH, TODAY, TODAY_STR, SelectMethods, StrategyNameList
+from ..utils import progress_bar
 from ..utils.time import TimeTool
 from ..utils.file import FileHandler
 from ..utils.orders import OrderTool
@@ -14,7 +15,7 @@ from ..utils.database import db, KBarTables
 from ..utils.database.tables import SelectedStocks
 from .base import convert_statement
 from .backtest import BacktestPerformance
-from .charts import add_candlestick, export_figure
+from .charts import export_figure, convert_encodings, SuplotHandler
 try:
     from ..scripts import __BacktestScripts__
 except:
@@ -24,7 +25,11 @@ except:
 bts = __BacktestScripts__.__dict__ if __BacktestScripts__ else {}
 
 
-class PerformanceReporter(OrderTool, TimeTool, FileHandler):
+class FiguresSet:
+    pass
+
+
+class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
     def __init__(self, account: str):
         self.account = account
         self.TablesFile = f'{PATH}/daily_info/{TODAY_STR[:-3]}-performance-{account}.xlsx'
@@ -202,7 +207,7 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
         # Candlesticks
         for name, col in [['1', 1], ['101', 2]]:
             temp = table[table.name == name]
-            fig = add_candlestick(fig, temp, 1, col)
+            fig = self.add_candlestick(fig, temp, 1, col)
 
         for stra, color in zip(self.strategies, colors):
             name = StrategyNameList.Code[stra]
@@ -321,3 +326,267 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
         if save:
             export_figure(fig, self.TablesFile.replace('xlsx', 'jpg'))
         return fig
+
+
+class BacktestReport(SuplotHandler, FileHandler):
+    def __init__(self, market) -> None:
+        self.Figures = FiguresSet
+        self.Market = market
+        self.DATAPATH = f'{PATH}/backtest'
+        self.stock_col_maps = {
+            'TSEopen': 'first',
+            'TSEhigh': 'max',
+            'TSElow': 'min',
+            'TSEclose': 'last',
+            'TSEvolume': 'sum',
+            'OTCopen': 'first',
+            'OTChigh': 'max',
+            'OTClow': 'min',
+            'OTCclose': 'last',
+            'OTCvolume': 'sum',
+            'chance': 'first',
+            'n_stock_limit': 'first',
+            'n_stocks': 'last',
+            'nClose': 'sum',
+            'balance': 'last',
+            'nOpen': 'sum',
+            'profit': 'sum',
+            'PutCallRatio': 'first'
+        }
+        self.futures_col_maps = {
+            'Open': 'first',
+            'High': 'max',
+            'Low': 'min',
+            'Close': 'last',
+            'Volume': 'sum',
+            'chance': 'first',
+            'n_stock_limit': 'first',
+            'n_stocks': 'last',
+            'nClose': 'sum',
+            'balance': 'last',
+            'nOpen': 'sum',
+            'profit': 'sum',
+            'PutCallRatio': 'first'
+        }
+        self.Titles = (
+            # tables
+            'Backtest Settings', '',
+            'Summary', '',
+            'Transaction Detail', '',
+
+            # candles
+            'TWSE', 'OTC',
+
+            # lines/scatters
+            'Put/Call Ratio', 'Changes in Opens & Closes',
+            'Balance', 'Accumulated Profit/Loss',
+            'Changes in Portfolio Control', ''
+        )
+
+    def _replaceString(self, x: str):
+        return str(x).replace(' ', '<br>').replace('00.000000000', '00')
+
+    def _daily_info_processor(self, TestResult: object):
+        profit = TestResult.Statement.groupby('CloseTime').profit.sum()
+        profit = profit.to_dict()
+
+        if self.Market == 'Stocks':
+            col_maps = self.stock_col_maps
+        else:
+            col_maps = self.futures_col_maps
+
+        df = TestResult.DailyInfo
+        df['profit'] = df.index.map(profit).fillna(0).values
+        df = df.resample('1D', closed='left', label='left').apply(col_maps)
+        df = df.dropna()
+        df['profits'] = (df.profit*(df.profit > 0)).cumsum()
+        df['losses'] = (df.profit*(df.profit <= 0)).cumsum()
+        df['pc115'] = 115
+        return df
+
+    def plot_backtest_result(self, TestResult: object, title="Backtest Report"):
+        '''將回測結果畫成圖表'''
+
+        statement = TestResult.Statement.copy()
+        statement.OpenTime = statement.OpenTime.apply(self._replaceString)
+        statement.CloseTime = statement.CloseTime.apply(self._replaceString)
+
+        daily_info = self._daily_info_processor(TestResult)
+
+        N = 7
+        n_tables = 3
+        spec1 = [[{"type": "table", "colspan": 2}, {}]]*n_tables  # 3張表
+        spec2 = [[{'secondary_y': True}]*2]  # TSE & OTC K線圖
+        spec3 = [[{"type": "scatter"}]*2]*(N-n_tables-1)  # 其餘折線走勢圖
+        fig = make_subplots(
+            rows=N,
+            cols=2,
+            vertical_spacing=0.02,
+            subplot_titles=list(self.Titles),
+            specs=spec1 + spec2 + spec3,
+            row_heights=[0.1, 0.15, 0.15] + [0.6/(N-n_tables)]*(N-n_tables)
+        )
+        fig = self.add_table(fig, TestResult.Configuration, row=1, col=1)
+        fig = self.add_table(fig, TestResult.Summary, row=2, col=1)
+        fig = self.add_table(fig, statement, row=3, col=1, height=40)
+
+        # TSE/OTC candlesticks
+        for col, (a, b) in enumerate([('TSE', 'TWSE'), ('OTC', 'OTC')]):
+            temp = daily_info.reset_index().rename(columns={
+                'index': 'Time',
+                f'{a}open': 'Open',
+                f'{a}high': 'High',
+                f'{a}low': 'Low',
+                f'{a}close': 'Close',
+                f'{a}volume': 'Volume',
+            })
+            temp['name'] = b
+            fig = self.add_candlestick(fig, temp, 4, col+1)
+
+        # Put/Call Ratio
+        for args in [
+            dict(y='PutCallRatio', name='Put/Call Ratio', marker_color='#ff9f1a'),
+            dict(y='pc115', name='多空分界', marker_color='#68c035'),
+        ]:
+            fig = self.add_line(fig, temp, 5, 1, args)
+
+        # Changes in Opens & Closes
+        for args in [
+            dict(y='nOpen', name='Opens', marker_color='#48b2ef'),
+            dict(y='nClose', name='Closes', marker_color='#7F7F7F'),
+            dict(y='n_stocks', name='in-stock', marker_color='#ef488e')
+        ]:
+            fig = self.add_line(fig, temp, 5, 2, args)
+
+        # Accumulated Balance
+        args = dict(y='balance', name='Accumulated Balance', marker_color='#d3503c')
+        fig = self.add_line(fig, temp, 6, 1, args)
+
+        # Accumulated Profit/Loss
+        for args in [
+            dict(y='profits', name="Accumulated Profit", marker_color='#c25656'),
+            dict(y='losses', name="Accumulated Loss", marker_color='#9ad37e')
+        ]:
+            fig = self.add_line(fig, temp, 6, 2, args, fill='tozeroy')
+
+        # Changes in Portfolio Control
+        for args in [
+            dict(y='chance', name='Opens Available', marker_color='#48efec'),
+            dict(y='n_stock_limit', name='Opens Limit', marker_color='#b1487f')
+        ]:
+            fig = self.add_line(fig, temp, 7, 1, args)
+
+        # figure layouts
+        fig.update_layout(height=2400, width=1700, title_text=title)
+        setattr(self.Figures, 'BacktestResult', fig)
+
+        return self.Figures
+
+    def plot_Ins_Outs(self, df: pd.DataFrame, testResult: object):
+        '''畫圖: 個股進出場位置'''
+
+        cols = ['name', 'Time', 'Open', 'High', 'Low', 'Close']
+        statement = testResult.Statement
+        statement['start'] = statement.groupby(
+            'stock').OpenTime.transform(lambda x: x.min() - timedelta(days=5))
+        statement['end'] = statement.groupby(
+            'stock').CloseTime.transform(lambda x: x.max() + timedelta(days=5))
+        tb = df[cols][
+            (df.Time >= statement.start.min()) & (df.Time <= statement.end.max())]
+
+        stocks = statement.stock.unique()
+        N = stocks.shape[0]
+        for i, s in enumerate(stocks):
+            df1 = statement[statement.stock == s].copy()
+
+            start = df1.start.values[0]
+            end = df1.end.values[0]
+            df2 = tb[(tb.name == s) & (tb.Time >= start) & (tb.Time <= end)]
+
+            ins = df2[df2.Time.isin(df1.OpenTime)]
+            ins = ins.set_index('Time').Low.to_dict()
+            df1['Ins'] = df1.OpenTime.map(ins)
+
+            outs = df2[df2.Time.isin(df1.CloseTime)]
+            outs = outs.set_index('Time').High.to_dict()
+            df1['Outs'] = df1.CloseTime.map(outs)
+
+            fig = go.Figure(
+                data=[
+                    go.Candlestick(
+                        x=df2.Time,
+                        open=df2['Open'],
+                        high=df2['High'],
+                        low=df2['Low'],
+                        close=df2['Close'],
+                        name=f'{s}進出場點位',
+                        increasing=dict(line=dict(color='Crimson')),
+                        decreasing=dict(line=dict(color='LimeGreen'))
+                    ),
+
+                    go.Scatter(
+                        x=df1.OpenTime,
+                        y=df1.Ins*0.96,
+                        customdata=np.stack(
+                            (df1.OpenReason, df1.Ins),
+                            axis=-1
+                        ),
+                        hovertemplate='%{x} <br>%{customdata[0]} <br>%{customdata[1]} 進場',
+                        name='進場',
+                        mode='markers',
+                        marker=dict(
+                            symbol='star-triangle-up',
+                            color='MediumBlue',
+                            size=10,
+                            line=dict(color='MediumPurple', width=1)
+                        ),
+                    ),
+
+                    go.Scatter(
+                        x=df1.CloseTime,
+                        y=df1.Outs*1.04,
+                        customdata=df1[
+                            ['CloseReason', 'Outs', 'profit', 'returns']].values,
+                        hovertemplate='%{x} <br>%{customdata[0]} <br>出場: %{customdata[1]} <br>獲利: %{customdata[2]} (%{customdata[3]}%)',
+                        name='出場',
+                        mode='markers',
+                        marker=dict(
+                            symbol='star-triangle-down',
+                            color='#17BECF',
+                            size=10,
+                            line=dict(color='MediumPurple', width=1)
+                        ),
+                    )
+                ],
+                # 設定 XY 顯示格式
+                layout=go.Layout(
+                    xaxis=go.layout.XAxis(tickformat='%Y-%m-%d %H:%M'),
+                    yaxis=go.layout.YAxis(tickformat='.2f')
+                )
+            )
+
+            fig.update_xaxes(
+                rangebreaks=[
+                    dict(bounds=["sat", "mon"]),
+                    dict(bounds=[14, 8], pattern="hour"),
+                ]
+            )
+            setattr(self.Figures, f'fig{s}', fig)
+            progress_bar(N, i)
+
+        return self.Figures
+
+    def save_figure(self, fig: object, filename='回測圖表'):
+        '''輸出回測圖表'''
+
+        folder_path = f'{self.DATAPATH}/回測報告/{TODAY_STR}-{filename}'
+        self.create_folder(folder_path)
+        export_figure(fig.BacktestResult, f'{folder_path}/回測結果.html')
+
+        figures = [f for f in fig.__dict__ if 'fig' in f]
+        for f in figures:
+            export_figure(fig.__dict__[f], f'{folder_path}/{f}.html')
+
+        files = self.listdir(folder_path, pattern='.html')
+        for file in files:
+            convert_encodings(f'{folder_path}/{file}')

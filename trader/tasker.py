@@ -13,7 +13,7 @@ from .utils.database import redis_tick
 from .utils.subscribe import Subscriber
 from .utils.accounts import AccountInfo
 from .executor import StrategyExecutor
-from .performance.reports import PerformanceReporter
+from .performance.reports import PerformanceReport
 
 
 def runCreateENV():
@@ -34,7 +34,7 @@ def runAccountInfo():
             logging.debug(f'Load 【{env}】 config')
             config = dotenv_values(f'./lib/envs/{env}.env')
 
-            pr = PerformanceReporter(env)
+            pr = PerformanceReport(env)
             Tables = pr.getTables(config)
             pr.save_tables(Tables)
             pr.plot_performance_report(Tables, save=True)

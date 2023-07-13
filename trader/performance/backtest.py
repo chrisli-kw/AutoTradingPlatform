@@ -20,7 +20,6 @@ from .base import (
     computeWinLoss,
     convert_statement
 )
-from .charts import BacktestFigures
 
 
 def merge_pc_ratio(df):
@@ -317,7 +316,7 @@ class BacktestPerformance(FileHandler):
         writer.save()
 
 
-class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
+class BackTester(SelectStock, BacktestPerformance, TimeTool):
     def __init__(self, config):
         SelectStock.__init__(
             self,
@@ -326,7 +325,6 @@ class BackTester(SelectStock, BacktestFigures, BacktestPerformance, TimeTool):
             scale=config.scale
         )
         BacktestPerformance.__init__(self, config)
-        BacktestFigures.__init__(self, config.market)
 
         self.isLong = self.mode == 'long'
         self.sign = 1 if self.isLong else -1

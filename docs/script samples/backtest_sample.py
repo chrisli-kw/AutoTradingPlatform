@@ -4,6 +4,7 @@ from collections import namedtuple
 
 from trader.config import TODAY_STR
 from trader.performance.backtest import BackTester, merge_pc_ratio
+from trader.performance.reports import BacktestReport
 from trader.utils.select import SelectStock
 
 
@@ -177,6 +178,7 @@ init_position = 1500000
 startDate = pd.to_datetime(TODAY_STR) - timedelta(days=days)
 
 backtestScript = SampleScript()
+br = BacktestReport(backtestScript.market)
 tester = BackTester(config=backtestScript)
 tester.set_scripts(backtestScript)
 
@@ -216,8 +218,8 @@ if TestResult.Summary is not None:
 # tester.generate_tb_reasons(TestResult.Statement)
 
 # Plot figures
-fig = tester.plot_backtest_result(TestResult)
+fig = br.plot_backtest_result(TestResult)
 
 # Output backtest results
 tester.save_result(TestResult)
-tester.save_figure(fig, 'Backtest Result')
+br.save_figure(fig, 'Backtest Result')
