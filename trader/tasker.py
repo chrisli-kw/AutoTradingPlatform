@@ -39,6 +39,13 @@ def runAccountInfo():
             pr.save_tables(Tables)
             pr.plot_performance_report(Tables, save=True)
 
+            notifier.post(
+                pr.TablesFile.split('/')[-1][:-5],
+                image_name=pr.TablesFile.replace('xlsx', 'jpg'),
+                msgType='AccountInfo'
+            )
+            break
+
         #     API_KEY = config['API_KEY']
         #     SECRET_KEY = config['SECRET_KEY']
         #     acct = config['ACCOUNT_NAME']
@@ -313,10 +320,10 @@ def runSimulationChecker():
 
 
 Tasks = {
-    'create_env': [runCreateENV], 
+    'create_env': [runCreateENV],
     'account_info': [runAccountInfo, runSimulationChecker],
     'update_and_select_stock': [runCrawlStockData, runSelectStock, runCrawlFromHTML],
-    'crawl_stock_data': [runCrawlStockData], 
+    'crawl_stock_data': [runCrawlStockData],
     'select_stock': [runSelectStock],
     'crawl_html': [runCrawlFromHTML],
     'auto_trader': [runAutoTrader],

@@ -93,22 +93,23 @@ class FileHandler:
             tb = df_default
         else:
             tb = pd.DataFrame()
-        
+
         return tb
 
     def read_and_concat(self, filename: str, df: pd.DataFrame):
         tb = self.read_table(filename)
         tb = pd.concat([tb, df]).reset_index(drop=True)
         return tb
-    
+
     def read_tables_in_folder(self, dir_path: str, pattern: str = None):
         files = self.listdir(dir_path, pattern=pattern)
         N = len(files)
-        df = np.array([None]*N)
-        for i, f in enumerate(files):
-            df[i] = self.read_table(f'{dir_path}/{f}')
-            progress_bar(N, i, status=f'[{f}]')
-        
-        df = pd.concat(df).reset_index(drop=True)
-        return df
+        if N:
+            df = np.array([None]*N)
+            for i, f in enumerate(files):
+                df[i] = self.read_table(f'{dir_path}/{f}')
+                progress_bar(N, i, status=f'[{f}]')
 
+            df = pd.concat(df).reset_index(drop=True)
+            return df
+        return pd.DataFrame()

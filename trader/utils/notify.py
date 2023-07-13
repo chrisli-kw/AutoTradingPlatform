@@ -37,7 +37,7 @@ class Notification:
             return
 
         if image_name:
-            image = open(f'{PATH}/{image_name}.jpg', 'rb')
+            image = open(image_name, 'rb')
             files = {'imageFile': image}
             requests.post(
                 self.NotifyURL,

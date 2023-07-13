@@ -9,6 +9,12 @@ from ..config import PATH, TODAY_STR
 from ..utils import progress_bar
 
 
+def export_figure(fig, filename):
+    if '.html' in fig:
+        fig.write_html(filename)
+    fig.write_image(filename, scale=5)
+
+
 def add_candlestick(fig, df, row, col):
     title = {'1': 'TWSE', '101': 'OTC'}
     name = df.name.unique()[0]

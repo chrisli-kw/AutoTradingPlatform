@@ -14,7 +14,7 @@ from ..utils.database import db, KBarTables
 from ..utils.database.tables import SelectedStocks
 from .base import convert_statement
 from .backtest import BacktestPerformance
-from .charts import add_candlestick
+from .charts import add_candlestick, export_figure
 try:
     from ..scripts import __BacktestScripts__
 except:
@@ -319,5 +319,5 @@ class PerformanceReporter(OrderTool, TimeTool, FileHandler):
         fig.update_yaxes(title='Profit', tickvals=[0], row=3, col=2)
 
         if save:
-            fig.write_html(self.TablesFile.replace('xlsx', 'html'))
+            export_figure(fig, self.TablesFile.replace('xlsx', 'jpg'))
         return fig

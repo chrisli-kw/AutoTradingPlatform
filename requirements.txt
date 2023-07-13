@@ -10,6 +10,7 @@ Flask==2.0.2
 Flask-Compress==1.10.1
 Flask-Cors==3.0.10
 Flask-Excel==0.0.7
+kaleido==0.2.1
 numpy==1.21.5
 openpyxl==3.0.10
 pandas==1.4.4
