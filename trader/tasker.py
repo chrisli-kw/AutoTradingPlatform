@@ -163,6 +163,7 @@ def runCrawlStockData(account):
         for scale in ConvertScales:
             crawler1.add_new_data(scale, save=True, start=TODAY_STR)
             crawler1.merge_daily_data(TODAY_STR, scale, save=True)
+        crawler1.merge_daily_data(TODAY_STR, '1T', save=True)
 
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')

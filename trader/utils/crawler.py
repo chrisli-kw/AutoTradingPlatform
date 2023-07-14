@@ -71,12 +71,9 @@ class CrawlStockData(FileHandler):
         if db.HAS_DB:
             db.dataframe_to_DB(df, KBarTables[scale])
 
-        filename = f'{PATH}/Kbars/{scale}/{TODAY_STR}-stock_data_{scale}'
-        if scale == '1T':
-            self.save_table(df, f'{filename}.csv')
-        else:
-            df.to_pickle(f'{filename}.pkl')
-            return df
+        filename = f'{PATH}/Kbars/{scale}/{TODAY_STR}-stock_data_{scale}.pkl'
+        self.save_table(df, filename)
+        return df
 
     def _load_data_into_queue(self, stockids: list):
         '''創建股票待爬清單(queue)'''
@@ -196,7 +193,7 @@ class CrawlStockData(FileHandler):
             self.remove_files(self.folder_path, pattern='.csv')
 
         df = df.sort_values(['name', 'date', 'Time']).reset_index(drop=True)
-        self.export_kbar_data(df, '1T')
+        df = self.export_kbar_data(df, '1T')
         os.rmdir(self.folder_path)
 
     def add_new_data(self, scale: str, save=True, start=None, end=None):
