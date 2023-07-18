@@ -6,7 +6,7 @@ from typing import List, Dict
 from datetime import datetime, timedelta
 
 from ..config import API, PATH, TODAY, TODAY_STR, TimeStartStock, TimeEndStock
-from ..config import K15min_feature, K30min_feature, K60min_feature
+from ..config import KbarFeatures
 from ..indicators.signals import TechnicalSignals
 from . import get_contract
 from .time import TimeTool
@@ -35,9 +35,18 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             'Amount': 'sum'
         }
         self.kbar_columns = [
-            'name', 'date', 'Time', 'hour', 'minute', 'Open', 'High', 'Low', 'Close', 'Volume', 'Amount']
+            'name', 'date', 'Time', 'hour', 'minute', 
+            'Open', 'High', 'Low', 'Close', 'Volume', 'Amount'
+        ]
         self.KBars = {
-            freq: pd.DataFrame(columns=self.kbar_columns) for freq in ['1D', '60T', '30T', '15T', '5T', '1T']
+            freq: pd.DataFrame(columns=self.kbar_columns) for freq in ['1D', '60T', '30T', '15T', '5T', '2T', '1T']
+        }
+        self.featureFuncs = {
+            '2T': self.add_K2min_feature,
+            '5T': self.add_K5min_feature,
+            '15T': self.add_K15min_feature,
+            '30T': self.add_K30min_feature,
+            '60T': self.add_K60min_feature,
         }
 
     def __set_daysdata(self, kbar_start_day):
@@ -62,6 +71,16 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
                 @self.on_add_KDay_feature()
                 def _add_KDay_feature(df):
                     return featureScript.add_KDay_feature(df)
+
+            if hasattr(featureScript, 'add_K2min_feature'):
+                @self.on_add_K2min_feature()
+                def _add_K2min_feature(df):
+                    return featureScript.add_K2min_feature(df)
+
+            if hasattr(featureScript, 'add_K5min_feature'):
+                @self.on_add_K5min_feature()
+                def _add_K5min_feature(df):
+                    return featureScript.add_K5min_feature(df)
 
             if hasattr(featureScript, 'add_K15min_feature'):
                 @self.on_add_K15min_feature()
@@ -90,7 +109,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             kbars = API.kbars(contract, start=start, end=end, timeout=60000)
         except AttributeError:
             logging.exception(f'tbKBar({stockid}) Catch an Exception:')
-            kbars = {'ts':[]}
+            kbars = {'ts': []}
 
         tb = pd.DataFrame({**kbars})
         tb.ts = pd.to_datetime(tb.ts)
@@ -150,6 +169,22 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
     def on_add_K15min_feature(self):
         def wrapper(func):
             self.add_K15min_feature = func
+        return wrapper
+
+    def add_K5min_feature(self, df: pd.DataFrame):
+        return df
+
+    def on_add_K5min_feature(self):
+        def wrapper(func):
+            self.add_K5min_feature = func
+        return wrapper
+
+    def add_K2min_feature(self, df: pd.DataFrame):
+        return df
+
+    def on_add_K2min_feature(self):
+        def wrapper(func):
+            self.add_K2min_feature = func
         return wrapper
 
     def history_kbars(self, stockids: List[str], daysdata: int = 0):
@@ -297,50 +332,33 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         df = self.revert_dividend_price(df, dividends)
         concat_df(df)
 
-    def _update_K5(self):
-        '''每隔5分鐘更新5分K'''
+    def _update_kbar_table(self, scale: str):
+        '''更新K棒資料表，scale:更新頻率，features:技術指標'''
 
-        tb = self._update_kbar('5T')
+        tb = self._update_kbar(scale)
         if isinstance(tb, pd.DataFrame) and tb.shape[0]:
-            self.KBars['5T'] = self._concat_kbar(self.KBars['5T'], tb)
-
-    def _update_K15(self):
-        '''每隔15分鐘更新15分K'''
-
-        tb = self._update_kbar('15T')
-        if isinstance(tb, pd.DataFrame) and tb.shape[0]:
-            for col in K15min_feature:
+            for col in KbarFeatures[scale]:
                 tb[col] = None
 
-            K15min = self._concat_kbar(self.KBars['15T'], tb)
-            self.KBars['15T'] = self.add_K15min_feature(K15min)
-
-    def _update_K30(self):
-        '''每隔30分鐘更新30分K'''
-
-        tb = self._update_kbar('30T')
-        if isinstance(tb, pd.DataFrame) and tb.shape[0]:
-            for col in K30min_feature:
-                tb[col] = None
-
-            K30min = self._concat_kbar(self.KBars['30T'], tb)
-            self.KBars['30T'] = self.add_K30min_feature(K30min)
+            kbar = self._concat_kbar(self.KBars[scale], tb)
+            self.KBars[scale] = self.featureFuncs[scale](kbar)
 
     def _update_K60(self, hour: int):
         '''每隔60分鐘更新60分K'''
 
-        K60min = self.KBars['60T'].copy()
-        if not K60min[(K60min.date == TODAY_STR) & (K60min.hour == hour)].shape[0]:
+        scale = '60T'
+        kbar = self.KBars[scale].copy()
+        if not kbar[(kbar.date == TODAY_STR) & (kbar.hour == hour)].shape[0]:
             tb = self.KBars['1T'][self.KBars['1T'].hour == hour].copy()
 
             if tb.shape[0]:
-                tb = self.convert_kbar(tb, scale='60T')
+                tb = self.convert_kbar(tb, scale=scale)
 
-                for col in K60min_feature:
+                for col in KbarFeatures[scale]:
                     tb[col] = None
 
-                K60min = self._concat_kbar(K60min, tb[K60min.columns])
-                self.KBars['60T'] = self.add_K60min_feature(K60min)
+                kbar = self._concat_kbar(kbar, tb[kbar.columns])
+                self.KBars[scale] = self.featureFuncs[scale](kbar)
 
     def update_today_previous_kbar(self, stockids: List[str], dividends: dict = {}):
         '''盤中執行程式時，更新當天啟動前的資料'''

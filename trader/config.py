@@ -36,6 +36,9 @@ def get_settings(section, option, dataType='str'):
                 return funcs[dataType](section, option)
             except:
                 return SystemConfig.get(section, option)
+
+    if dataType == 'list':
+        return []
     return ''
 
 
@@ -123,6 +126,10 @@ SelectMethods = get_settings('SELECT', 'METHODS', dataType='list')
 ConvertScales = get_settings('CRAWLER', 'SCALES', dataType='list')
 
 # K棒特徵
-K60min_feature = get_settings('KBARFEATURE', 'K60min', dataType='list')
-K30min_feature = get_settings('KBARFEATURE', 'K30min', dataType='list')
-K15min_feature = get_settings('KBARFEATURE', 'K15min', dataType='list')
+KbarFeatures = {
+    '2T': get_settings('KBARFEATURE', 'K2min', dataType='list'),
+    '5T': get_settings('KBARFEATURE', 'K5min', dataType='list'),
+    '15T': get_settings('KBARFEATURE', 'K15min', dataType='list'),
+    '30T': get_settings('KBARFEATURE', 'K30min', dataType='list'),
+    '60T': get_settings('KBARFEATURE', 'K60min', dataType='list'),
+}

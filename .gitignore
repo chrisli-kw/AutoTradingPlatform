@@ -131,10 +131,6 @@ dmypy.json
 # projec-related files
 .vscode/
 *.ipynb
-*.cmd
-*.bat
-*.pem
-.pub
 data/
 documents/
 logs/
@@ -143,8 +139,6 @@ logs/
 test.py
 dev.py
 python_practice.py
-trader/scripts/StrategySet.py
-trader/scripts/conditions.py
-trader/scripts/features.py
-trader/scripts/__BacktestScripts__.py
 
+trader/scripts/*
+!trader/scripts/README.md

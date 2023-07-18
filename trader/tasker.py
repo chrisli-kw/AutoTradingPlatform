@@ -44,7 +44,6 @@ def runAccountInfo():
                 image_name=pr.TablesFile.replace('xlsx', 'jpg'),
                 msgType='AccountInfo'
             )
-            break
 
         #     API_KEY = config['API_KEY']
         #     SECRET_KEY = config['SECRET_KEY']
