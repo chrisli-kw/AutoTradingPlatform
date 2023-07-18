@@ -1373,15 +1373,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         # 開始監控
         while True:
             now = datetime.now()
-            hour = now.hour
 
             if self.is_not_trade_day(now):
                 logging.info('Non-trading time, stop monitoring')
-                self._update_kbar_table('2T')
-                self._update_kbar_table('5T')
-                self._update_kbar_table('15T')
-                self._update_kbar_table('30T')
-                self._update_K60(hour)
+                self.updateKBars('2T')
+                self.updateKBars('5T')
+                self.updateKBars('15T')
+                self.updateKBars('30T')
+                self.updateKBars('60T')
                 break
             elif all(x == 0 for x in [
                 self.n_stocks_long, self.n_stocks_short,
@@ -1404,20 +1403,20 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 self.StrategySet.update_indicators(now, self.KBars)
 
                 if now.minute % 2 == 0:
-                    self._update_kbar_table('2T')
+                    self.updateKBars('2T')
 
                 if now.minute % 5 == 0:
-                    self._update_kbar_table('5T')
+                    self.updateKBars('5T')
                     self.balance(mode='debug')  # 防止斷線用 TODO:待永豐更新後刪除
 
                 if now.minute % 15 == 0:
-                    self._update_kbar_table('15T')
+                    self.updateKBars('15T')
 
                 if now.minute % 30 == 0:
-                    self._update_kbar_table('30T')
+                    self.updateKBars('30T')
 
                 if now.minute == 0:
-                    self._update_K60(hour-1)
+                    self.updateKBars('60T')
 
             # TODO: merge stocks_to_monitor & futures_to_monitor
             for target in list(self.stocks_to_monitor):

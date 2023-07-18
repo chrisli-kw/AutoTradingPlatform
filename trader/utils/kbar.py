@@ -35,18 +35,20 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             'Amount': 'sum'
         }
         self.kbar_columns = [
-            'name', 'date', 'Time', 'hour', 'minute', 
+            'name', 'date', 'Time', 'hour', 'minute',
             'Open', 'High', 'Low', 'Close', 'Volume', 'Amount'
         ]
-        self.KBars = {
-            freq: pd.DataFrame(columns=self.kbar_columns) for freq in ['1D', '60T', '30T', '15T', '5T', '2T', '1T']
-        }
         self.featureFuncs = {
+            '1T': self.add_K1min_feature,
             '2T': self.add_K2min_feature,
             '5T': self.add_K5min_feature,
             '15T': self.add_K15min_feature,
             '30T': self.add_K30min_feature,
             '60T': self.add_K60min_feature,
+            '1D': self.add_KDay_feature,
+        }
+        self.KBars = {
+            freq: pd.DataFrame(columns=self.kbar_columns) for freq in self.featureFuncs
         }
 
     def __set_daysdata(self, kbar_start_day):
@@ -71,6 +73,11 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
                 @self.on_add_KDay_feature()
                 def _add_KDay_feature(df):
                     return featureScript.add_KDay_feature(df)
+
+            if hasattr(featureScript, 'add_K1min_feature'):
+                @self.on_add_K1min_feature()
+                def _add_K1min_feature(df):
+                    return featureScript.add_K1min_feature(df)
 
             if hasattr(featureScript, 'add_K2min_feature'):
                 @self.on_add_K2min_feature()
@@ -125,19 +132,10 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         '''取得N日的日K資料'''
         tb = self.tbKBar(stockid, self._strf_timedelta(TODAY, daysdata))
 
-        # 日K
-        tb1 = self.convert_kbar(tb, '1D')[self.kbar_columns].dropna()
-
-        # 60分K
-        tb2 = self.convert_kbar(tb, '60T')[self.kbar_columns].dropna()
-
-        # 30分K
-        tb3 = self.convert_kbar(tb, '30T')[self.kbar_columns].dropna()
-
-        # 15分K
-        tb4 = self.convert_kbar(tb, '15T')[self.kbar_columns].dropna()
-
-        return tb1, tb2, tb3, tb4
+        kbars = {
+            scale: self.convert_kbar(tb, scale)[self.kbar_columns].dropna() for scale in ['1D', '60T', '30T', '15T']
+        }
+        return kbars
 
     def add_KDay_feature(self, df: pd.DataFrame):
         return df
@@ -187,26 +185,30 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             self.add_K2min_feature = func
         return wrapper
 
+    def add_K1min_feature(self, df: pd.DataFrame):
+        return df
+
+    def on_add_K1min_feature(self):
+        def wrapper(func):
+            self.add_K1min_feature = func
+        return wrapper
+
     def history_kbars(self, stockids: List[str], daysdata: int = 0):
         '''取得歷史k棒資料(1D/60T/30T/15T)'''
         ndays = daysdata if daysdata else self.daysdata
-        KDay = self.KBars['1D'].copy()
-        K60min = self.KBars['60T'].copy()
-        K30min = self.KBars['30T'].copy()
-        K15min = self.KBars['15T'].copy()
         for stockid in stockids:
-            tb1, tb2, tb3, tb4 = self.get_kbars(stockid, ndays)
-            KDay = pd.concat([KDay, tb1]).reset_index(drop=True)
-            K60min = pd.concat([K60min, tb2]).reset_index(drop=True)
-            K30min = pd.concat([K30min, tb3]).reset_index(drop=True)
-            K15min = pd.concat([K15min, tb4]).reset_index(drop=True)
+            kbars = self.get_kbars(stockid, ndays)
+            for scale, kbar in kbars.items():
+                self.KBars[scale] = self.concatKBars(self.KBars[scale], kbar)
 
+        KDay = self.KBars['1D'].copy()
         if KDay.shape[0]:
-            KDay = self.add_KDay_feature(KDay)
+            KDay = self.featureFuncs['1D'](KDay)
             self.KBars['1D'] = KDay[KDay.date != TODAY_STR]
 
+        K60min = self.KBars['60T'].copy()
         if K60min.shape[0]:
-            K60min = self.add_K60min_feature(K60min)
+            K60min = self.featureFuncs['60T'](K60min)
 
             now = datetime.now()
             current_time = pd.to_datetime(
@@ -214,11 +216,13 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             K60min = K60min[(K60min.Time < current_time)]
             self.KBars['60T'] = K60min
 
+        K30min = self.KBars['30T'].copy()
         if K30min.shape[0]:
-            self.KBars['30T'] = self.add_K30min_feature(K30min)
+            self.KBars['30T'] = self.featureFuncs['30T'](K30min)
 
+        K15min = self.KBars['15T'].copy()
         if K15min.shape[0]:
-            self.KBars['15T'] = self.add_K15min_feature(K15min)
+            self.KBars['15T'] = self.featureFuncs['15T'](K15min)
 
     def convert_kbar(self, tb: pd.DataFrame, scale='60T'):
         '''將1分K轉換成其他週期K線資料'''
@@ -299,11 +303,11 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         except:
             return pd.DataFrame()
 
-    def _concat_kbar(self, df1: pd.DataFrame, df2: pd.DataFrame):
+    def concatKBars(self, df1: pd.DataFrame, df2: pd.DataFrame):
         '''合併K棒資料表'''
-        return pd.concat([df1, df2]).sort_values(['name', 'date', 'hour', 'minute']).reset_index(drop=True)
+        return pd.concat([df1, df2]).sort_values(['name', 'Time']).reset_index(drop=True)
 
-    def _update_kbar(self, scale: str):
+    def updateKBars(self, scale: str):
         '''檢查並更新K棒資料表'''
 
         _scale = int(re.findall('\d+', scale)[0])
@@ -313,7 +317,13 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             tb = self.KBars['1T'].copy()
             tb = tb[(tb.Time >= t2) & (tb.Time < t1)]
             if tb.shape[0]:
-                return self.convert_kbar(tb, scale=scale)
+                tb = self.convert_kbar(tb, scale=scale)
+
+                for col in KbarFeatures[scale]:
+                    tb[col] = None
+
+                kbar = self.concatKBars(self.KBars[scale], tb)
+                self.KBars[scale] = self.featureFuncs[scale](kbar)
 
     def _update_K1(self, dividends: dict, quotes):
         '''每隔1分鐘更新1分K'''
@@ -332,34 +342,6 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         df = self.revert_dividend_price(df, dividends)
         concat_df(df)
 
-    def _update_kbar_table(self, scale: str):
-        '''更新K棒資料表，scale:更新頻率，features:技術指標'''
-
-        tb = self._update_kbar(scale)
-        if isinstance(tb, pd.DataFrame) and tb.shape[0]:
-            for col in KbarFeatures[scale]:
-                tb[col] = None
-
-            kbar = self._concat_kbar(self.KBars[scale], tb)
-            self.KBars[scale] = self.featureFuncs[scale](kbar)
-
-    def _update_K60(self, hour: int):
-        '''每隔60分鐘更新60分K'''
-
-        scale = '60T'
-        kbar = self.KBars[scale].copy()
-        if not kbar[(kbar.date == TODAY_STR) & (kbar.hour == hour)].shape[0]:
-            tb = self.KBars['1T'][self.KBars['1T'].hour == hour].copy()
-
-            if tb.shape[0]:
-                tb = self.convert_kbar(tb, scale=scale)
-
-                for col in KbarFeatures[scale]:
-                    tb[col] = None
-
-                kbar = self._concat_kbar(kbar, tb[kbar.columns])
-                self.KBars[scale] = self.featureFuncs[scale](kbar)
-
     def update_today_previous_kbar(self, stockids: List[str], dividends: dict = {}):
         '''盤中執行程式時，更新當天啟動前的資料'''
         if isinstance(stockids, str):
@@ -372,19 +354,20 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
 
         now = datetime.now()
         t1 = now-timedelta(minutes=1)
-        t2 = now-timedelta(minutes=(now.minute % 5))
+        t2 = now-timedelta(minutes=(now.minute % 2))
+        t5 = now-timedelta(minutes=(now.minute % 5))
 
         for s in stockids:
             df = self.tbKBar(s, TODAY_STR)
             df = self.revert_dividend_price(df, dividends)
 
-            k5 = df[df.Time <= t2]
-            k5 = self.convert_kbar(k5, '5T')[self.kbar_columns]
-
-            self.KBars['5T'] = self._concat_kbar(self.KBars['5T'], k5)
-            self.KBars['1T'] = pd.concat([
-                self.KBars['1T'], df[df.Time <= t1][self.kbar_columns]
-            ]).sort_values(['name', 'date']).reset_index(drop=True)
+            for t, scale in [
+                (t5, '5T'), (t2, '2T'), (t1, '1T')
+            ]:
+                kbar = df[df.Time <= t]
+                if scale != '1T':
+                    kbar = self.convert_kbar(kbar, scale)[self.kbar_columns]
+                self.KBars[scale] = self.concatKBars(self.KBars[scale], kbar)
 
 
 class TickDataProcesser(TimeTool, FileHandler):
