@@ -6,6 +6,7 @@ from datetime import timedelta
 from ..config import PATH, TODAY_STR, TODAY
 from .time import TimeTool
 from .file import FileHandler
+from .crawler import readStockList
 from .database import db, KBarTables
 from .database.tables import SelectedStocks
 try:
@@ -13,6 +14,7 @@ try:
 except:
     logging.warning('Cannot import SelectConditions from package.')
     SelectConditions = None
+
 
 def map_BKD(OTCclose, OTChigh, add_days=10):
     for d in range(80, 0, -10):
@@ -66,9 +68,9 @@ class SelectStock(TimeTool, FileHandler):
             80: '管理股票'
         }
 
-    def setScripts(self, methods: list=[]):
+    def setScripts(self, methods: list = []):
         '''Set preprocess & stock selection scripts'''
-        
+
         if SelectConditions:
             scripts = SelectConditions()
             self.Preprocess = {
@@ -113,14 +115,14 @@ class SelectStock(TimeTool, FileHandler):
         otc['otcbkd30'] = otc.apply(lambda x: map_BKD(
             x.OTCclose, x.otcbkd30, 30), axis=1)
         otc.otcbkd30 = otc.otcbkd30.fillna(method='ffill')
-        
+
         # process TSE data
         tse = df[df.name == '1'].rename(
             columns={c: f'TSE{c.lower()}' for c in ohlcva}).drop(['name'], axis=1)
         tse['Time'] = pd.to_datetime(tse['Time'])
         tse[f'tse_{self.dma}ma'] = tse.TSEclose.shift(
             self.d_shift).rolling(self.dma).mean()
-        
+
         df = df.merge(otc, how='left', on='Time')
         df = df.merge(tse, how='left', on='Time')
 
@@ -130,7 +132,7 @@ class SelectStock(TimeTool, FileHandler):
                     (df.name == '8070') & (df.Time < '2020-08-17'), col] /= 10
                 df.loc[
                     (df.name == '6548') & (df.Time < '2019-09-09'), col] /= 10
-                
+
             group = df.groupby('name')
             df['volume_ma'] = group.Volume.transform(
                 lambda x: x.shift(1).rolling(22).mean())
@@ -142,7 +144,7 @@ class SelectStock(TimeTool, FileHandler):
                 lambda x: x.shift(1).rolling(20).mean())
 
         if self.scale == '1D':
-            df = df.rename(columns={'Time':'date'})
+            df = df.rename(columns={'Time': 'date'})
 
         return df
 
@@ -157,13 +159,13 @@ class SelectStock(TimeTool, FileHandler):
             df.insert(i+2, m, func(df, *args))
 
         # insert columns
-        stockids = pd.read_excel(f'{PATH}/selections/stock_list.xlsx')
-        stockids.code = stockids.code.astype(int).astype(str)
+        stockids = readStockList()
         stockids.category = stockids.category.astype(int)
-        df.insert(1, 'company_name', df.name.map(
-            stockids.set_index('code').name.to_dict()))
-        df.insert(2, 'category', df.name.map(stockids.set_index(
-            'code').category.to_dict()).map(self.categories))
+        stockids = stockids.set_index('code')
+
+        df.insert(1, 'company_name', df.name.map(stockids.name.to_dict()))
+        df.insert(2, 'category', df.name.map(
+            stockids.category.to_dict()).map(self.categories))
 
         return df
 
@@ -198,7 +200,8 @@ class SelectStock(TimeTool, FileHandler):
             db.dataframe_to_DB(df, SelectedStocks)
         else:
             self.save_table(df, f'{PATH}/selections/all.csv')
-            self.save_table(df, f'{PATH}/selections/history/{TODAY_STR}-all.csv')
+            self.save_table(
+                df, f'{PATH}/selections/history/{TODAY_STR}-all.csv')
 
     def get_selection_files(self):
         '''取得選股清單'''
@@ -211,13 +214,13 @@ class SelectStock(TimeTool, FileHandler):
             df = self.read_table(
                 filename=f'{PATH}/selections/all.csv',
                 df_default=pd.DataFrame(columns=[
-                    'code', 'company_name', 'category', 'date', 
-                    'Open', 'High', 'Low', 'Close', 
+                    'code', 'company_name', 'category', 'date',
+                    'Open', 'High', 'Low', 'Close',
                     'Volume', 'Amount', 'Strategy'
                 ])
             )
             df.date = pd.to_datetime(df.date)
             df.code = df.code.astype(str)
             df = df[df.date == day]
-            
+
         return df

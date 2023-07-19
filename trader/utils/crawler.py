@@ -22,6 +22,19 @@ from .database import db, KBarTables
 from .database.tables import KBarData1T, SecurityList, PutCallRatioList, ExDividendTable
 
 
+def readStockList(markets=['OTC', 'TSE']):
+    if db.HAS_DB:
+        df = db.query(
+            SecurityList.code,
+            SecurityList.exchange.in_(markets)
+        )
+    else:
+        df = pd.read_excel(f'{PATH}/selections/stock_list.xlsx')
+        df.code = df.code.astype(int).astype(str)
+        df = df[df.exchange.isin(markets)]
+    return df
+
+
 class CrawlStockData(FileHandler):
     def __init__(self, folder_path: str = f'{PATH}/Kbars/1T/{TODAY_STR}', scale='1D'):
         self.folder_path = folder_path
@@ -80,18 +93,7 @@ class CrawlStockData(FileHandler):
 
         # get stock id list
         if type(stockids) == str and stockids == 'all':
-            markets = ['OTC', 'TSE']
-            if db.HAS_DB:
-                stockids = db.query(
-                    SecurityList.code,
-                    SecurityList.exchange.in_(markets)
-                ).code.values
-            else:
-                stockids = pd.read_excel(f'{PATH}/selections/stock_list.xlsx')
-                stockids.code = stockids.code.astype(int).astype(str)
-                stockids = stockids[
-                    stockids.exchange.isin(markets)].code.values
-
+            stockids = readStockList().code.values
         elif type(stockids) == str:
             stockids = stockids.split(',')
         logging.info(f"Target list size: {len(stockids)}")
