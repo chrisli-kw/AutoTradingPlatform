@@ -749,7 +749,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 actionInfo = func(
                     inputs=inputs,
                     kbars=self.KBars,
-                    indexQuotes=self.Quotes.NowIndex,
+                    Quotes=self.Quotes,
                     pct_chg_DowJones=self.pct_chg_DowJones
                 )
                 if actionInfo.position:
@@ -835,8 +835,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 actionInfo = func(
                     inputs=inputs,
                     kbars=self.KBars,
-                    indexQuotes=self.Quotes.NowIndex,
-                    allQuotes=self.Quotes.AllTargets,
+                    Quotes=self.Quotes,
+                    pct_chg_DowJones=self.pct_chg_DowJones
                 )
                 if actionInfo.position:
                     if isTransfer:
@@ -1340,11 +1340,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         strategy_s, all_stocks = self.init_stocks()
         strategy_f, all_futures = self.init_futures()
         self.subscribe_all(all_stocks+all_futures)
-
-        now = datetime.now()
-        if (not self.is_not_trade_day(now)) and now > TStart:
-            self.update_today_previous_kbar(
-                all_stocks+all_futures, self.StrategySet.dividends)
 
         logging.info(f"Today's punish lis: {self.punish_list}")
         logging.info(f"Stocks Ex-dividend: {self.StrategySet.dividends}")

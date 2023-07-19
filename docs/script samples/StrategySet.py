@@ -140,8 +140,7 @@ class StrategySet(StrategyTool):
         are 1D, 60T, 30T, 15T, 5T, 1T.
 
         Supported key-word arguments:
-        indexQuotes: index quote data (TSE, OTC) for the specific trade-
-        day.
+        Quotes: current and history (for the past 1-min period) tick data.
         pct_chg_DowJones: the percentage change of the previous trade-day
         Dow-Jones index.
 
@@ -168,8 +167,7 @@ class StrategySet(StrategyTool):
         are 1D, 60T, 30T, 15T, 5T, 1T.
 
         Supported key-word arguments:
-        indexQuotes: index quote data (TSE, OTC) for the specific trade-
-        day.
+        Quotes: current and history (for the past 1-min period) tick data.
         pct_chg_DowJones: the percentage change of the previous trade-day
         Dow-Jones index.
 
@@ -196,8 +194,7 @@ class StrategySet(StrategyTool):
         are 1D, 60T, 30T, 15T, 5T, 1T.
 
         Supported key-word arguments:
-        indexQuotes: index quote data (TSE, OTC) for the specific trade-
-        day.
+        Quotes: current and history (for the past 1-min period) tick data.
         pct_chg_DowJones: the percentage change of the previous trade-day
         Dow-Jones index.
 
@@ -224,8 +221,7 @@ class StrategySet(StrategyTool):
         are 1D, 60T, 30T, 15T, 5T, 1T.
 
         Supported key-word arguments:
-        indexQuotes: index quote data (TSE, OTC) for the specific trade-
-        day.
+        Quotes: current and history (for the past 1-min period) tick data.
         pct_chg_DowJones: the percentage change of the previous trade-day
         Dow-Jones index.
 

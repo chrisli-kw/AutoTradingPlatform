@@ -71,7 +71,10 @@ class TimeTool:
         return datetime.now() >= time_target
 
     def count_n_kbars(self, start: datetime, end: datetime, scale: int):
-        '''計算K棒數量'''
+        '''
+        計算K棒數量
+        scale單位: min
+        '''
         # TODO: 扣除國定假日不開盤 & 收盤期間
 
         if isinstance(start, str):
