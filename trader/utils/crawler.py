@@ -13,7 +13,7 @@ from sqlalchemy import text
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
-from . import progress_bar, create_queue
+from . import progress_bar, create_queue, reduce_mem_usage
 from .kbar import KBarTool
 from .time import TimeTool
 from .file import FileHandler
@@ -25,7 +25,7 @@ from .database.tables import KBarData1T, SecurityList, PutCallRatioList, ExDivid
 def readStockList(markets=['OTC', 'TSE']):
     if db.HAS_DB:
         df = db.query(
-            SecurityList.code,
+            SecurityList,
             SecurityList.exchange.in_(markets)
         )
     else:
@@ -84,6 +84,7 @@ class CrawlStockData(FileHandler):
         if db.HAS_DB:
             db.dataframe_to_DB(df, KBarTables[scale])
 
+        df = reduce_mem_usage(df)
         filename = f'{PATH}/Kbars/{scale}/{TODAY_STR}-stock_data_{scale}.pkl'
         self.save_table(df, filename)
         return df
@@ -250,6 +251,11 @@ class CrawlStockData(FileHandler):
         return df
 
     def merge_daily_data(self, day: datetime, scale: str, save=True):
+        '''
+        This function merges daily kbar data at the 1st trading-day of 
+        each month
+        '''
+
         if not isinstance(day, datetime):
             day = pd.to_datetime(day)
 
@@ -260,6 +266,7 @@ class CrawlStockData(FileHandler):
             df = self.read_tables_in_folder(dir_path, pattern=year_month)
             df = df.sort_values(['name', 'date', 'Time'])
             df = df.reset_index(drop=True)
+            df = reduce_mem_usage(df)
 
             if save:
                 filename = f'{dir_path}/{year_month}-stock_data_{scale}.pkl'
