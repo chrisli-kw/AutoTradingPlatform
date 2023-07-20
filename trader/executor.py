@@ -567,13 +567,13 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.n_futures = self.futures.shape[0]
 
         # 取得策略清單
-        strategies.update(self.futures.set_index('Code').strategy.to_dict())
+        self.futures.index = self.futures.Code
+        strategies.update(self.futures.strategy.to_dict())
 
         # 剔除不堅控的股票
         self.futures = self.futures[~self.futures.Code.isin(self.FILTER_OUT)]
 
         # update_futures_to_monitor
-        self.futures.index = self.futures.Code
         self.futures_to_monitor.update(self.futures.to_dict('index'))
         self.futures_to_monitor.update({
             f: None for f in strategies if f not in self.futures_to_monitor})
@@ -1312,7 +1312,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         if target in self.stocks.code.values:
             logging.debug(f'Remove【{target}】from self.stocks.')
             self.stocks = self.stocks[self.stocks.code != target]
-            if db.HAS_DB:
+            if self.simulation and db.HAS_DB:
                 db.delete(
                     SecurityInfoStocks,
                     SecurityInfoStocks.code == target,
@@ -1326,11 +1326,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         if target in self.futures.Code.values:
             logging.debug(f'Remove【{target}】from self.futures.')
-            self.futures = self.futures[self.futures.Code != target]
-            if db.HAS_DB:
+            self.futures = self.futures[self.futures.CodeName != target]
+            if self.simulation and db.HAS_DB:
                 db.delete(
                     SecurityInfoFutures,
-                    SecurityInfoFutures.Code == target,
+                    SecurityInfoFutures.CodeName == target,
                     SecurityInfoFutures.Account == self.ACCOUNT_NAME
                 )
 
@@ -1501,6 +1501,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 df = df.reset_index(drop=True)
                 df = df.rename(columns={
                     'account_id': 'Account',
+                    'market': 'Market',
                     'bst': 'Date',
                     'symbol': 'CodeName',
                     'action': 'OrderBS',
