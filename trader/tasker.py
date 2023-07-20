@@ -171,7 +171,8 @@ def runCrawlStockData(account):
         notifier.post(f"\n【Error】【爬蟲程式】股價爬蟲發生異常", msgType='Tasker')
         if len(crawler1.StockData):
             df = pd.concat(crawler1.StockData)
-            df.to_pickle(f'{crawler1.folder_path}/stock_data_1T.pkl')
+            filename = f'{crawler1.folder_path}/stock_data_1T.pkl'
+            file_handler.save_table(df, filename)
     finally:
         logging.info(f'登出系統: {API.logout()}')
 

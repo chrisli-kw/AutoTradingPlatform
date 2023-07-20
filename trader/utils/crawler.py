@@ -41,6 +41,7 @@ class CrawlStockData(FileHandler):
         self.timetool = TimeTool()
         self.kbartool = KBarTool()
         self.filename = 'company_stock_data'
+        self.tempFile = f'{self.folder_path}/crawled_list.pkl'
         self.scale = scale
         self.StockData = []
 
@@ -76,7 +77,7 @@ class CrawlStockData(FileHandler):
             condition = SecurityList.code.in_(code1)
             db.delete(SecurityList, condition)
         else:
-            df.to_excel(f'{PATH}/selections/stock_list.xlsx', index=False)
+            self.save_table(df, f'{PATH}/selections/stock_list.xlsx')
 
     def export_kbar_data(self, df: pd.DataFrame, scale: str):
         '''Export kbar data either to local or to DB'''
@@ -100,9 +101,8 @@ class CrawlStockData(FileHandler):
         logging.info(f"Target list size: {len(stockids)}")
 
         # get crawled list
-        filename = f'{self.folder_path}/crawled_list.pkl'
         df_default = pd.DataFrame({'stockid': []})
-        self.crawled_list = self.read_table(filename, df_default)
+        self.crawled_list = self.read_table(self.tempFile, df_default)
         logging.info(f"Crawled size: {self.crawled_list.shape[0]}")
 
         return create_queue(stockids, self.crawled_list.stockid.values)
@@ -138,9 +138,8 @@ class CrawlStockData(FileHandler):
         self.StockData = np.array([None]*N)
         while True:
             if q.empty():
-                os.remove(f'{self.folder_path}/crawled_list.pkl')
+                os.remove(self.tempFile)
                 logging.info("Queue is deleted successfully")
-
                 break
 
             i = N-q.qsize()
@@ -158,9 +157,7 @@ class CrawlStockData(FileHandler):
                         self.crawled_list,
                         pd.DataFrame([{'stockid': stockid}])
                     ])
-                    self.crawled_list.to_pickle(
-                        f'{self.folder_path}/crawled_list.pkl')
-
+                    self.save_table(self.crawled_list, filename=self.tempFile)
             except:
                 logging.exception(f"Put back into queue: {stockid}")
                 q.put(stockid)
@@ -463,7 +460,7 @@ class CrawlFromHTML(TimeTool, FileHandler):
 
         filename = f'{PATH}/Kbars/futures_data_1T.pkl'
         df = self.read_and_concat(filename, df)
-        df.to_pickle(filename)
+        self.save_table(df, filename)
 
     def export_ex_dividend_list(self, df: pd.DataFrame):
         if db.HAS_DB:
