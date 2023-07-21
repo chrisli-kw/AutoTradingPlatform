@@ -17,6 +17,6 @@ pandas==1.4.4
 plotly==5.5.0
 python-dotenv==0.19.2
 redis==4.3.4
-shioaji==1.1.0
+shioaji==1.1.8
 XlsxWriter==3.0.2
 lxml==4.8.0

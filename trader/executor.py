@@ -1339,8 +1339,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         strategy_s, all_stocks = self.init_stocks()
         strategy_f, all_futures = self.init_futures()
+        usage = round(API.usage().bytes/2**20, 2)
         self.subscribe_all(all_stocks+all_futures)
 
+        logging.info(f"Current data usage: {usage}")
         logging.info(f"Today's punish lis: {self.punish_list}")
         logging.info(f"Stocks Ex-dividend: {self.StrategySet.dividends}")
         logging.info(f"Previous Put/Call ratio: {self.StrategySet.pc_ratio}")
@@ -1363,6 +1365,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         text += f"\n【操盤模式】{self.MODE}\n【操盤策略】{self.STRATEGY_STOCK}"
         text += f"\n【前日行情】Put/Call: {self.StrategySet.pc_ratio}"
         text += f"\n【美股行情】道瓊({self.pct_chg_DowJones}%)"
+        text += f"\n【數據用量】{usage}MB"
         notifier.post(text, msgType='Monitor')
 
         # 開始監控
