@@ -182,7 +182,7 @@ def runSelectStock():
         picker.setScripts(SelectMethods)
         df = picker.pick(3, 1.8, 3)
         df = picker.melt_table(df)
-        tb = df[df.date == TODAY_STR].reset_index(drop=True)
+        tb = df[df.Time == TODAY_STR].reset_index(drop=True)
         picker.export(tb)
         notifier.post_stock_selection(tb)
 

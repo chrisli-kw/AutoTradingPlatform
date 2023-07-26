@@ -83,7 +83,7 @@ class SelectStock(TimeTool, FileHandler):
         if db.HAS_DB:
             if self.mode == 'select':
                 start = TODAY - timedelta(days=365*2)
-                condition = KBarTables[self.scale].date >= start
+                condition = KBarTables[self.scale].Time >= start
                 df = db.query(KBarTables[self.scale], condition)
             else:
                 df = db.query(KBarTables[self.scale])
@@ -91,7 +91,6 @@ class SelectStock(TimeTool, FileHandler):
             dir_path = f'{PATH}/Kbars/{self.scale}'
             df = self.read_tables_in_folder(dir_path)
 
-        df = df.drop(['date', 'hour', 'minute'], axis=1)
         df = df.drop_duplicates(['name', 'Time'], keep='last')
         df = df.sort_values(['name', 'Time'])
         return df
@@ -143,9 +142,6 @@ class SelectStock(TimeTool, FileHandler):
             df['ma_1_20'] = group.Close.transform(
                 lambda x: x.shift(1).rolling(20).mean())
 
-        if self.scale == '1D':
-            df = df.rename(columns={'Time': 'date'})
-
         return df
 
     def pick(self, *args):
@@ -174,7 +170,7 @@ class SelectStock(TimeTool, FileHandler):
 
         if not columns:
             columns = [
-                'name', 'company_name', 'category', 'date',
+                'name', 'company_name', 'category', 'Time',
                 'Open', 'High', 'Low', 'Close', 'Volume', 'Amount',
             ]
         select_methods = list(self.METHODS)

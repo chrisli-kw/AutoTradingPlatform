@@ -135,10 +135,7 @@ class KBarData1T(Base):
         Integer, primary_key=True, autoincrement=True, nullable=False)
 
     name = Column(String(10, collation), nullable=False)
-    date = Column(TIMESTAMP(fsp=6), server_default=time_default)
     Time = Column(TIMESTAMP(fsp=6), server_default=time_default)
-    hour = Column(Integer)
-    minute = Column(Integer)
     Open = Column(FLOAT(2), default=0)
     High = Column(FLOAT(2), default=0)
     Low = Column(FLOAT(2), default=0)
@@ -161,10 +158,7 @@ class KBarData30T(Base):
         Integer, primary_key=True, autoincrement=True, nullable=False)
 
     name = Column(String(10, collation), nullable=False)
-    date = Column(TIMESTAMP(fsp=6), server_default=time_default)
     Time = Column(TIMESTAMP(fsp=6), server_default=time_default)
-    hour = Column(Integer)
-    minute = Column(Integer)
     Open = Column(FLOAT(2), default=0)
     High = Column(FLOAT(2), default=0)
     Low = Column(FLOAT(2), default=0)
@@ -187,10 +181,7 @@ class KBarData60T(Base):
         Integer, primary_key=True, autoincrement=True, nullable=False)
 
     name = Column(String(10, collation), nullable=False)
-    date = Column(TIMESTAMP(fsp=6), server_default=time_default)
     Time = Column(TIMESTAMP(fsp=6), server_default=time_default)
-    hour = Column(Integer)
-    minute = Column(Integer)
     Open = Column(FLOAT(2), default=0)
     High = Column(FLOAT(2), default=0)
     Low = Column(FLOAT(2), default=0)
@@ -213,10 +204,7 @@ class KBarData1D(Base):
         Integer, primary_key=True, autoincrement=True, nullable=False)
 
     name = Column(String(10, collation), nullable=False)
-    date = Column(TIMESTAMP(fsp=6), server_default=time_default)
     Time = Column(TIMESTAMP(fsp=6), server_default=time_default)
-    hour = Column(Integer)
-    minute = Column(Integer)
     Open = Column(FLOAT(2), default=0)
     High = Column(FLOAT(2), default=0)
     Low = Column(FLOAT(2), default=0)

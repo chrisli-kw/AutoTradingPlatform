@@ -23,9 +23,6 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         self.daysdata = self.__set_daysdata(kbar_start_day)
         self.maps = {
             'name': 'first',
-            'date': 'first',
-            'hour': 'first',
-            'minute': 'first',
             'Open': 'first',
             'High': 'max',
             'Low': 'min',
@@ -34,7 +31,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             'Amount': 'sum'
         }
         self.kbar_columns = [
-            'name', 'date', 'Time', 'hour', 'minute',
+            'name', 'Time',
             'Open', 'High', 'Low', 'Close', 'Volume', 'Amount'
         ]
         self.featureFuncs = {
@@ -180,10 +177,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         tb = pd.DataFrame({**kbars})
         tb.ts = pd.to_datetime(tb.ts)
         tb.insert(0, 'name', stockid)
-        tb.insert(1, 'date', tb.ts.apply(self.datetime_to_str))
         tb.name = tb.name.replace('OTC101', '101').replace('TSE001', '001')
-        tb['hour'] = tb.ts.dt.hour
-        tb['minute'] = tb.ts.dt.minute
         tb = tb.rename(columns={'ts': 'Time'})
         return tb
 
@@ -197,7 +191,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             for scale in self.featureFuncs:
                 kbar = self.convert_kbar(tb, scale)
                 if scale == '1D':
-                    kbar = kbar[kbar.date != TODAY_STR]
+                    kbar = kbar[kbar.Time.dt.date.astype(str) != TODAY_STR]
                 else:
                     scale_ = self._scale_converter(scale)
                     n = self.count_n_kbars(TimeStartStock, now, scale_)
@@ -251,10 +245,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         if not tb.shape[1]:
             return pd.DataFrame()
 
-        tb['date'] = TODAY_STR
         tb['Time'] = pd.to_datetime(datetime.now())
-        tb['hour'] = tb.Time.dt.hour
-        tb['minute'] = tb.Time.dt.minute
         tb['Open'] = tb.price.apply(lambda x: x[0])
         tb['High'] = tb.price.apply(max)
         tb['Low'] = tb.price.apply(min)
@@ -276,8 +267,6 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             tb = tb.rename(columns={'Code': 'name', 'Date': 'date'})
 
             tb['Time'] = pd.to_datetime(datetime.now())
-            tb['hour'] = tb.Time.dt.hour
-            tb['minute'] = tb.Time.dt.minute
             tb['Open'] = tb.Close.values[0]
             tb['High'] = tb.Close.max()
             tb['Low'] = tb.Close.min()
@@ -285,7 +274,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             tb.Volume = tb.Volume.sum()
             tb['Amount'] = tb.Amount.sum()
             tb = tb[self.kbar_columns]
-            return tb.drop_duplicates(['name', 'date', 'hour', 'minute'])
+            return tb.drop_duplicates(['name', 'Time'])
         except:
             return pd.DataFrame()
 
@@ -317,7 +306,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         def concat_df(df):
             if df.shape[0]:
                 self.KBars['1T'] = pd.concat(
-                    [self.KBars['1T'], df]).sort_values(['name', 'date']).reset_index(drop=True)
+                    [self.KBars['1T'], df]).sort_values(['name', 'Time']).reset_index(drop=True)
 
         if TimeStartStock <= datetime.now() <= TimeEndStock:
             for i in quotes.AllIndex:

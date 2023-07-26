@@ -130,19 +130,19 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
             df = KBarTables['1D']
             df = db.query(
                 df,
-                df.date >= start,
-                df.date <= end,
+                df.Time >= start,
+                df.Time <= end,
                 df.name.in_(names)
             )
         else:
             dir_path = f'{PATH}/KBars/1D'
             df = self.read_tables_in_folder(dir_path)
             df = df[
-                (df.date >= start) &
-                (df.date <= end) &
+                (df.Time >= start) &
+                (df.Time <= end) &
                 df.name.isin(names)
             ]
-        df = df.sort_values(['name', 'date']).reset_index(drop=True)
+        df = df.sort_values(['name', 'Time']).reset_index(drop=True)
         return df
 
     def plot_performance_report(self, Tables: namedtuple = None, save=True):
@@ -165,7 +165,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
         tb = df_select.drop_duplicates(['code', 'date', 'isLong'])
         profits = np.array([0.0]*tb.shape[0])
         for i, (code, day, is_long) in enumerate(zip(tb.code, tb.date, tb.isLong)):
-            temp = table[(table.name == code) & (table.date >= day)].head(5)
+            temp = table[(table.name == code) & (table.Time >= day)].head(5)
             v1 = temp.Open.values[0]
             v2 = temp.Close.values[-1]
             m = 1 if is_long else -1
@@ -406,6 +406,9 @@ class BacktestReport(SuplotHandler, FileHandler):
 
     def plot_backtest_result(self, TestResult: object, title="Backtest Report"):
         '''將回測結果畫成圖表'''
+
+        if TestResult.Statement is None:
+            return self.Figures
 
         statement = TestResult.Statement.copy()
         statement.OpenTime = statement.OpenTime.apply(self._replaceString)

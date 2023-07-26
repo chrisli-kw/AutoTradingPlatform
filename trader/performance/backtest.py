@@ -29,10 +29,10 @@ def merge_pc_ratio(df):
     else:
         df_pcr = pd.read_csv(f'{PATH}/put_call_ratio.csv')
 
-    df_pcr = df_pcr.rename(columns={'Date': 'date'})
-    df_pcr.date = pd.to_datetime(df_pcr.date)
+    df_pcr = df_pcr.rename(columns={'Date': 'Time'})
+    df_pcr.Time = pd.to_datetime(df_pcr.Time)
     df_pcr.PutCallRatio = df_pcr.PutCallRatio.shift(1)
-    df = df.merge(df_pcr[['date', 'PutCallRatio']], how='left', on='date')
+    df = df.merge(df_pcr[['Time', 'PutCallRatio']], how='left', on='Time')
     return df
 
 
@@ -168,15 +168,15 @@ class BacktestPerformance(FileHandler):
                     table = KBarTables[self.scale]
                     table = db.query(
                         table,
-                        table.date >= start,
-                        table.date <= end
+                        table.Time >= df.OpenTime.min(),
+                        table.Time <= df.CloseTime.max(),
                     )
                 else:
                     dir_path = f'{PATH}/KBars/{self.scale}'
                     table = self.read_tables_in_folder(dir_path)
                     table = table[
-                        (table.date >= start) &
-                        (table.date <= end)
+                        (table.Time >= df.OpenTime.min()) &
+                        (table.Time <= df.CloseTime.max())
                     ]
 
                 df_TSE = table[table.name == '1']
@@ -331,7 +331,7 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
         self.FEE_RATE = .001425*.65
         self.TAX_RATE_STOCK = .003
         self.TAX_RATE_FUTURES = .00002
-        self.TimeCol = 'date' if self.scale == '1D' else 'Time'
+        self.TimeCol = 'Time'
 
         self.nStocksLimit = 0
         self.nStocks_high = 20
@@ -485,18 +485,24 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
         '''
 
         if 'startDate' in params and params['startDate']:
-            df = df[df.date >= params['startDate']]
+            start = params['startDate']
+            if isinstance(start, str):
+                start = pd.to_datetime(start)
+            df = df[df.Time >= start]
 
         if 'endDate' in params and params['endDate']:
-            df = df[df.date <= params['endDate']]
+            end = params['endDate']
+            if isinstance(end, str):
+                end = pd.to_datetime(end)
+            df = df[df.Time <= end]
 
         required_cols = [
-            'name', 'date', 'isIn', 'PutCallRatio',
+            'name', 'Time', 'isIn', 'PutCallRatio',
             'Open', 'High', 'Low', 'Close', 'Volume'
         ]
 
         if self.scale != '1D':
-            required_cols += ['Time', 'nth_bar']
+            required_cols += ['nth_bar']
 
         if self.Market == 'Stocks':
             required_cols += [
@@ -888,8 +894,8 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
 
         params.update({
             'statement': self.statements,
-            'startDate': pd.to_datetime(params['startDate']) if 'startDate' in params else df.date.min(),
-            'endDate': pd.to_datetime(params['endDate']) if 'endDate' in params else df.date.max(),
+            'startDate': params['startDate'] if 'startDate' in params else df.Time.min(),
+            'endDate': params['endDate'] if 'endDate' in params else df.Time.max(),
             'daily_info': pd.DataFrame(self.daily_info).T,
 
         })

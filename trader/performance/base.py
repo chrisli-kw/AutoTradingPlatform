@@ -15,6 +15,9 @@ def convert_statement(df, mode='trading', **kwargs):
                 return s
         return 'Unknown'
 
+    if not df.shape[0]:
+        return df
+
     if mode == 'trading':
         df = df.rename(columns={
             'code': 'Code',

@@ -383,3 +383,6 @@ class AccountInfo(TimeTool, FileHandler):
             summary='Y', start_date=start_date, end_date=end_date)
         df_profitloss = pd.DataFrame(settle_profitloss.data())
         return df_profitloss
+
+    def dataUsage(self):
+        return round(API.usage().bytes/2**20, 2)

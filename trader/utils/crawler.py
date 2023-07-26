@@ -85,6 +85,7 @@ class CrawlStockData(FileHandler):
         if db.HAS_DB:
             db.dataframe_to_DB(df, KBarTables[scale])
 
+        df.Volume = df.Volume.astype('int32')
         filename = f'{PATH}/Kbars/{scale}/{TODAY_STR}-stock_data_{scale}.pkl'
         self.save_table(df, filename)
         return df
@@ -118,9 +119,9 @@ class CrawlStockData(FileHandler):
         if not start:
             if update:
                 if db.HAS_DB:
-                    dates = db.query(KBarTables[self.scale].date)
+                    dates = db.query(KBarTables[self.scale].Time)
                     if dates.shape[0]:
-                        last_end = dates.date.max()
+                        last_end = dates.Time.max()
                     else:
                         last_end = self.timetool.last_business_day()
                 else:
@@ -128,8 +129,8 @@ class CrawlStockData(FileHandler):
                     ref = self.timetool.last_business_day()
                     last_end = self.read_table(
                         filename=filename,
-                        df_default=pd.DataFrame({'date': [ref]})
-                    ).date.max()
+                        df_default=pd.DataFrame({'Time': [ref]})
+                    ).Time.max()
                 start = self.timetool._strf_timedelta(last_end, -1)
             else:
                 start = '2017-01-01'
@@ -177,21 +178,20 @@ class CrawlStockData(FileHandler):
         logging.info("Merge stockinfo")
         if len(self.StockData):
             df = pd.concat(self.StockData)
-            df.date = pd.to_datetime(df.date)
+            df.Time = pd.to_datetime(df.Time)
             df.name = df.name.astype(int).astype(str)
             self.StockData = df
         else:
             df = self.read_tables_in_folder(self.folder_path, pattern='.csv')
             if df.shape[0]:
-                for col in ['date', 'Time']:
-                    if col in df.columns:
-                        df[col] = pd.to_datetime(df[col])
+                if 'Time' in df.columns:
+                    df['Time'] = pd.to_datetime(df['Time'])
 
                 df.name = df.name.astype(int)
 
             self.remove_files(self.folder_path, pattern='.csv')
 
-        df = df.sort_values(['name', 'date', 'Time']).reset_index(drop=True)
+        df = df.sort_values(['name', 'Time']).reset_index(drop=True)
         df = self.export_kbar_data(df, '1T')
         os.rmdir(self.folder_path)
 
@@ -201,9 +201,9 @@ class CrawlStockData(FileHandler):
         if isinstance(self.StockData, pd.DataFrame) and self.StockData.shape[0]:
             df = self.StockData.copy()
         elif db.HAS_DB:
-            condition1 = KBarData1T.date >= text(
+            condition1 = KBarData1T.Time >= text(
                 start) if start else text('1901-01-01')
-            condition2 = KBarData1T.date <= text(
+            condition2 = KBarData1T.Time <= text(
                 end) if end else text(TODAY_STR)
             df = db.query(KBarData1T, condition1, condition2)
         else:
@@ -220,20 +220,19 @@ class CrawlStockData(FileHandler):
             df = np.array([None]*N)
             for i, fd in enumerate(folders):
                 tb = pd.read_csv(
-                    f'{PATH}/Kbars/1T/{fd}/{fd}-stock_data_1T.csv')
-                tb = tb.sort_values('date')
+                    f'{PATH}/Kbars/1T/{fd}-stock_data_1T.csv')
+                tb = tb.sort_values(['name', 'Time'])
 
                 if tb.shape[0]:
-                    for col in ['date', 'Time']:
-                        if col in tb.columns:
-                            tb[col] = pd.to_datetime(tb[col])
+                    if 'Time' in tb.columns:
+                        tb['Time'] = pd.to_datetime(tb['Time'])
 
                     tb.name = tb.name.astype(int)
 
                 df[i] = tb
 
             df = pd.concat(df)
-            df = df.sort_values(['name', 'date', 'Time'])
+            df = df.sort_values(['name', 'Time'])
             df = df.reset_index(drop=True)
             df.name = df.name.astype(int).astype(str)
 
@@ -260,7 +259,7 @@ class CrawlStockData(FileHandler):
             dir_path = f'{PATH}/Kbars/{scale}'
             year_month = self.timetool.datetime_to_str(last_day)[:-3]
             df = self.read_tables_in_folder(dir_path, pattern=year_month)
-            df = df.sort_values(['name', 'date', 'Time'])
+            df = df.sort_values(['name', 'Time'])
             df = df.reset_index(drop=True)
 
             if save:
