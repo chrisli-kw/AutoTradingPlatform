@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
+from .. import file_handler
 from ..config import PATH, TODAY_STR, TimeTransferFutures, StrategyList
 from ..utils.database import db
 from ..utils.database.tables import PutCallRatioList, ExDividendTable
@@ -108,7 +109,7 @@ class StrategyTool:
             return df[df.Date == TODAY_STR].set_index('Code').CashDividend.to_dict()
 
         try:
-            df = pd.read_csv(f'{PATH}/exdividends.csv')
+            df = file_handler.read_table(f'{PATH}/exdividends.csv')
             df.Code = df.Code.astype(str).str.zfill(4)
             return df[df.Date == TODAY_STR].set_index('Code').CashDividend.to_dict()
         except:
@@ -124,7 +125,7 @@ class StrategyTool:
             return 100
 
         try:
-            pc_ratio = pd.read_csv(f'{PATH}/put_call_ratio.csv')
+            pc_ratio = file_handler.read_table(f'{PATH}/put_call_ratio.csv')
             pc_ratio = pc_ratio.sort_values('Date')
             return pc_ratio.PutCallRatio.values[-1]
         except:

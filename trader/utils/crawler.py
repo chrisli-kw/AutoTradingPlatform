@@ -13,11 +13,11 @@ from sqlalchemy import text
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
+from ..config import API, PATH, TODAY_STR, TODAY
 from . import progress_bar, create_queue
 from .kbar import KBarTool
 from .time import TimeTool
 from .file import FileHandler
-from ..config import API, PATH, TODAY_STR, TODAY
 from .database import db, KBarTables
 from .database.tables import KBarData1T, SecurityList, PutCallRatioList, ExDividendTable
 
@@ -29,7 +29,10 @@ def readStockList(markets=['OTC', 'TSE']):
             SecurityList.exchange.in_(markets)
         )
     else:
-        df = pd.read_excel(f'{PATH}/selections/stock_list.xlsx')
+        df = FileHandler().read_table(
+            f'{PATH}/selections/stock_list.xlsx',
+            df_default=pd.DataFrame(columns=['code', 'exchange'])
+        )
         df.code = df.code.astype(int).astype(str)
         df = df[df.exchange.isin(markets)]
     return df
@@ -219,8 +222,8 @@ class CrawlStockData(FileHandler):
             N = len(folders)
             df = np.array([None]*N)
             for i, fd in enumerate(folders):
-                tb = pd.read_csv(
-                    f'{PATH}/Kbars/1T/{fd}-stock_data_1T.csv')
+                filename = f'{PATH}/Kbars/1T/{fd}-stock_data_1T.pkl'
+                tb = self.read_table(filename)
                 tb = tb.sort_values(['name', 'Time'])
 
                 if tb.shape[0]:

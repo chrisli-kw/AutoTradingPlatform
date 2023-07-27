@@ -10,9 +10,9 @@ from collections import namedtuple
 from datetime import datetime, timedelta
 
 from . import __version__
-from . import notifier, picker, crawler2
+from . import notifier, picker, crawler2, file_handler
 from .config import API, PATH, TODAY, TODAY_STR, holidays
-from .config import FEE_RATE, TStart, TEnd, TTry, TimeStartStock, TimeStartFuturesDay
+from .config import FEE_RATE, TEnd, TTry, TimeStartStock, TimeStartFuturesDay
 from .config import TimeEndFuturesDay, TimeStartFuturesNight, TimeEndFuturesNight
 from .utils import get_contract
 from .utils.kbar import KBarTool
@@ -1015,6 +1015,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         '''取得證券庫存清單'''
 
         if self.simulation:
+            df_default = {
+                'Stocks': self.df_securityInfo,
+                'Futures': self.df_futuresInfo
+            }
             try:
                 if db.HAS_DB and market == 'Stocks':
                     df = db.query(
@@ -1027,13 +1031,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                         SecurityInfoFutures.Account == self.ACCOUNT_NAME
                     )
                 else:
-                    df = pd.read_pickle(
-                        f'{PATH}/stock_pool/simulation_{market.lower()}_{self.ACCOUNT_NAME}.pkl')
+                    df = file_handler.read_table(
+                        f'{PATH}/stock_pool/simulation_{market.lower()}_{self.ACCOUNT_NAME}.pkl',
+                        df_default=df_default[market]
+                    )
             except:
-                if market == 'Stocks':
-                    df = self.df_securityInfo
-                else:
-                    df = self.df_futuresInfo
+                df = df_default[market]
 
             df['account_id'] = 'simulate'
 

@@ -5,6 +5,7 @@ from typing import Union
 from datetime import datetime
 from collections import namedtuple
 
+from .. import file_handler
 from ..config import PATH, TODAY_STR
 from ..utils import progress_bar
 from ..utils.kbar import KBarTool
@@ -27,7 +28,7 @@ def merge_pc_ratio(df):
     if db.HAS_DB:
         df_pcr = db.query(PutCallRatioList)
     else:
-        df_pcr = pd.read_csv(f'{PATH}/put_call_ratio.csv')
+        df_pcr = file_handler.read_table(f'{PATH}/put_call_ratio.csv')
 
     df_pcr = df_pcr.rename(columns={'Date': 'date'})
     df_pcr.date = pd.to_datetime(df_pcr.date)

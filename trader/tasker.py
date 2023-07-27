@@ -276,7 +276,7 @@ def thread_subscribe(user, targets):
 
 def runShioajiSubscriber():
     # TODO: 讀取要盤中選股的股票池
-    df = pd.read_excel(f'{PATH}/selections/stock_list.xlsx')
+    df = file_handler.read_table(f'{PATH}/selections/stock_list.xlsx')
     codes = df[df.exchange.isin(['TSE', 'OTC'])].code.astype(str).values
 
     N = 200
