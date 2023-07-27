@@ -165,7 +165,8 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
         tb = df_select.drop_duplicates(['code', 'date', 'isLong'])
         profits = np.array([0.0]*tb.shape[0])
         for i, (code, day, is_long) in enumerate(zip(tb.code, tb.date, tb.isLong)):
-            temp = table[(table.name == code) & (table.Time >= day)].head(5)
+            d = str(day.date())
+            temp = table[(table.name == code) & (table.Time >= d)].head(5)
             v1 = temp.Open.values[0]
             v2 = temp.Close.values[-1]
             m = 1 if is_long else -1
@@ -451,7 +452,7 @@ class BacktestReport(SuplotHandler, FileHandler):
             dict(y='PutCallRatio', name='Put/Call Ratio', marker_color='#ff9f1a'),
             dict(y='pc115', name='多空分界', marker_color='#68c035'),
         ]:
-            fig = self.add_line(fig, temp, 5, 1, args)
+            fig = self.add_line(fig, daily_info, 5, 1, args)
 
         # Changes in Opens & Closes
         for args in [
@@ -459,25 +460,25 @@ class BacktestReport(SuplotHandler, FileHandler):
             dict(y='nClose', name='Closes', marker_color='#7F7F7F'),
             dict(y='n_stocks', name='in-stock', marker_color='#ef488e')
         ]:
-            fig = self.add_line(fig, temp, 5, 2, args)
+            fig = self.add_line(fig, daily_info, 5, 2, args)
 
         # Accumulated Balance
         args = dict(y='balance', name='Accumulated Balance', marker_color='#d3503c')
-        fig = self.add_line(fig, temp, 6, 1, args)
+        fig = self.add_line(fig, daily_info, 6, 1, args)
 
         # Accumulated Profit/Loss
         for args in [
             dict(y='profits', name="Accumulated Profit", marker_color='#c25656'),
             dict(y='losses', name="Accumulated Loss", marker_color='#9ad37e')
         ]:
-            fig = self.add_line(fig, temp, 6, 2, args, fill='tozeroy')
+            fig = self.add_line(fig, daily_info, 6, 2, args, fill='tozeroy')
 
         # Changes in Portfolio Control
         for args in [
             dict(y='chance', name='Opens Available', marker_color='#48efec'),
             dict(y='n_stock_limit', name='Opens Limit', marker_color='#b1487f')
         ]:
-            fig = self.add_line(fig, temp, 7, 1, args)
+            fig = self.add_line(fig, daily_info, 7, 1, args)
 
         # figure layouts
         fig.update_layout(height=2400, width=1700, title_text=title)

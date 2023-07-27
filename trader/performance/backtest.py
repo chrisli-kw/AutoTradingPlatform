@@ -29,11 +29,14 @@ def merge_pc_ratio(df):
     else:
         df_pcr = pd.read_csv(f'{PATH}/put_call_ratio.csv')
 
-    df_pcr = df_pcr.rename(columns={'Date': 'Time'})
-    df_pcr.Time = pd.to_datetime(df_pcr.Time)
+    df_pcr = df_pcr.rename(columns={'Date': 'date'})
+    df_pcr.date = pd.to_datetime(df_pcr.date)
     df_pcr.PutCallRatio = df_pcr.PutCallRatio.shift(1)
-    df = df.merge(df_pcr[['Time', 'PutCallRatio']], how='left', on='Time')
-    return df
+
+    if 'date' not in df.columns:
+        df['date'] = pd.to_datetime(df.Time.dt.date)
+    df = df.merge(df_pcr[['date', 'PutCallRatio']], how='left', on='date')
+    return df.drop('date', axis=1)
 
 
 class BacktestPerformance(FileHandler):
@@ -356,13 +359,11 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
         if backtestScript.market == 'Stocks':
             df = self.load_and_merge()
             df = self.preprocess(df)
-            if backtestScript.scale == '1D':
-                df = merge_pc_ratio(df)
         else:
             kbt = KBarTool()
             df = pd.read_pickle(f'{PATH}/Kbars/futures_data_1T.pkl')
             df = kbt.convert_kbar(df, backtestScript.scale)
-            df = merge_pc_ratio(df)
+        df = merge_pc_ratio(df)
 
         print('Done')
         return df

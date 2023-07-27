@@ -45,6 +45,9 @@ class SuplotHandler:
         return fig
 
     def add_candlestick(self, fig, df, row, col):
+        if not df.shape[0]:
+            return fig
+
         title = {'1': 'TWSE', '101': 'OTC'}
         name = df.name.unique()[0]
         name = title[name] if name in title else name
