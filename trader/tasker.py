@@ -32,14 +32,15 @@ def runPerformanceReport():
 
             pr = PerformanceReport(env)
             Tables = pr.getTables(config)
-            pr.save_tables(Tables)
-            pr.plot_performance_report(Tables, save=True)
+            if Tables is not None:
+                pr.save_tables(Tables)
+                pr.plot_performance_report(Tables, save=True)
 
-            notifier.post(
-                pr.TablesFile.split('/')[-1][:-5],
-                image_name=pr.TablesFile.replace('xlsx', 'jpg'),
-                msgType='AccountInfo'
-            )
+                notifier.post(
+                    pr.TablesFile.split('/')[-1][:-5],
+                    image_name=pr.TablesFile.replace('xlsx', 'jpg'),
+                    msgType='AccountInfo'
+                )
     except:
         logging.exception('Catch an exception:')
         notifier.post('\n【Error】【帳務資訊查詢】發生異常', msgType='Tasker')

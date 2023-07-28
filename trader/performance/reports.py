@@ -68,6 +68,10 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
         init_position = int(config['INIT_POSITION'])
 
         df = self.read_statement(f'simulate-{self.account}')
+
+        if not df.shape[0]:
+            return None
+
         df = convert_statement(df, init_position=init_position)
         df = df[df.CloseTime.dt.month == TODAY.month]
 
