@@ -337,6 +337,14 @@ class AccountInfo(TimeTool, FileHandler):
         }
         return row
 
+    def update_info(self, df, row):
+        tb = pd.read_excel(df, sheet_name='dentist_1')
+        tb = pd.concat([
+            tb,
+            pd.DataFrame([row])
+        ]).reset_index(drop=True)
+        return tb
+
     def get_account_margin(self):
         '''期權保證金資訊'''
 

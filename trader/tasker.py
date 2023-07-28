@@ -23,11 +23,7 @@ def runCreateENV():
     app.run()
 
 
-def runAccountInfo():
-    # account = AccountInfo()
-    # df = account.create_info_table()
-    # tables = {}
-
+def runPerformanceReport():
     try:
         logging.debug(f'ACCOUNTS: {ACCOUNTS}')
         for env in ACCOUNTS:
@@ -44,57 +40,70 @@ def runAccountInfo():
                 image_name=pr.TablesFile.replace('xlsx', 'jpg'),
                 msgType='AccountInfo'
             )
+    except:
+        logging.exception('Catch an exception:')
+        notifier.post('\n【Error】【帳務資訊查詢】發生異常', msgType='Tasker')
+        API.logout()
 
-        #     API_KEY = config['API_KEY']
-        #     SECRET_KEY = config['SECRET_KEY']
-        #     acct = config['ACCOUNT_NAME']
-        #     account._login(API_KEY, SECRET_KEY, acct)
-        #     time.sleep(1)
 
-        #     row = account.query_all()
-        #     if row:
-        #         for i, data in enumerate(row):
-        #             if i < 3:
-        #                 logging.info(f"{data}： {row[data]}")
-        #             else:
-        #                 logging.info(f"{data}： NT$ {'{:,}'.format(row[data])}")
+def runAccountInfo():
+    account = AccountInfo()
+    df = account.create_info_table()
+    tables = {}
 
-        #         if hasattr(df, 'sheet_names') and acct in df.sheet_names:
-        #             tb = account.update_info(df, row)
-        #         else:
-        #             tb = pd.DataFrame([row])
+    try:
+        logging.debug(f'ACCOUNTS: {ACCOUNTS}')
+        for env in ACCOUNTS:
+            logging.debug(f'Load 【{env}】 config')
+            config = dotenv_values(f'./lib/envs/{env}.env')
 
-        #         tables[acct] = tb
+            API_KEY = config['API_KEY']
+            SECRET_KEY = config['SECRET_KEY']
+            acct = config['ACCOUNT_NAME']
+            account._login(API_KEY, SECRET_KEY, acct)
+            time.sleep(1)
 
-        #         # 推播訊息
-        #         account_id = API.stock_account.account_id
-        #         notifier.post_account_info(account_id, row)
+            row = account.query_all()
+            if row:
+                for i, data in enumerate(row):
+                    if i < 3:
+                        logging.info(f"{data}： {row[data]}")
+                    else:
+                        logging.info(f"{data}： NT$ {'{:,}'.format(row[data])}")
 
-        #     elif hasattr(df, 'sheet_names') and account.account_name in df.sheet_names:
-        #         tables[acct] = pd.read_excel(
-        #             df, sheet_name=account.account_name)
+                if hasattr(df, 'sheet_names') and acct in df.sheet_names:
+                    tb = account.update_info(df, row)
+                else:
+                    tb = pd.DataFrame([row])
 
-        #     else:
-        #         tables[acct] = account.DEFAULT_TABLE
+                tables[acct] = tb
 
-        #     # 登出
-        #     time.sleep(5)
-        #     logging.info(f'登出系統: {API.logout()}')
-        #     time.sleep(10)
+                # 推播訊息
+                account_id = API.stock_account.account_id
+                notifier.post_account_info(account_id, row)
+            elif hasattr(df, 'sheet_names') and account.account_name in df.sheet_names:
+                tables[acct] = pd.read_excel(df, sheet_name=env)
+            else:
+                tables[acct] = account.DEFAULT_TABLE
 
-        # logging.info('儲存資訊')
-        # writer = pd.ExcelWriter(
-        #     f'{PATH}/daily_info/{account.filename}', engine='xlsxwriter')
+            # 登出
+            time.sleep(5)
+            logging.info(f'登出系統: {API.logout()}')
+            time.sleep(10)
 
-        # for sheet in tables:
-        #     try:
-        #         tables[sheet].to_excel(
-        #             writer, encoding='utf-8-sig', index=False, sheet_name=sheet)
-        #     except:
-        #         logging.exception('Catch an exception:')
-        #         tables[sheet].to_excel(
-        #             sheet+'.csv', encoding='utf-8-sig', index=False)
-        # writer.save()
+        logging.info('儲存資訊')
+        writer = pd.ExcelWriter(
+            f'{PATH}/daily_info/{account.filename}', engine='xlsxwriter')
+
+        for sheet in tables:
+            try:
+                tables[sheet].to_excel(
+                    writer, encoding='utf-8-sig', index=False, sheet_name=sheet)
+            except:
+                logging.exception('Catch an exception:')
+                tables[sheet].to_excel(
+                    sheet+'.csv', encoding='utf-8-sig', index=False)
+        writer.save()
     except:
         logging.exception('Catch an exception:')
         notifier.post('\n【Error】【帳務資訊查詢】發生異常', msgType='Tasker')
@@ -322,7 +331,7 @@ def runSimulationChecker():
 
 Tasks = {
     'create_env': [runCreateENV],
-    'account_info': [runAccountInfo, runSimulationChecker],
+    'account_info': [runAccountInfo, runPerformanceReport, runSimulationChecker],
     'update_and_select_stock': [runCrawlStockData, runSelectStock, runCrawlFromHTML],
     'crawl_stock_data': [runCrawlStockData],
     'select_stock': [runSelectStock],
