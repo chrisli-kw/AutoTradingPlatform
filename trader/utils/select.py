@@ -205,18 +205,18 @@ class SelectStock(TimeTool, FileHandler):
         day = self.last_business_day()
 
         if db.HAS_DB:
-            df = db.query(SelectedStocks, SelectedStocks.date == day)
+            df = db.query(SelectedStocks, SelectedStocks.Time == day)
         else:
             df = self.read_table(
                 filename=f'{PATH}/selections/all.csv',
                 df_default=pd.DataFrame(columns=[
-                    'code', 'company_name', 'category', 'date',
+                    'code', 'company_name', 'category', 'Time',
                     'Open', 'High', 'Low', 'Close',
                     'Volume', 'Amount', 'Strategy'
                 ])
             )
-            df.date = pd.to_datetime(df.date)
+            df.Time = pd.to_datetime(df.Time)
             df.code = df.code.astype(str)
-            df = df[df.date == day]
+            df = df[df.Time == day]
 
         return df

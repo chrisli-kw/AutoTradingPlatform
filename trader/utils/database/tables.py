@@ -314,7 +314,7 @@ class SelectedStocks(Base):
     code = Column(String(10, collation), nullable=False, comment='證券代號')
     company_name = Column(String(10, collation), comment='證券名稱')
     category = Column(String(50, collation), comment='產業類別')
-    date = Column(
+    Time = Column(
         TIMESTAMP(fsp=6), server_default=time_default, comment='選股日期')
     Open = Column(FLOAT(2), nullable=False, comment='開盤價')
     High = Column(FLOAT(2), nullable=False, comment='最高價')

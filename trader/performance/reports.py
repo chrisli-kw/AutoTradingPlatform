@@ -112,14 +112,14 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
         if db.HAS_DB:
             df = db.query(
                 SelectedStocks,
-                SelectedStocks.date >= start
+                SelectedStocks.Time >= start
             )
         else:
             dir_path = f'{PATH}/selections/history'
             df = self.read_tables_in_folder(dir_path)
         df = df[
             df.Strategy.isin(statement.Strategy) &
-            (df.date >= start)
+            (df.Time >= start)
         ]
         df['isLong'] = df.Strategy.map(
             statement.set_index('Strategy').isLong.to_dict()
@@ -127,8 +127,8 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
         return df
 
     def getKbarTable(self, df_select: pd.DataFrame):
-        start = df_select.date.min()
-        end = df_select.date.max() + timedelta(days=20)
+        start = df_select.Time.min()
+        end = df_select.Time.max() + timedelta(days=20)
         names = df_select.code.to_list() + ['1', '101']
         if db.HAS_DB:
             df = KBarTables['1D']
@@ -166,11 +166,10 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
 
         df_select = self.getSelections(df)
         table = self.getKbarTable(df_select)
-        tb = df_select.drop_duplicates(['code', 'date', 'isLong'])
+        tb = df_select.drop_duplicates(['code', 'Time', 'isLong'])
         profits = np.array([0.0]*tb.shape[0])
-        for i, (code, day, is_long) in enumerate(zip(tb.code, tb.date, tb.isLong)):
-            d = str(day.date())
-            temp = table[(table.name == code) & (table.Time >= d)].head(5)
+        for i, (code, day, is_long) in enumerate(zip(tb.code, tb.Time, tb.isLong)):
+            temp = table[(table.name == code) & (table.Time >= day)].head(5)
             v1 = temp.Open.values[0]
             v2 = temp.Close.values[-1]
             m = 1 if is_long else -1
@@ -219,12 +218,12 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
 
             # 每日選股數
             tb1 = df_select[df_select.Strategy == stra]
-            tb1 = tb1.groupby(['date', 'Strategy']).code.count()
+            tb1 = tb1.groupby(['Time', 'Strategy']).code.count()
             tb1 = tb1.reset_index()
             max_point = tb1.code.max()
             fig.add_trace(
                 go.Scatter(
-                    x=tb1.date,
+                    x=tb1.Time,
                     y=tb1.code,
                     name=name,
                     showlegend=False,
