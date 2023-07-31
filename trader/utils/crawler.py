@@ -89,7 +89,7 @@ class CrawlStockData(FileHandler):
             db.dataframe_to_DB(df, KBarTables[scale])
 
         df.Volume = df.Volume.astype('int32')
-        filename = f'{PATH}/Kbars/{scale}/{TODAY_STR}-stock_data_{scale}.pkl'
+        filename = f'{PATH}/Kbars/{scale}/{TODAY_STR}-stocks-{scale}.pkl'
         self.save_table(df, filename)
         return df
 
@@ -266,7 +266,7 @@ class CrawlStockData(FileHandler):
             df = df.reset_index(drop=True)
 
             if save:
-                filename = f'{dir_path}/{year_month}-stock_data_{scale}.pkl'
+                filename = f'{dir_path}/{year_month}-stocks-{scale}.pkl'
                 self.remove_files(dir_path, pattern=year_month)
                 self.save_table(df, filename)
 
@@ -458,7 +458,7 @@ class CrawlFromHTML(TimeTool, FileHandler):
         if db.HAS_DB:
             db.dataframe_to_DB(df, KBarData1T)
 
-        filename = f'{PATH}/Kbars/futures_data_1T.pkl'
+        filename = f'{PATH}/Kbars/1T/futures-1T.pkl'
         df = self.read_and_concat(filename, df)
         self.save_table(df, filename)
 

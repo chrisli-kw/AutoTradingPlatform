@@ -32,16 +32,16 @@ Based on the kbar frequency you select, we have 3 tables for backtesting:
 
 ### 2. Local Directories
 #### Default data names: 
-1. stock data (monthly): ```{YYYY}-{MM}-stock_data_{kbar_freq}```
-2. stock data (daily): ```{YYYY}-{MM}-{DD}-stock_data_{kbar_freq}```
-3. futures data: ```futures_data_1T```  
+1. stock data (monthly): ```{YYYY}-{MM}-stocks-{kbar_freq}```
+2. stock data (daily): ```{YYYY}-{MM}-{DD}-stocks-{kbar_freq}```
+3. futures data: ```futures-1T```  
 
 PS: The stock datasets are merged at the end of each month (after daily crawler finishes). Therefore, there are 2 kinds of file names of the stock data.
 
 #### Default path to the datasets:
-1. stock data (monthly): ```./data/Kbars/{kbar_freq}/{YYYY}-{MM}-stock_data_{kbar_freq}.pkl```
-2. stock data (daily): ```./data/Kbars/{kbar_freq}/{YYYY}-{MM}-{DD}-stock_data_{kbar_freq}.pkl```
-3. futures data: ```./data/Kbars/futures_data_1T.pkl```
+1. stock data (monthly): ```./data/Kbars/{kbar_freq}/{YYYY}-{MM}-stocks-{kbar_freq}.pkl```
+2. stock data (daily): ```./data/Kbars/{kbar_freq}/{YYYY}-{MM}-{DD}-stocks-{kbar_freq}.pkl```
+3. futures data: ```./data/Kbars/1T/futures-1T.pkl```
 
 ## Backtest Results
 After running the backtest module, you can get the following results:

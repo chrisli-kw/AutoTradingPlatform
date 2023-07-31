@@ -362,7 +362,7 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
             df = self.preprocess(df)
         else:
             kbt = KBarTool()
-            df = pd.read_pickle(f'{PATH}/Kbars/futures_data_1T.pkl')
+            df = pd.read_pickle(f'{PATH}/Kbars/futures-1T.pkl')
             df = kbt.convert_kbar(df, backtestScript.scale)
         df = merge_pc_ratio(df)
 
