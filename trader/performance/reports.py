@@ -161,6 +161,9 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
             df_config = Tables.Configuration
             df_summary = Tables.Summary
 
+        if not df.shape[0]:
+            return None
+
         df.OpenTime = df.OpenTime.dt.date
         df.CloseTime = df.CloseTime.dt.date
 

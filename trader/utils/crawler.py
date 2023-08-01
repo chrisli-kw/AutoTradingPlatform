@@ -459,6 +459,7 @@ class CrawlFromHTML(TimeTool, FileHandler):
             db.dataframe_to_DB(df, KBarData1T)
 
         filename = f'{PATH}/Kbars/1T/futures-1T.pkl'
+        df.Volume = df.Volume.astype('int32')
         df = self.read_and_concat(filename, df)
         self.save_table(df, filename)
 
