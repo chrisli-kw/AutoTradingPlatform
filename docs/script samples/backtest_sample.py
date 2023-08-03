@@ -8,27 +8,6 @@ from trader.performance.reports import BacktestReport
 from trader.utils.select import SelectStock
 
 
-def kbar_1D_processor(df1d, df):
-    df1d = df1d.rename(columns={
-        'OTCopen': 'OTCopenD',
-        'OTChigh': 'OTChighD',
-        'OTClow': 'OTClowD',
-        'OTCclose': 'OTCcloseD',
-        'Open': 'OpenD',
-        'High': 'HighD',
-        'Low': 'LowD',
-        'Close': 'CloseD',
-        'Volume': 'VolumeD',
-        'isIn': 'isInD',
-        'bias': 'biasD'
-    })
-    commons = list(set(df.columns).intersection(set(df1d.columns)))
-    target_columns_1D = ['name'] + \
-        [c for c in df1d.columns if c not in commons]
-    df1d = df1d[target_columns_1D]
-    return df1d
-
-
 Action = namedtuple(
     typename="Action",
     field_names=['position', 'reason', 'msg', 'price'],
@@ -69,8 +48,11 @@ class SampleScript:
     # Define whether its a long or short strategy
     mode = 'long'
 
-    # Kbar scale(also is the main scale for multiple kbar scales backtesting)
-    scale = '1D'
+    # Kbar MAIN scale for backtesting
+    scale = '5T'
+
+    # Kbar scales to generate indicators for backtesting
+    kbarScales = ['1D', '5T']
 
     # whether raise trading quota after opening a position
     raiseQuota = False
@@ -81,20 +63,7 @@ class SampleScript:
     # base number of days for generating features
     kbar_start_day = 16
 
-    # target columns for backtesting
-    target_columns = [
-        # required columns
-        'name', 'date', 'isIn', 'nth_bar',
-        'Open', 'High', 'Low', 'Close', 'Volume', 'volume_ma',
-        'TSEopen', 'TSEhigh', 'TSElow', 'TSEclose', 'TSEvolume',
-        'OTCopen', 'OTChigh', 'OTClow', 'OTCclose', 'OTCvolume',
-
-        # optional columns
-        'pc_ratio', 'z_totalamount', 'OTCclose_ma5',
-        'yOpen', 'yHigh', 'yLow', 'yClose',
-    ]
-
-    def add_features_1d(self, df: pd.DataFrame):
+    def addFeatures_1D(self, df: pd.DataFrame):
         '''
         ===================================================================
 
@@ -107,33 +76,14 @@ class SampleScript:
         df['yClose'] = df.groupby('name').Close.transform('shift')
         return df
 
-    def preprocess_df1d(self, df: pd.DataFrame):
-        '''
-        ===================================================================
-
-        *****OPTIONAL*****
-
-        Function of preprocessing Day-frequency dataset. Add this function
-        if your backtest strategy needs multi-scale kbar datasets.
-        ===================================================================
-        '''
-        selector = SelectStock(dma=5, mode=self.mode, scale='1D')
-        df1d = selector.load_and_merge()
-        df1d = selector.preprocess(df1d)
-        df1d = self.add_features_1d(df1d)
-
-        # label to determine whether to open a position
-        df1d['isIn'] = True
-        df1d['isIn'] = df1d.groupby('name').isIn.shift(1).fillna(False)
-        return kbar_1D_processor(df1d, df)
-
-    def addFeatures(self, df: pd.DataFrame):
+    def addFeatures(self, Kbars: dict):
         '''
         ===================================================================
         Functions of adding "other-frequency" features.
         ===================================================================
         '''
-        return df
+        Kbars['1D'] = self.addFeatures_1D(Kbars['1D'])
+        return Kbars
 
     def selectStocks(self, df: pd.DataFrame):
         '''
@@ -156,9 +106,10 @@ class SampleScript:
         Set conditions to open a position.
         ===================================================================
         '''
-        open_condition = inputs['Close'] > inputs['Open']
+        kbar1D = inputs['1D']
+        open_condition = kbar1D['Close'] > kbar1D['Open']
         if open_condition:
-            return Action(100, 'reason', 'reason', inputs['Close'])
+            return Action(100, 'reason', 'reason', kbar1D['Close'])
         return Action()
 
     def examineClose(self, stocks: dict, inputs: dict, **kwargs):
@@ -167,9 +118,10 @@ class SampleScript:
         Set conditions to close a position.
         ===================================================================
         '''
-        sell_condition = inputs['Close'] < inputs['Open']
+        kbar1D = inputs['1D']
+        sell_condition = kbar1D['Close'] < kbar1D['Open']
         if sell_condition:
-            return Action(100, 'reason', 'reason', inputs['Close'])
+            return Action(100, 'reason', 'reason', kbar1D['Close'])
         return Action()
 
 
@@ -180,40 +132,29 @@ startDate = pd.to_datetime(TODAY_STR) - timedelta(days=days)
 backtestScript = SampleScript()
 br = BacktestReport(backtestScript.market)
 tester = BackTester(config=backtestScript)
-tester.set_scripts(backtestScript)
 
 # Load & Merge datasets
-df = tester.load_data(backtestScript)
-if backtestScript.scale != '1D':
-    if backtestScript.market == 'Stocks':
-        df1d = backtestScript.preprocess_df1d(df)
-
-        df['date'] = pd.to_datetime(df.Time.dt.date)
-        df = df.merge(df1d, how='left', on=['name', 'date'])
-        df = merge_pc_ratio(df)
-        del df1d
-
+Kbars = tester.load_datasets(
+    backtestScript,
+    start=startDate,
+    end='',
+)
 
 # Add backtest features and select stocks
-df = tester.addFeatures(df)
-df = tester.selectStocks(df)
-print('Loading data done.')
-
+Kbars = tester.addFeatures(Kbars)
+Kbars = tester.selectStocks(Kbars)
 
 # Run backtest
 TestResult = tester.run(
-    df,
-    startDate=startDate,
-    endDate=None,
+    Kbars,
     init_position=init_position,
     unit=init_position/100000,
-    target_columns=backtestScript.target_columns,
     buyOrder='Close',
     raiseQuota=False
 )
 
 if TestResult.Summary is not None:
-    print(TestResult.Summary.iloc[[9, 15, 16, 17, 18, 19]])
+    print(TestResult.Summary)
 
 # tester.generate_tb_reasons(TestResult.Statement)
 

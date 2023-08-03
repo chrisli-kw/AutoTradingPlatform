@@ -79,7 +79,8 @@ class SuplotHandler:
                     mode='lines+text',
                     marker_color=c,
                     name=f'{d}MA',
-                    text=[f'{d}MA' if i == d else '' for i, _ in enumerate(ma)],
+                    text=[
+                        f'{d}MA' if i == d else '' for i, _ in enumerate(ma)],
                     textfont=dict(color=c),
                     textposition='bottom right',
                 ),

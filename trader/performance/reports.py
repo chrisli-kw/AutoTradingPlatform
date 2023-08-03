@@ -61,7 +61,8 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
                     temp = v.Configuration
                 else:
                     temp = v.Summary
-                temp = temp.rename(columns={'Description': k}).set_index('Content')
+                temp = temp.rename(
+                    columns={'Description': k}).set_index('Content')
                 df = pd.concat([df, temp], axis=1)
             return df.reset_index()
 
@@ -152,7 +153,8 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
     def plot_performance_report(self, Tables: namedtuple = None, save=True):
         if Tables is None:
             df = pd.read_excel(self.TablesFile, sheet_name='Statement')
-            df_config = pd.read_excel(self.TablesFile, sheet_name='Configuration')
+            df_config = pd.read_excel(
+                self.TablesFile, sheet_name='Configuration')
             df_summary = pd.read_excel(self.TablesFile, sheet_name='Summary')
             df_summary.iloc[22, 1:] = df_summary.iloc[22, 1:].apply(
                 lambda x: float(x.replace('%', '')))
@@ -193,7 +195,8 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
             "Profit Factor/Profit Ratio",
         )
         specs = [[{'secondary_y': True}]*2] + [[{}, {}]]*3
-        fig = make_subplots(rows=4, cols=2, subplot_titles=subplot_titles, specs=specs)
+        fig = make_subplots(
+            rows=4, cols=2, subplot_titles=subplot_titles, specs=specs)
 
         if self.strategies == []:
             self.strategies = self.getStrategyList(df)
@@ -336,21 +339,12 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
 
 
 class BacktestReport(SuplotHandler, FileHandler):
-    def __init__(self, market) -> None:
+    def __init__(self, backtestScript) -> None:
         self.Figures = FiguresSet
-        self.Market = market
+        self.Market = backtestScript.market
+        self.CandleScale = '1D' if '1D' in backtestScript.kbarScales else backtestScript.scale
         self.DATAPATH = f'{PATH}/backtest'
         self.stock_col_maps = {
-            'TSEopen': 'first',
-            'TSEhigh': 'max',
-            'TSElow': 'min',
-            'TSEclose': 'last',
-            'TSEvolume': 'sum',
-            'OTCopen': 'first',
-            'OTChigh': 'max',
-            'OTClow': 'min',
-            'OTCclose': 'last',
-            'OTCvolume': 'sum',
             'chance': 'first',
             'n_stock_limit': 'first',
             'n_stocks': 'last',
@@ -358,7 +352,6 @@ class BacktestReport(SuplotHandler, FileHandler):
             'balance': 'last',
             'nOpen': 'sum',
             'profit': 'sum',
-            'PutCallRatio': 'first'
         }
         self.futures_col_maps = {
             'Open': 'first',
@@ -408,10 +401,9 @@ class BacktestReport(SuplotHandler, FileHandler):
         df = df.dropna()
         df['profits'] = (df.profit*(df.profit > 0)).cumsum()
         df['losses'] = (df.profit*(df.profit <= 0)).cumsum()
-        df['pc115'] = 115
         return df
 
-    def plot_backtest_result(self, TestResult: object, title="Backtest Report"):
+    def plot_backtest_result(self, TestResult: object, Kbars: dict, title="Backtest Report"):
         '''將回測結果畫成圖表'''
 
         if TestResult.Statement is None:
@@ -441,24 +433,28 @@ class BacktestReport(SuplotHandler, FileHandler):
         fig = self.add_table(fig, statement, row=3, col=1, height=40)
 
         # TSE/OTC candlesticks
-        for col, (a, b) in enumerate([('TSE', 'TWSE'), ('OTC', 'OTC')]):
-            temp = daily_info.reset_index().rename(columns={
-                'index': 'Time',
-                f'{a}open': 'Open',
-                f'{a}high': 'High',
-                f'{a}low': 'Low',
-                f'{a}close': 'Close',
-                f'{a}volume': 'Volume',
-            })
+        for col, (a, b) in enumerate([('1', 'TWSE'), ('101', 'OTC')]):
+            temp = Kbars[self.CandleScale].copy()
+            temp = temp[temp.name == a].sort_values('Time')
             temp['name'] = b
-            fig = self.add_candlestick(fig, temp, 4, col+1)
+            fig = self.add_candlestick(fig, temp, row=4, col=col+1)
 
         # Put/Call Ratio
-        for args in [
-            dict(y='PutCallRatio', name='Put/Call Ratio', marker_color='#ff9f1a'),
-            dict(y='pc115', name='多空分界', marker_color='#68c035'),
-        ]:
-            fig = self.add_line(fig, daily_info, 5, 1, args)
+        if 'put_call_ratio' in Kbars:
+            df_pcr = pd.DataFrame(Kbars['put_call_ratio']).T
+            df_pcr['pc115'] = 115
+            for args in [
+                dict(y='PutCallRatio', name='Put/Call Ratio',
+                     marker_color='#ff9f1a'),
+                dict(y='pc115', name='多空分界', marker_color='#68c035'),
+            ]:
+                fig = self.add_line(
+                    fig,
+                    df_pcr,
+                    row=5,
+                    col=1,
+                    settings=args
+                )
 
         # Changes in Opens & Closes
         for args in [
@@ -466,25 +462,27 @@ class BacktestReport(SuplotHandler, FileHandler):
             dict(y='nClose', name='Closes', marker_color='#7F7F7F'),
             dict(y='n_stocks', name='in-stock', marker_color='#ef488e')
         ]:
-            fig = self.add_line(fig, daily_info, 5, 2, args)
+            fig = self.add_line(fig, daily_info, row=5, col=2, settings=args)
 
         # Accumulated Balance
-        args = dict(y='balance', name='Accumulated Balance', marker_color='#d3503c')
-        fig = self.add_line(fig, daily_info, 6, 1, args)
+        args = dict(y='balance', name='Accumulated Balance',
+                    marker_color='#d3503c')
+        fig = self.add_line(fig, daily_info, row=6, col=1, settings=args)
 
         # Accumulated Profit/Loss
         for args in [
             dict(y='profits', name="Accumulated Profit", marker_color='#c25656'),
             dict(y='losses', name="Accumulated Loss", marker_color='#9ad37e')
         ]:
-            fig = self.add_line(fig, daily_info, 6, 2, args, fill='tozeroy')
+            fig = self.add_line(
+                fig, daily_info, row=6, col=2, settings=args, fill='tozeroy')
 
         # Changes in Portfolio Control
         for args in [
             dict(y='chance', name='Opens Available', marker_color='#48efec'),
             dict(y='n_stock_limit', name='Opens Limit', marker_color='#b1487f')
         ]:
-            fig = self.add_line(fig, daily_info, 7, 1, args)
+            fig = self.add_line(fig, daily_info, row=7, col=1, settings=args)
 
         # figure layouts
         fig.update_layout(height=2400, width=1700, title_text=title)

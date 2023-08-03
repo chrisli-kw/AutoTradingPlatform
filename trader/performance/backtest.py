@@ -5,15 +5,6 @@ from typing import Union
 from datetime import datetime
 from collections import namedtuple
 
-from .. import file_handler
-from ..config import PATH, TODAY_STR
-from ..utils import progress_bar
-from ..utils.kbar import KBarTool
-from ..utils.time import TimeTool
-from ..utils.file import FileHandler
-from ..utils.select import SelectStock
-from ..utils.database import db, KBarTables
-from ..utils.database.tables import PutCallRatioList
 from .base import (
     AccountingNumber,
     compute_profits,
@@ -21,23 +12,14 @@ from .base import (
     computeWinLoss,
     convert_statement
 )
-
-
-def merge_pc_ratio(df):
-    # merge put call ratio data
-    if db.HAS_DB:
-        df_pcr = db.query(PutCallRatioList)
-    else:
-        df_pcr = file_handler.read_table(f'{PATH}/put_call_ratio.csv')
-
-    df_pcr = df_pcr.rename(columns={'Date': 'date'})
-    df_pcr.date = pd.to_datetime(df_pcr.date)
-    df_pcr.PutCallRatio = df_pcr.PutCallRatio.shift(1)
-
-    if 'date' not in df.columns:
-        df['date'] = pd.to_datetime(df.Time.dt.date)
-    df = df.merge(df_pcr[['date', 'PutCallRatio']], how='left', on='date')
-    return df.drop('date', axis=1)
+from .. import file_handler
+from ..config import PATH, TODAY_STR
+from ..utils import progress_bar
+from ..utils.time import TimeTool
+from ..utils.file import FileHandler
+from ..utils.crawler import readStockList
+from ..utils.database import db, KBarTables
+from ..utils.database.tables import PutCallRatioList
 
 
 class BacktestPerformance(FileHandler):
@@ -157,15 +139,14 @@ class BacktestPerformance(FileHandler):
             days_p, days_n = self.get_max_profit_loss_days(df)
 
             if 'daily_info' in result:
+                Kbars = result.get('Kbars')
                 result['daily_info'] = self.process_daily_info(df, **result)
 
                 # TSE 漲跌幅
-                tse_return = computeReturn(
-                    result['daily_info'], 'TSEopen', 'TSEclose')
+                tse_return = computeReturn(Kbars['1D'], 'TSEopen', 'TSEclose')
 
                 # OTC 漲跌幅
-                otc_return = computeReturn(
-                    result['daily_info'], 'OTCopen', 'OTCclose')
+                otc_return = computeReturn(Kbars['1D'], 'OTCopen', 'OTCclose')
             else:
                 result['daily_info'] = None
                 if db.HAS_DB:
@@ -320,15 +301,10 @@ class BacktestPerformance(FileHandler):
         writer.save()
 
 
-class BackTester(SelectStock, BacktestPerformance, TimeTool):
-    def __init__(self, config):
-        SelectStock.__init__(
-            self,
-            dma=5,
-            mode=config.mode,
-            scale=config.scale
-        )
-        BacktestPerformance.__init__(self, config)
+class BackTester(BacktestPerformance, TimeTool):
+    def __init__(self, script):
+        self.set_scripts(script)
+        BacktestPerformance.__init__(self, script)
 
         self.isLong = self.mode == 'long'
         self.sign = 1 if self.isLong else -1
@@ -355,33 +331,59 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
             defaults=[0, '', '', 0]
         )
 
-    def load_data(self, backtestScript: object):
-        print('Loading data...')
-        if backtestScript.market == 'Stocks':
-            df = self.load_and_merge()
-            df = self.preprocess(df)
+    def load_datasets(self, backtestScript, start='', end='', **kwargs):
+        market = backtestScript.market
+        if market == 'Stocks':
+            codes = readStockList().code.to_list()
         else:
-            kbt = KBarTool()
-            df = pd.read_pickle(f'{PATH}/Kbars/futures-1T.pkl')
-            df = kbt.convert_kbar(df, backtestScript.scale)
-        df = merge_pc_ratio(df)
+            codes = ['TX']
+        codes += ['1', '101']
 
-        print('Done')
-        return df
+        if not start:
+            start = '2018-07-01'
 
-    def addFeatures(self, df: pd.DataFrame):
-        df = df[df.yClose != 0]
-        return df
+        if not end:
+            end = TODAY_STR
+
+        Kbars = {scale: None for scale in backtestScript.kbarScales}
+        for scale in Kbars:
+            if db.HAS_DB:
+                condition1 = KBarTables[scale].Time >= start
+                condition2 = KBarTables[scale].Time <= end
+                condition3 = KBarTables[scale].name.in_(codes)
+                df = db.query(
+                    KBarTables[scale],
+                    condition1,
+                    condition2,
+                    condition3
+                )
+            else:
+                dir_path = f'{PATH}/Kbars/{scale}'
+                df = file_handler.read_tables_in_folder(dir_path)
+                df = df[
+                    (df.Time >= start) &
+                    (df.Time <= end) &
+                    df.name.isin(codes)
+                ]
+            Kbars[scale] = df.sort_values(['name', 'Time'])
+
+        if kwargs:
+            for dataname, func in kwargs.items():
+                Kbars[dataname] = func(start=start, end=end)
+
+        return Kbars
+
+    def addFeatures(self, Kbars: dict):
+        return Kbars
 
     def on_addFeatures(self):
         def wrapper(func):
             self.addFeatures = func
         return wrapper
 
-    def selectStocks(self, df: pd.DataFrame):
-        '''依照策略選股條件挑出可進場的股票'''
-        df['isIn'] = True
-        return df
+    def selectStocks(self, Kbars: dict):
+        '''依照策略選股條件挑出可進場的股票，必須新增一個"isIn"欄位'''
+        return Kbars
 
     def on_selectStocks(self):
         def wrapper(func):
@@ -409,7 +411,7 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
             self.examineClose = func
         return wrapper
 
-    def computeStocksLimit(self, df: pd.DataFrame, **kwargs):
+    def computeStocksLimit(self, Kbars: pd.DataFrame, **kwargs):
         '''計算每日買進股票上限(可做幾支)'''
         return 2000
 
@@ -465,8 +467,8 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
 
         if hasattr(testScript, 'computeStocksLimit'):
             @self.on_computeStocksLimit()
-            def compute_limit(df, chance):
-                return testScript.computeStocksLimit(df, chance)
+            def compute_limit(Kbars, **kwargs):
+                return testScript.computeStocksLimit(Kbars, **kwargs)
 
         if hasattr(testScript, 'computeOpenUnit'):
             @self.on_computeOpenUnit()
@@ -478,49 +480,8 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
             def open_unit(market_value):
                 return testScript.setVolumeProp(market_value)
 
-    def filter_data(self, df: pd.DataFrame, **params):
-        '''
-        過濾要回測的數據，包括起訖日、所需欄位
-        參數:
-        df - 歷史資料表
-        params - 回測參數
-        '''
-
-        if 'startDate' in params and params['startDate']:
-            start = params['startDate']
-            if isinstance(start, str):
-                start = pd.to_datetime(start)
-            df = df[df.Time >= start]
-
-        if 'endDate' in params and params['endDate']:
-            end = params['endDate']
-            if isinstance(end, str):
-                end = pd.to_datetime(end)
-            df = df[df.Time <= end]
-
-        required_cols = [
-            'name', 'Time', 'isIn', 'PutCallRatio',
-            'Open', 'High', 'Low', 'Close', 'Volume'
-        ]
-
-        if self.scale != '1D':
-            required_cols += ['nth_bar']
-
-        if self.Market == 'Stocks':
-            required_cols += [
-                'TSEopen', 'TSEhigh', 'TSElow', 'TSEclose', 'TSEvolume',
-                'OTCopen', 'OTChigh', 'OTClow', 'OTCclose', 'OTCvolume',
-            ]
-
-        target_columns = params['target_columns']
-        if any(c not in target_columns for c in required_cols):
-            cols = [c for c in required_cols if c not in target_columns]
-            raise KeyError(
-                f'Some required columns are not in the table: {cols}')
-
-        df = df[target_columns]
-        df = df[df.Open != 0]
-        return df
+        if hasattr(testScript, 'scale'):
+            self.scale = testScript.scale
 
     def updateMarketValue(self):
         '''更新庫存市值'''
@@ -713,8 +674,8 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
         '''
 
         unit = self.computeOpenUnit(inputs)
-        if 'volume_ma' in inputs:
-            unit = self.checkOpenUnitLimit(unit, inputs['volume_ma'])
+        # if 'volume_ma' in inputs:
+        #     unit = self.checkOpenUnitLimit(unit, inputs['volume_ma'])
 
         openInfo = self.examineOpen(
             inputs,
@@ -723,11 +684,11 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
         )
 
         if openInfo.price > 0 and unit > 0:
-
-            if inputs['name'] in self.stocks:
+            data = inputs[self.scale]
+            name = data['name']
+            if name in self.stocks:
                 # 加碼部位
-                quantity = 1000 * \
-                    (self.stocks[inputs['name']]['quantity']/1000)/3
+                quantity = 1000*(self.stocks[name]['quantity']/1000)/3
             elif self.Market == 'Stocks':
                 quantity = 1000*unit
             else:
@@ -738,17 +699,17 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
             if self.balance >= amount+fee and len(self.stocks) < self.nStocksLimit:
                 self.execute(
                     trans_type='Open',
-                    day=inputs[self.TimeCol],
-                    stockid=inputs['name'],
+                    day=data['Time'],
+                    stockid=name,
                     price=openInfo.price,
                     quantity=quantity,
                     position=None,
                     amount=amount,
-                    cum_max_min=inputs['High'] if self.isLong else inputs['Low'],
+                    cum_max_min=data['High'] if self.isLong else data['Low'],
                     reason=openInfo.reason,
-                    bsh=inputs['High']
+                    bsh=data['High']
                 )
-                self.day_trades.append(inputs['name'])
+                self.day_trades.append(name)
 
     def checkMarginCall(self, name: str, closePrice: float):
         if self.leverage == 1:
@@ -758,29 +719,29 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
         margin = closePrice/(openPrice*(1 - self.leverage))
         return margin < 1.35
 
-    def checkClose(self, inputs: dict, day: Union[str, datetime], stocksClosed: dict):
-        s = inputs['name']
-        value = inputs['High'] if self.isLong else inputs['Low']
-        cum_max_min = min(self.stocks[s]['cum_max_min'], value)
-        self.stocks[s].update({
-            'price': inputs['Close'],
-            'krun': self.stocks[s]['krun'] + 1,
+    def checkClose(self, inputs: dict, stocksClosed: dict):
+        data = inputs[self.scale]
+        name = data['name']
+        value = data['High'] if self.isLong else data['Low']
+        cum_max_min = min(self.stocks[name]['cum_max_min'], value)
+        self.stocks[name].update({
+            'price': data['Close'],
+            'krun': self.stocks[name]['krun'] + 1,
             'cum_max_min': cum_max_min
         })
 
         closeInfo = self.examineClose(
             stocks=self.stocks,
             inputs=inputs,
-            today=day,
             stocksClosed=stocksClosed
         )
 
-        margin_call = self.checkMarginCall(s, closeInfo.price)
+        margin_call = self.checkMarginCall(name, closeInfo.price)
         if closeInfo.position or margin_call:
             self.execute(
                 trans_type='Close',
-                day=inputs[self.TimeCol],
-                stockid=s,
+                day=data['Time'],
+                stockid=name,
                 price=closeInfo.price,
                 quantity=None,
                 position=100 if margin_call else closeInfo.position,
@@ -819,7 +780,9 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
         if 'raiseQuota' in params:
             self.raiseQuota = params['raiseQuota']
 
-    def run(self, df: pd.DataFrame, **params):
+        self.Kbars = {}
+
+    def run(self, Kbars: pd.DataFrame, **params):
         '''
         回測
         參數:
@@ -831,50 +794,58 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
 
         t1 = time.time()
 
-        df = self.filter_data(df, **params)
-
-        times = np.sort(df[self.TimeCol].unique())
+        df = Kbars[self.scale]
+        times = np.sort(df.Time.unique())
         N = len(times)
-        for i, day in enumerate(times):
-            d1 = pd.to_datetime(day).date()
+        for i, time_ in enumerate(times):
+            day = str(pd.to_datetime(time_).date())
             self.nClose = 0
             self.volume_prop = self.setVolumeProp(self.market_value)
 
             # 進場順序
-            temp = df[df[self.TimeCol] == day].copy()
-            temp = self.set_open_order(temp)
-
-            head = temp.head(1).to_dict('records')[0]
-            self.daily_info[day] = head
+            rows = df[df.Time == time_].copy()
 
             # 取出當天(或某小時)所有股票資訊
-            if self.scale == '1D' or (temp.nth_bar.min() == 1):
-                chance = temp.isIn.sum()
+            if rows.nth_bar.min() == 1:
+                chance = rows.isIn.sum()
+
+                tb = Kbars['1D']
+                self.Kbars['1D'] = tb[tb.date == day].set_index(
+                    'name').to_dict('index')
+                del tb
+
                 self.nStocksLimit = self.computeStocksLimit(
-                    head, chance=chance)
+                    self.Kbars['1D']['101'], day=time_, chance=chance)
                 self.day_trades = []
 
-            temp = temp[(
-                (temp.isIn == 1) |
-                (temp.name.isin(self.stocks.keys()))
+            rows = rows[(
+                (rows.isIn == 1) |
+                (rows.name.isin(self.stocks.keys()))
             )]
+            rows = self.set_open_order(rows)
 
             # 檢查進場 & 出場
-            rows = np.array(temp.to_dict('records'))
-            del temp
-            for inputs in rows:
-                if inputs['name'] in self.stocks:
-                    self.checkClose(inputs, d1, stocksClosed)
-                elif inputs['isIn']:
+            rows = np.array(rows.to_dict('records'))
+            for row in rows:
+                name = row['name']
+                inputs = {
+                    '1D': self.Kbars['1D'][name],
+                    self.scale: row,
+                }
+                inputs.update({k: v for k, v in Kbars.items()
+                              if k not in ['1D', self.scale]})
+                if name in self.stocks:
+                    self.checkClose(inputs, stocksClosed)
+                elif row['isIn']:
                     self.checkOpen(inputs)
 
             # 更新交易明細數據
-            self.daily_info[day].update({
+            self.daily_info[time_] = {
                 'chance': chance,
                 'n_stock_limit': self.nStocksLimit,
                 'n_stocks': len(self.stocks),
                 'nClose': self.nClose
-            })
+            }
             self.updateMarketValue()
             progress_bar(N, i)
 
@@ -885,14 +856,14 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
         for name in list(self.stocks):
             self.execute(
                 trans_type='Close',
-                day=day,
+                day=time_,
                 stockid=name,
                 price=self.stocks[name]['price'],
                 quantity=None,
                 position=100,
                 reason='清空庫存'
             )
-        self.daily_info[day].update({'nClose': self.nClose})
+        self.daily_info[time_].update({'nClose': self.nClose})
 
         params.update({
             'statement': self.statements,
@@ -905,4 +876,5 @@ class BackTester(SelectStock, BacktestPerformance, TimeTool):
         return self.get_backtest_result(
             **params,
             isLong=self.isLong,
+            Kbars=Kbars
         )
