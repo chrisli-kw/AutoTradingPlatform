@@ -17,9 +17,9 @@ from ..config import PATH, TODAY_STR
 from ..utils import progress_bar
 from ..utils.time import TimeTool
 from ..utils.file import FileHandler
+from ..utils.kbar import KBarTool
 from ..utils.crawler import readStockList
 from ..utils.database import db, KBarTables
-from ..utils.database.tables import PutCallRatioList
 
 
 class BacktestPerformance(FileHandler):
@@ -346,25 +346,32 @@ class BackTester(BacktestPerformance, TimeTool):
             end = TODAY_STR
 
         Kbars = {scale: None for scale in backtestScript.kbarScales}
+        Kbars['1D'] = None
         for scale in Kbars:
+            scale_ = scale if market == 'Stocks' else '1T'
+
             if db.HAS_DB:
-                condition1 = KBarTables[scale].Time >= start
-                condition2 = KBarTables[scale].Time <= end
-                condition3 = KBarTables[scale].name.in_(codes)
                 df = db.query(
-                    KBarTables[scale],
-                    condition1,
-                    condition2,
-                    condition3
+                    KBarTables[scale_],
+                    KBarTables[scale_].Time >= start,
+                    KBarTables[scale_].Time <= end,
+                    KBarTables[scale_].name.in_(codes)
                 )
             else:
-                dir_path = f'{PATH}/Kbars/{scale}'
-                df = file_handler.read_tables_in_folder(dir_path)
+                dir_path = f'{PATH}/Kbars/{scale_}'
+                df = file_handler.read_tables_in_folder(
+                    dir_path,
+                    pattern=market.lower()
+                )
                 df = df[
                     (df.Time >= start) &
                     (df.Time <= end) &
                     df.name.isin(codes)
                 ]
+
+            if market == 'Futures':
+                df = KBarTool().convert_kbar(df, scale=scale)
+
             Kbars[scale] = df.sort_values(['name', 'Time'])
 
         if kwargs:
@@ -809,14 +816,15 @@ class BackTester(BacktestPerformance, TimeTool):
             if rows.nth_bar.min() == 1:
                 chance = rows.isIn.sum()
 
-                tb = Kbars['1D']
-                self.Kbars['1D'] = tb[tb.date == day].set_index(
-                    'name').to_dict('index')
-                del tb
+                if self.Market == 'Stocks':
+                    tb = Kbars['1D']
+                    self.Kbars['1D'] = tb[tb.date == day].set_index(
+                        'name').to_dict('index')
+                    del tb
 
-                self.nStocksLimit = self.computeStocksLimit(
-                    self.Kbars['1D']['101'], day=time_, chance=chance)
-                self.day_trades = []
+                    self.nStocksLimit = self.computeStocksLimit(
+                        self.Kbars['1D']['101'], day=time_, chance=chance)
+                    self.day_trades = []
 
             rows = rows[(
                 (rows.isIn == 1) |
@@ -829,7 +837,7 @@ class BackTester(BacktestPerformance, TimeTool):
             for row in rows:
                 name = row['name']
                 inputs = {
-                    '1D': self.Kbars['1D'][name],
+                    '1D': self.Kbars['1D'][name] if '1D' in self.Kbars else None,
                     self.scale: row,
                 }
                 inputs.update({k: v for k, v in Kbars.items()
