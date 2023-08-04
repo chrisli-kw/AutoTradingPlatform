@@ -114,7 +114,6 @@ class BacktestPerformance(FileHandler):
             '起始資金': AccountingNumber(result['init_position']),
             '做多/做空': self.mode,
             '槓桿倍數': self.leverage,
-            '股數因子': result['unit'],
             '進場順序': result['buyOrder']
         }
         if isinstance(result['statement'], list):
@@ -319,11 +318,10 @@ class BackTester(BacktestPerformance, TimeTool):
         self.statements = []
         self.stocks = {}
         self.daily_info = {}
-        self.unit = 10
         self.balance = 1000000
         self.init_balance = 1000000
         self.buyOrder = None
-        self.raiseQuota = False  # 加碼參數
+        self.raiseQuota = script.raiseQuota  # 加碼參數
         self.market_value = 0
         self.Action = namedtuple(
             typename="Action",
@@ -372,6 +370,7 @@ class BackTester(BacktestPerformance, TimeTool):
             if market == 'Futures':
                 df = KBarTool().convert_kbar(df, scale=scale)
 
+            df['date'] = df.Time.dt.date.astype(str)
             Kbars[scale] = df.sort_values(['name', 'Time'])
 
         if kwargs:
@@ -773,9 +772,6 @@ class BackTester(BacktestPerformance, TimeTool):
     def set_params(self, **params):
         '''參數設定'''
 
-        if 'unit' in params:
-            self.unit = params['unit']
-
         if 'init_position' in params:
             self.balance = params['init_position']
             self.init_balance = params['init_position']
@@ -783,9 +779,6 @@ class BackTester(BacktestPerformance, TimeTool):
 
         if 'buyOrder' in params:
             self.buyOrder = params['buyOrder']
-
-        if 'raiseQuota' in params:
-            self.raiseQuota = params['raiseQuota']
 
         self.Kbars = {}
 
@@ -833,6 +826,7 @@ class BackTester(BacktestPerformance, TimeTool):
                 inputs[self.scale] = row
                 if '1D' in Kbars:
                     inputs['1D'] = self.Kbars['1D'][name]
+                    inputs['1D']['name'] = name
 
                 if name in self.stocks:
                     self.checkClose(inputs, stocksClosed)

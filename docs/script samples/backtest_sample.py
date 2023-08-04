@@ -28,7 +28,6 @@ class SampleScript:
     7. kbarScales
     8. raiseQuota
     9. leverage
-    10. kbar_start_day
     ===================================================================
     '''
 
@@ -58,9 +57,6 @@ class SampleScript:
 
     # trading leverage
     leverage = 1
-
-    # base number of days for generating features
-    kbar_start_day = 16
 
     def addFeatures_1D(self, df: pd.DataFrame):
         '''
@@ -156,9 +152,7 @@ Kbars = tester.selectStocks(Kbars)
 TestResult = tester.run(
     Kbars,
     init_position=init_position,
-    unit=init_position/100000,
     buyOrder='Close',
-    raiseQuota=False
 )
 
 if TestResult.Summary is not None:
