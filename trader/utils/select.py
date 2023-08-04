@@ -16,19 +16,8 @@ except:
     SelectConditions = None
 
 
-def map_BKD(OTCclose, OTChigh, add_days=10):
-    for d in range(80, 0, -10):
-        highs = OTChigh[-d:]
-        if len(highs) >= d and OTCclose >= max(highs):
-            return d + add_days
-    return None
-
-
 class SelectStock(TimeTool, FileHandler):
-    def __init__(self, d_shift=0, dma=5, mode='select', scale='1D'):
-        self.d_shift = d_shift
-        self.dma = dma
-        self.mode = mode
+    def __init__(self, scale='1D'):
         self.scale = scale
         self.Preprocess = {}
         self.METHODS = {}
@@ -78,15 +67,15 @@ class SelectStock(TimeTool, FileHandler):
             self.METHODS = {
                 m: getattr(scripts, f'condition_{m}') for m in methods}
 
+            if hasattr(scripts, 'preprocess_index'):
+                self.Preprocess.update({
+                    'preprocess_index': scripts.preprocess_index})
+
     def load_and_merge(self):
-        # TODO: 加入自選資料
         if db.HAS_DB:
-            if self.mode == 'select':
-                start = TODAY - timedelta(days=365*2)
-                condition = KBarTables[self.scale].Time >= start
-                df = db.query(KBarTables[self.scale], condition)
-            else:
-                df = db.query(KBarTables[self.scale])
+            start = TODAY - timedelta(days=365*2)
+            condition = KBarTables[self.scale].Time >= start
+            df = db.query(KBarTables[self.scale], condition)
         else:
             dir_path = f'{PATH}/Kbars/{self.scale}'
             df = self.read_tables_in_folder(dir_path)
@@ -96,51 +85,18 @@ class SelectStock(TimeTool, FileHandler):
         return df
 
     def preprocess(self, df: pd.DataFrame):
+        df = df.groupby('name').tail(365).reset_index(drop=True)
         df.name = df.name.astype(int).astype(str)
-        if self.mode == 'select':
-            df = df.groupby('name').tail(365).reset_index(drop=True)
-
         df.Close = df.Close.replace(0, np.nan).fillna(method='ffill')
 
-        # process OTC data
-        ohlcva = ['Open', 'High', 'Low', 'Close', 'Volume', 'Amount']
-        otc = df[df.name == '101'].rename(
-            columns={c: f'OTC{c.lower()}' for c in ohlcva}).drop(['name'], axis=1)
-        otc['Time'] = pd.to_datetime(otc['Time'])
-        otc[f'otc_{self.dma}ma'] = otc.OTCclose.shift(
-            self.d_shift).rolling(self.dma).mean()
-        otc['otcbkd30'] = [window.to_list()
-                           for window in otc.OTChigh.rolling(window=80)]
-        otc['otcbkd30'] = otc.apply(lambda x: map_BKD(
-            x.OTCclose, x.otcbkd30, 30), axis=1)
-        otc.otcbkd30 = otc.otcbkd30.fillna(method='ffill')
+        for col in ['Open', 'High', 'Low', 'Close']:
+            df.loc[
+                (df.name == '8070') & (df.Time < '2020-08-17'), col] /= 10
+            df.loc[
+                (df.name == '6548') & (df.Time < '2019-09-09'), col] /= 10
 
-        # process TSE data
-        tse = df[df.name == '1'].rename(
-            columns={c: f'TSE{c.lower()}' for c in ohlcva}).drop(['name'], axis=1)
-        tse['Time'] = pd.to_datetime(tse['Time'])
-        tse[f'tse_{self.dma}ma'] = tse.TSEclose.shift(
-            self.d_shift).rolling(self.dma).mean()
-
-        df = df.merge(otc, how='left', on='Time')
-        df = df.merge(tse, how='left', on='Time')
-
-        if self.scale == '1D':
-            for col in ['Open', 'High', 'Low', 'Close']:
-                df.loc[
-                    (df.name == '8070') & (df.Time < '2020-08-17'), col] /= 10
-                df.loc[
-                    (df.name == '6548') & (df.Time < '2019-09-09'), col] /= 10
-
-            group = df.groupby('name')
-            df['volume_ma'] = group.Volume.transform(
-                lambda x: x.shift(1).rolling(22).mean())
-            df['volume_std'] = group.Volume.transform(
-                lambda x: x.shift(1).rolling(22).std())
-            df['yClose'] = group.Close.transform('shift')
-            df['y2Close'] = group.Close.transform(lambda x: x.shift(2))
-            df['ma_1_20'] = group.Close.transform(
-                lambda x: x.shift(1).rolling(20).mean())
+        if 'preprocess_index' in self.Preprocess:
+            df = self.Preprocess['preprocess_index'](df)
 
         return df
 
@@ -149,7 +105,8 @@ class SelectStock(TimeTool, FileHandler):
         df = self.preprocess(df)
 
         for m, func in self.Preprocess.items():
-            df = func(df)
+            if m != 'preprocess_index':
+                df = func(df)
 
         for i, (m, func) in enumerate(self.METHODS.items()):
             df.insert(i+2, m, func(df, *args))
