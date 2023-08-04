@@ -144,7 +144,7 @@ def compute_profits(tb):
 
 
 def computeReturn(df, target1, target2):
-    if df.shape[0]:
+    if df.shape[0] and target1 in df.columns and target2 in df.columns:
         start = df[target1].values[0]
         end = df[target2].values[-1]
         return 100*round(end/start - 1, 2)

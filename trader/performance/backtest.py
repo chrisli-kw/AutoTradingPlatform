@@ -418,16 +418,16 @@ class BackTester(BacktestPerformance, TimeTool):
             self.examineClose = func
         return wrapper
 
-    def computeStocksLimit(self, Kbars: pd.DataFrame, **kwargs):
+    def computeOpenLimit(self, data: dict, **kwargs):
         '''計算每日買進股票上限(可做幾支)'''
         return 2000
 
-    def on_computeStocksLimit(self):
+    def on_computeOpenLimit(self):
         def wrapper(func):
-            self.computeStocksLimit = func
+            self.computeOpenLimit = func
         return wrapper
 
-    def computeOpenUnit(self, inputs: dict, **kwargs):
+    def computeOpenUnit(self, inputs: dict):
         '''
         計算買進股數
         參數:
@@ -472,10 +472,10 @@ class BackTester(BacktestPerformance, TimeTool):
             def close_(stocks, inputs, **kwargs):
                 return testScript.examineClose(stocks, inputs, **kwargs)
 
-        if hasattr(testScript, 'computeStocksLimit'):
-            @self.on_computeStocksLimit()
+        if hasattr(testScript, 'computeOpenLimit'):
+            @self.on_computeOpenLimit()
             def compute_limit(Kbars, **kwargs):
-                return testScript.computeStocksLimit(Kbars, **kwargs)
+                return testScript.computeOpenLimit(Kbars, **kwargs)
 
         if hasattr(testScript, 'computeOpenUnit'):
             @self.on_computeOpenUnit()
@@ -793,7 +793,7 @@ class BackTester(BacktestPerformance, TimeTool):
         '''
         回測
         參數:
-        df - 歷史資料表
+        Kbars - 歷史資料表
         '''
 
         self.set_params(**params)
@@ -805,43 +805,35 @@ class BackTester(BacktestPerformance, TimeTool):
         times = np.sort(df.Time.unique())
         N = len(times)
         for i, time_ in enumerate(times):
-            day = str(pd.to_datetime(time_).date())
             self.nClose = 0
             self.volume_prop = self.setVolumeProp(self.market_value)
 
             # 進場順序
             rows = df[df.Time == time_].copy()
+            rows = rows[(rows.isIn == 1) | (rows.name.isin(self.stocks))]
+            rows = self.set_open_order(rows)
 
             # 取出當天(或某小時)所有股票資訊
+            chance = rows.isIn.sum()
             if rows.nth_bar.min() == 1:
-                chance = rows.isIn.sum()
+                day = str(pd.to_datetime(time_).date())
+                tb = Kbars['1D'][Kbars['1D'].date == day]
+                self.Kbars['1D'] = tb.set_index('name').to_dict('index')
+                del tb
 
-                if self.Market == 'Stocks':
-                    tb = Kbars['1D']
-                    self.Kbars['1D'] = tb[tb.date == day].set_index(
-                        'name').to_dict('index')
-                    del tb
-
-                    self.nStocksLimit = self.computeStocksLimit(
-                        self.Kbars['1D']['101'], day=time_, chance=chance)
-                    self.day_trades = []
-
-            rows = rows[(
-                (rows.isIn == 1) |
-                (rows.name.isin(self.stocks.keys()))
-            )]
-            rows = self.set_open_order(rows)
+                self.nStocksLimit = self.computeOpenLimit(
+                    self.Kbars['1D'], day=time_)
+                self.day_trades = []
 
             # 檢查進場 & 出場
             rows = np.array(rows.to_dict('records'))
             for row in rows:
                 name = row['name']
-                inputs = {
-                    '1D': self.Kbars['1D'][name] if '1D' in self.Kbars else None,
-                    self.scale: row,
-                }
-                inputs.update({k: v for k, v in Kbars.items()
-                              if k not in ['1D', self.scale]})
+                inputs = Kbars.copy()
+                inputs[self.scale] = row
+                if '1D' in Kbars:
+                    inputs['1D'] = self.Kbars['1D'][name]
+
                 if name in self.stocks:
                     self.checkClose(inputs, stocksClosed)
                 elif row['isIn']:
@@ -880,7 +872,7 @@ class BackTester(BacktestPerformance, TimeTool):
             'daily_info': pd.DataFrame(self.daily_info).T,
 
         })
-        del df
+        del df, rows
         return self.get_backtest_result(
             **params,
             isLong=self.isLong,

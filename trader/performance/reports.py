@@ -341,10 +341,9 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
 class BacktestReport(SuplotHandler, FileHandler):
     def __init__(self, backtestScript) -> None:
         self.Figures = FiguresSet
-        self.Market = backtestScript.market
-        self.CandleScale = '1D' if '1D' in backtestScript.kbarScales else backtestScript.scale
+        self.Script = backtestScript
         self.DATAPATH = f'{PATH}/backtest'
-        self.stock_col_maps = {
+        self.col_maps = {
             'chance': 'first',
             'n_stock_limit': 'first',
             'n_stocks': 'last',
@@ -352,21 +351,6 @@ class BacktestReport(SuplotHandler, FileHandler):
             'balance': 'last',
             'nOpen': 'sum',
             'profit': 'sum',
-        }
-        self.futures_col_maps = {
-            'Open': 'first',
-            'High': 'max',
-            'Low': 'min',
-            'Close': 'last',
-            'Volume': 'sum',
-            'chance': 'first',
-            'n_stock_limit': 'first',
-            'n_stocks': 'last',
-            'nClose': 'sum',
-            'balance': 'last',
-            'nOpen': 'sum',
-            'profit': 'sum',
-            'PutCallRatio': 'first'
         }
         self.Titles = (
             # tables
@@ -390,14 +374,9 @@ class BacktestReport(SuplotHandler, FileHandler):
         profit = TestResult.Statement.groupby('CloseTime').profit.sum()
         profit = profit.to_dict()
 
-        if self.Market == 'Stocks':
-            col_maps = self.stock_col_maps
-        else:
-            col_maps = self.futures_col_maps
-
         df = TestResult.DailyInfo
         df['profit'] = df.index.map(profit).fillna(0).values
-        df = df.resample('1D', closed='left', label='left').apply(col_maps)
+        df = df.resample('1D', closed='left', label='left').apply(self.col_maps)
         df = df.dropna()
         df['profits'] = (df.profit*(df.profit > 0)).cumsum()
         df['losses'] = (df.profit*(df.profit <= 0)).cumsum()
@@ -433,11 +412,14 @@ class BacktestReport(SuplotHandler, FileHandler):
         fig = self.add_table(fig, statement, row=3, col=1, height=40)
 
         # TSE/OTC candlesticks
-        for col, (a, b) in enumerate([('1', 'TWSE'), ('101', 'OTC')]):
-            temp = Kbars[self.CandleScale].copy()
-            temp = temp[temp.name == a].sort_values('Time')
-            temp['name'] = b
-            fig = self.add_candlestick(fig, temp, row=4, col=col+1)
+        if self.Script.market == 'Stocks':
+            for col, (a, b) in enumerate([('1', 'TWSE'), ('101', 'OTC')]):
+                temp = Kbars['1D'].copy()
+                temp = temp[temp.name == a].sort_values('Time')
+                temp['name'] = b
+                fig = self.add_candlestick(fig, temp, row=4, col=col+1)
+        else:
+            fig = self.add_candlestick(fig, Kbars['1D'], row=4, col=1)
 
         # Put/Call Ratio
         if 'put_call_ratio' in Kbars:

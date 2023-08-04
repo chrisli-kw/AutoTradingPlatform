@@ -3,9 +3,8 @@ from datetime import timedelta
 from collections import namedtuple
 
 from trader.config import TODAY_STR
-from trader.performance.backtest import BackTester, merge_pc_ratio
+from trader.performance.backtest import BackTester
 from trader.performance.reports import BacktestReport
-from trader.utils.select import SelectStock
 
 
 Action = namedtuple(
@@ -26,10 +25,10 @@ class SampleScript:
     4. multipler
     5. mode
     6. scale
-    7. raiseQuota
-    8. leverage
-    9. kbar_start_day
-    10. target_columns
+    7. kbarScales
+    8. raiseQuota
+    9. leverage
+    10. kbar_start_day
     ===================================================================
     '''
 
@@ -85,19 +84,28 @@ class SampleScript:
         Kbars['1D'] = self.addFeatures_1D(Kbars['1D'])
         return Kbars
 
-    def selectStocks(self, df: pd.DataFrame):
+    def selectStocks(self, Kbars: dict):
         '''
         ===================================================================
         Set conditions to select stocks.
         ===================================================================
         '''
-        if 'isIn' in df.columns:
-            df = df.drop('isIn', axis=1)
 
+        df = Kbars[self.scale]
+
+        condition = df.Close/df.yClose > 1.05
+        df['isIn'] = df[condition]
         df.isIn = df.groupby('name').isIn.shift(1).fillna(False)
-        return df
 
-    def computeStocksLimit(self, df: pd.DataFrame, **kwargs):
+        Kbars[self.scale] = df
+        return Kbars
+
+    def computeOpenLimit(self, data: dict, **kwargs):
+        '''
+        ===================================================================
+        Determine the daily limit to open a position.
+        ===================================================================
+        '''
         return 10000
 
     def examineOpen(self, inputs: dict, **kwargs):
@@ -130,8 +138,8 @@ init_position = 1500000
 startDate = pd.to_datetime(TODAY_STR) - timedelta(days=days)
 
 backtestScript = SampleScript()
-br = BacktestReport(backtestScript.market)
-tester = BackTester(config=backtestScript)
+br = BacktestReport(backtestScript)
+tester = BackTester(backtestScript)
 
 # Load & Merge datasets
 Kbars = tester.load_datasets(
@@ -155,8 +163,6 @@ TestResult = tester.run(
 
 if TestResult.Summary is not None:
     print(TestResult.Summary)
-
-# tester.generate_tb_reasons(TestResult.Statement)
 
 # Plot figures
 fig = br.plot_backtest_result(TestResult)
