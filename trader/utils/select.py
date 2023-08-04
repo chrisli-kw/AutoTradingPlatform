@@ -71,11 +71,12 @@ class SelectStock(TimeTool, FileHandler):
                 self.Preprocess.update({
                     'preprocess_index': scripts.preprocess_index})
 
-    def load_and_merge(self):
+    def load_and_merge(self, targets):
         if db.HAS_DB:
             start = TODAY - timedelta(days=365*2)
-            condition = KBarTables[self.scale].Time >= start
-            df = db.query(KBarTables[self.scale], condition)
+            condition1 = KBarTables[self.scale].Time >= start
+            condition2 = KBarTables[self.scale].name.in_(targets)
+            df = db.query(KBarTables[self.scale], condition1, condition2)
         else:
             dir_path = f'{PATH}/Kbars/{self.scale}'
             df = self.read_tables_in_folder(dir_path)
@@ -101,7 +102,8 @@ class SelectStock(TimeTool, FileHandler):
         return df
 
     def pick(self, *args):
-        df = self.load_and_merge()
+        stockids = readStockList()
+        df = self.load_and_merge(stockids.code.tolist() + ['1', '101'])
         df = self.preprocess(df)
 
         for m, func in self.Preprocess.items():
@@ -112,7 +114,6 @@ class SelectStock(TimeTool, FileHandler):
             df.insert(i+2, m, func(df, *args))
 
         # insert columns
-        stockids = readStockList()
         stockids.category = stockids.category.astype(int)
         stockids = stockids.set_index('code')
 
