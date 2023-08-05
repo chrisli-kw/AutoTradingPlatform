@@ -367,11 +367,12 @@ class BackTester(BacktestPerformance, TimeTool):
                     df.name.isin(codes)
                 ]
 
+            df = df.sort_values(['name', 'Time'])
             if market == 'Futures':
                 df = KBarTool().convert_kbar(df, scale=scale)
 
             df['date'] = df.Time.dt.date.astype(str)
-            Kbars[scale] = df.sort_values(['name', 'Time'])
+            Kbars[scale] = df
 
         if kwargs:
             for dataname, func in kwargs.items():
