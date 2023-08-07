@@ -384,7 +384,7 @@ class BackTester(BacktestPerformance, TimeTool):
                     df.name.isin(codes)
                 ]
 
-            df = df.sort_values(['name', 'Time'])
+            df = df.sort_values(['name', 'Time']).reset_index(drop=True)
             if market == 'Futures':
                 df = KBarTool().convert_kbar(df, scale=scale)
 
@@ -878,8 +878,8 @@ class BackTester(BacktestPerformance, TimeTool):
 
         params.update({
             'statement': self.statements,
-            'startDate': params['startDate'] if 'startDate' in params else df.Time.min(),
-            'endDate': params['endDate'] if 'endDate' in params else df.Time.max(),
+            'startDate': df.Time.min(),
+            'endDate': df.Time.max(),
             'daily_info': pd.DataFrame(self.daily_info).T,
 
         })
