@@ -14,6 +14,18 @@ Action = namedtuple(
 )
 
 
+def dats_source(start='', end=''):
+    if not start:
+        start = '2000-01-01'
+
+    if not end:
+        end = TODAY_STR
+
+    df = pd.read_csv('your_data_path')
+    df = df[(df.Time >= start) & (df.Time <= end)]
+    return df
+
+
 class SampleScript:
     '''
     ===================================================================
@@ -28,6 +40,7 @@ class SampleScript:
     7. kbarScales
     8. raiseQuota
     9. leverage
+    10. extraData
     ===================================================================
     '''
 
@@ -57,6 +70,9 @@ class SampleScript:
 
     # trading leverage
     leverage = 1
+
+    # Optional: add this attribute if your strategy needs more datssets.
+    extraData = dict(dats_source=dats_source)
 
     def addFeatures_1D(self, df: pd.DataFrame):
         '''
@@ -129,31 +145,23 @@ class SampleScript:
         return Action()
 
 
-days = 180
-init_position = 1500000
-startDate = pd.to_datetime(TODAY_STR) - timedelta(days=days)
-
 backtestScript = SampleScript()
 br = BacktestReport(backtestScript)
 tester = BackTester(backtestScript)
 
 # Load & Merge datasets
-Kbars = tester.load_datasets(
-    backtestScript,
-    start=startDate,
-    end='',
-)
+startDate = pd.to_datetime(TODAY_STR) - timedelta(days=365)
+dataPath = './data'
+Kbars = tester.load_datasets(start=startDate, end='', dataPath=dataPath)
 
 # Add backtest features and select stocks
 Kbars = tester.addFeatures(Kbars)
 Kbars = tester.selectStocks(Kbars)
 
 # Run backtest
-TestResult = tester.run(
-    Kbars,
-    init_position=init_position,
-    buyOrder='Close',
-)
+init_position = 1000000
+params = dict(init_position=init_position, buyOrder='Close')
+TestResult = tester.run(Kbars, **params)
 
 if TestResult.Summary is not None:
     print(TestResult.Summary)

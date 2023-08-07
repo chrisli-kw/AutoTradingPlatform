@@ -54,6 +54,32 @@ class BacktestPerformance(FileHandler):
                 daily_info[c] = 1
         return daily_info
 
+    def getMDD(self, df: pd.DataFrame):
+        tb = df[['CloseTime', 'balance']].copy()
+        tb.set_index(pd.to_datetime(tb['CloseTime']), inplace=True)
+        tb.drop('CloseTime', axis=1, inplace=True)
+
+        # Reference:
+        # https://github.com/pyinvest/quant_basic_toturial/blob/master/quant/16_Max_drawdown.ipynb
+        dr = tb.pct_change(1)
+        r = dr.add(1).cumprod()
+        dd = r.div(r.cummax()).sub(1)
+
+        if dd.shape[0]:
+            mdd = dd.min()
+            end = dd.idxmin()
+            start = r.loc[:end[0]].idxmax()
+            days = end - start
+            result = {
+                'MDD': mdd[0],
+                'Start': start[0],
+                'End': end[0],
+                'Days': days[0],
+                'TotalLoss': df[(df.CloseTime >= start[0]) & (df.CloseTime <= end[0])].profit.sum()
+            }
+            return result
+        return {}
+
     def get_max_profit_loss_days(self, statement: pd.DataFrame):
         '''
         計算最大連續獲利/損失天數
@@ -135,7 +161,6 @@ class BacktestPerformance(FileHandler):
             end = str(df.CloseTime.max().date())
 
             win_loss = computeWinLoss(df)
-            days_p, days_n = self.get_max_profit_loss_days(df)
 
             if 'daily_info' in result:
                 Kbars = result.get('Kbars')
@@ -183,15 +208,11 @@ class BacktestPerformance(FileHandler):
             else:
                 std = 0
 
-            if days_p['n']:
-                max_win_days = f"{days_p['start']} ~ {days_p['end']}，共{days_p['n']}天"
+            mdd_data = self.getMDD(df)
+            if mdd_data:
+                mddTimes = f"{mdd_data['Start']} ~ {mdd_data['End']}，共{mdd_data['Days']}天"
             else:
-                max_win_days = '無'
-
-            if days_n['n']:
-                max_loss_days = f"{days_n['start']} ~ {days_n['end']}，共{days_n['n']}天"
-            else:
-                max_loss_days = '無'
+                mddTimes = '無'
 
             # 摘要
             summary = pd.DataFrame([{
@@ -207,10 +228,8 @@ class BacktestPerformance(FileHandler):
                 '年化報酬率': f"{AccountingNumber(anaualized_return)}%",
                 '最大單筆獲利': AccountingNumber(profits['MaxProfit']),
                 '最大單筆虧損': AccountingNumber(profits['MaxLoss']),
-                "最大區間獲利": max_win_days,
-                "最大連續獲利": f"${AccountingNumber(days_p['amount'])}",
-                "最大區間虧損": max_loss_days,
-                "最大連續虧損": f"${AccountingNumber(days_n['amount'])}",
+                'MDD': f"{AccountingNumber(mdd_data['TotalLoss'])}({100*round(mdd_data['MDD'], 6)}%)",
+                'MDD期間': mddTimes,
                 '全部平均持倉K線數': round(df.KRun.mean(), 1),
                 '獲利平均持倉K線數': profits['KRunProfit'],
                 '虧損平均持倉K線數': profits['KRunLoss'],
@@ -321,7 +340,6 @@ class BackTester(BacktestPerformance, TimeTool):
         self.balance = 1000000
         self.init_balance = 1000000
         self.buyOrder = None
-        self.raiseQuota = script.raiseQuota  # 加碼參數
         self.market_value = 0
         self.Action = namedtuple(
             typename="Action",
@@ -329,8 +347,8 @@ class BackTester(BacktestPerformance, TimeTool):
             defaults=[0, '', '', 0]
         )
 
-    def load_datasets(self, backtestScript, start='', end='', **kwargs):
-        market = backtestScript.market
+    def load_datasets(self, start='', end='', dataPath=''):
+        market = self.Script.market
         if market == 'Stocks':
             codes = readStockList().code.to_list()
         else:
@@ -343,7 +361,7 @@ class BackTester(BacktestPerformance, TimeTool):
         if not end:
             end = TODAY_STR
 
-        Kbars = {scale: None for scale in backtestScript.kbarScales}
+        Kbars = {scale: None for scale in self.Script.kbarScales}
         Kbars['1D'] = None
         for scale in Kbars:
             scale_ = scale if market == 'Stocks' else '1T'
@@ -356,9 +374,8 @@ class BackTester(BacktestPerformance, TimeTool):
                     KBarTables[scale_].name.in_(codes)
                 )
             else:
-                dir_path = f'{PATH}/Kbars/{scale_}'
                 df = file_handler.read_tables_in_folder(
-                    dir_path,
+                    f'{dataPath if dataPath else PATH}/Kbars/{scale_}',
                     pattern=market.lower()
                 )
                 df = df[
@@ -374,9 +391,9 @@ class BackTester(BacktestPerformance, TimeTool):
             df['date'] = df.Time.dt.date.astype(str)
             Kbars[scale] = df
 
-        if kwargs:
-            for dataname, func in kwargs.items():
-                Kbars[dataname] = func(start=start, end=end)
+        if hasattr(self.Script, 'extraData'):
+            for dataname, func in self.Script.extraData.items():
+                Kbars[dataname] = func(start=start, end=end, dataPath=dataPath)
 
         return Kbars
 
@@ -487,8 +504,7 @@ class BackTester(BacktestPerformance, TimeTool):
             def open_unit(market_value):
                 return testScript.setVolumeProp(market_value)
 
-        if hasattr(testScript, 'scale'):
-            self.scale = testScript.scale
+        self.Script = testScript
 
     def updateMarketValue(self):
         '''更新庫存市值'''
@@ -691,7 +707,7 @@ class BackTester(BacktestPerformance, TimeTool):
         )
 
         if openInfo.price > 0 and unit > 0:
-            data = inputs[self.scale]
+            data = inputs[self.Script.scale]
             name = data['name']
             if name in self.stocks:
                 # 加碼部位
@@ -727,7 +743,7 @@ class BackTester(BacktestPerformance, TimeTool):
         return margin < 1.35
 
     def checkClose(self, inputs: dict, stocksClosed: dict):
-        data = inputs[self.scale]
+        data = inputs[self.Script.scale]
         name = data['name']
         value = data['High'] if self.isLong else data['Low']
         cum_max_min = min(self.stocks[name]['cum_max_min'], value)
@@ -795,7 +811,7 @@ class BackTester(BacktestPerformance, TimeTool):
 
         t1 = time.time()
 
-        df = Kbars[self.scale]
+        df = Kbars[self.Script.scale]
         times = np.sort(df.Time.unique())
         N = len(times)
         for i, time_ in enumerate(times):
@@ -824,7 +840,7 @@ class BackTester(BacktestPerformance, TimeTool):
             for row in rows:
                 name = row['name']
                 inputs = Kbars.copy()
-                inputs[self.scale] = row
+                inputs[self.Script.scale] = row
                 if '1D' in Kbars:
                     inputs['1D'] = self.Kbars['1D'][name]
                     inputs['1D']['name'] = name
