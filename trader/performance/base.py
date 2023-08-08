@@ -106,7 +106,7 @@ def compute_profits(tb):
     # 毛利/毛損
     gross_profit = df_profit.profit.sum() if has_profits else 0
     gross_loss = df_loss.profit.sum() if has_loss else 0
-    profit_factor = round(abs(gross_profit/gross_loss), 2)
+    profit_factor = round(abs(gross_profit/gross_loss), 2) if gross_loss else np.inf
     if total_profit < 0:
         profit_factor *= -1
 

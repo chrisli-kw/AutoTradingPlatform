@@ -303,7 +303,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
             'rgb(17, 76, 95)',
             'rgb(16, 154, 246)'
         ]
-        for c, i in zip(colors, [19, 20, 21, 23, 24]):
+        for c, i in zip(colors, [17, 18, 19, 21, 22]):
             tb3 = df_summary.iloc[i, :]
             fig.add_trace(
                 go.Bar(
