@@ -1327,7 +1327,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         logging.debug(f'Remove【{target}】from futures_to_monitor.')
         self.futures_to_monitor.pop(target, None)
 
-        if target in self.futures.Code.values:
+        if target in self.futures.CodeName.values:
             logging.debug(f'Remove【{target}】from self.futures.')
             self.futures = self.futures[self.futures.CodeName != target]
             if self.simulation and db.HAS_DB:
