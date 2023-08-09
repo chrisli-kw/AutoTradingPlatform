@@ -2,7 +2,7 @@ import logging
 import requests
 import pandas as pd
 
-from ..config import API, PATH, TOKEN_INFO, TOKEN_MONITOR
+from ..config import API, TOKEN_INFO, TOKEN_MONITOR
 
 
 class Notification:
