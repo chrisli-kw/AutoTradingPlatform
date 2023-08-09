@@ -65,7 +65,7 @@ class BacktestPerformance(FileHandler):
         r = dr.add(1).cumprod()
         dd = r.div(r.cummax()).sub(1)
 
-        if dd.shape[0]:
+        if dd.shape[0] > 1:
             mdd = dd.min()
             end = dd.idxmin()
             start = r.loc[:end[0]].idxmax()
@@ -201,7 +201,10 @@ class BacktestPerformance(FileHandler):
 
             # 年化報酬率
             days = (df.CloseTime.max() - df.OpenTime.min()).days
-            anaualized_return = 100*round(total_return**(365/days) - 1, 2)
+            if days:
+                anaualized_return = 100*round(total_return**(365/days) - 1, 2)
+            else:
+                anaualized_return = 0
 
             if df.shape[0] >= 5:
                 std = df.balance.rolling(5).std().median()
@@ -210,8 +213,10 @@ class BacktestPerformance(FileHandler):
 
             mdd_data = self.getMDD(df)
             if mdd_data:
+                mdd = f"{AccountingNumber(mdd_data['TotalLoss'])}({100*round(mdd_data['MDD'], 6)}%)"
                 mddTimes = f"{mdd_data['Start']} ~ {mdd_data['End']}，共{mdd_data['Days']}天"
             else:
+                mdd = 0
                 mddTimes = '無'
 
             # 摘要
@@ -228,7 +233,7 @@ class BacktestPerformance(FileHandler):
                 '年化報酬率': f"{AccountingNumber(anaualized_return)}%",
                 '最大單筆獲利': AccountingNumber(profits['MaxProfit']),
                 '最大單筆虧損': AccountingNumber(profits['MaxLoss']),
-                'MDD': f"{AccountingNumber(mdd_data['TotalLoss'])}({100*round(mdd_data['MDD'], 6)}%)",
+                'MDD': mdd,
                 'MDD期間': mddTimes,
                 '全部平均持倉K線數': round(df.KRun.mean(), 1),
                 '獲利平均持倉K線數': profits['KRunProfit'],
