@@ -52,7 +52,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
         strategies = strategies[strategies.name.isin(df.Strategy)].name.values
         return strategies
 
-    def getTables(self, config):
+    def getTables(self, config, start=None, end=None):
 
         def concat_strategy_table(results: dict, table_name: str):
             df = pd.DataFrame()
@@ -74,7 +74,18 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
             return None
 
         df = convert_statement(df, init_position=init_position)
-        df = df[df.CloseTime.dt.month == TODAY.month]
+
+        # filter data
+        if start is None and end is None:
+            df = df[df.CloseTime.dt.month == TODAY.month]
+        else:
+            if not start:
+                start = TODAY_STR[:-2] + '01'
+
+            if not end:
+                end = TODAY_STR
+
+            df = df[(df.CloseTime >= str(start)) & (df.CloseTime <= str(end))]
 
         self.strategies = self.getStrategyList(df)
         results = {}

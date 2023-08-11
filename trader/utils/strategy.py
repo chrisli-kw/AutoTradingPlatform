@@ -11,14 +11,7 @@ from ..utils.database.tables import PutCallRatioList, ExDividendTable
 
 class StrategyTool:
     def __init__(self, **kwargs):
-        self.account_name = kwargs['account_name']
-        self.hold_day = kwargs['hold_day']
-        self.is_simulation = kwargs['is_simulation']
-        self.stock_limit_type = kwargs['stock_limit_type']
-        self.futures_limit_type = kwargs['futures_limit_type']
-        self.stock_limit_long = kwargs['stock_limit_long']
-        self.stock_limit_short = kwargs['stock_limit_short']
-        self.futures_limit = kwargs['futures_limit']
+        self.set_config(**kwargs)
         self.Action = namedtuple(
             typename="Action",
             field_names=['position', 'reason', 'msg', 'price'],
@@ -40,6 +33,16 @@ class StrategyTool:
             }
         }
         self.QuantityFunc = {}
+
+    def set_config(self, **kwargs):
+        self.account_name = kwargs.get('account_name')
+        self.hold_day = kwargs.get('hold_day')
+        self.is_simulation = kwargs.get('is_simulation')
+        self.stock_limit_type = kwargs.get('stock_limit_type')
+        self.futures_limit_type = kwargs.get('futures_limit_type')
+        self.stock_limit_long = kwargs.get('stock_limit_long')
+        self.stock_limit_short = kwargs.get('stock_limit_short')
+        self.futures_limit = kwargs.get('futures_limit')
 
     def mapFunction(self, action: str, tradeType: str, strategy: str):
         has_action = action in self.Funcs

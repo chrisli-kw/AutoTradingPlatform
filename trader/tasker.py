@@ -15,6 +15,11 @@ from .utils.accounts import AccountInfo
 from .executor import StrategyExecutor
 from .performance.reports import PerformanceReport
 
+try:
+    from .scripts.TaskList import customTasks
+except:
+    customTasks = None
+
 
 def runCreateENV():
     file_handler.create_folder('./lib')
@@ -23,7 +28,7 @@ def runCreateENV():
     app.run()
 
 
-def runPerformanceReport():
+def runPerformanceReport(start=None, end=None):
     try:
         logging.debug(f'ACCOUNTS: {ACCOUNTS}')
         for env in ACCOUNTS:
@@ -31,7 +36,7 @@ def runPerformanceReport():
             config = dotenv_values(f'./lib/envs/{env}.env')
 
             pr = PerformanceReport(env)
-            Tables = pr.getTables(config)
+            Tables = pr.getTables(config, start=start, end=end)
             if Tables is not None:
                 pr.save_tables(Tables)
                 pr.plot_performance_report(Tables, save=True)
@@ -211,7 +216,7 @@ def runCrawlFromHTML():
         step = 'PutCallRatio'
         df_pcr_new = crawler2.put_call_ratio()
         crawler2.export_put_call_ratio(df_pcr_new)
-        notifier.post_put_call_ratio(df_pcr_new)
+        # notifier.post_put_call_ratio(df_pcr_new)
 
         # 爬除權息資料
         step = '爬除權息資料'
@@ -340,3 +345,10 @@ Tasks = {
     'auto_trader': [runAutoTrader],
     'subscribe': [runShioajiSubscriber],
 }
+
+if customTasks:
+    for taskName, tasks in customTasks.items():
+        if taskName in Tasks:
+            Tasks[taskName] += tasks
+        else:
+            Tasks[taskName] = tasks
