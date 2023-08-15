@@ -113,6 +113,10 @@ class TimeTool:
         date = datetime(int(date[:4]), int(date[4:6]), int(date[6:8]), 8)
         return int(time.mktime(date.timetuple()))
 
+    def utcfromtimestamp_(self, timestamp):
+        '''將浮點格式時間戳轉為datetime格式'''
+        return datetime.utcfromtimestamp(timestamp)
+
     def last_business_day(self, date: datetime = None):
         '''取得最近一個交易日，遇假日, 連假, or補班日則往前推算'''
 

@@ -1189,7 +1189,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         start = self._strf_timedelta(TODAY, 30)
         dj = crawler2.DowJones(start, TODAY_STR)
-        if len(dj):
+        if 'c' in dj and len(dj['c']):
+            dj = dj['c']
             return 100*round(dj[0]/dj[1] - 1, 4)
         return 0
 

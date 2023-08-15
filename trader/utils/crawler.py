@@ -521,15 +521,15 @@ class CrawlFromHTML(TimeTool, FileHandler):
             result = requests.get(url_dow_jones+params)
             result = json.loads(result.text)
             if 'data' not in result:
-                result['data'] = {'c': []}
+                result['data'] = {}
         except requests.exceptions.ConnectionError as e:
             logging.warning(e)
-            result = {'data': {'c': []}}
+            result = {'data': {}}
         except:
             logging.exception('【Error】DowJones:')
-            result = {'data': {'c': []}}
+            result = {'data': {}}
 
-        return result['data']['c']
+        return result['data']
 
     def get_SymbolWinBroker_InputRadio(self, date: str, stockid: str):
         '''股懂券商'''

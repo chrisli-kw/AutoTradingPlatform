@@ -17,7 +17,7 @@ from .performance.reports import PerformanceReport
 try:
     from .scripts.TaskList import customTasks
 except:
-    customTasks = None
+    customTasks = {}
 
 
 def runCreateENV():
@@ -344,9 +344,8 @@ Tasks = {
     'subscribe': [runShioajiSubscriber],
 }
 
-if customTasks:
-    for taskName, tasks in customTasks.items():
-        if taskName in Tasks:
-            Tasks[taskName] += tasks
-        else:
-            Tasks[taskName] = tasks
+for taskName, tasks in customTasks.items():
+    if taskName in Tasks:
+        Tasks[taskName] += tasks
+    else:
+        Tasks[taskName] = tasks
