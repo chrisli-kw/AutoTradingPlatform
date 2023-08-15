@@ -116,7 +116,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.futures_to_monitor = {}
 
         # 載入指標模組
-        self.StrategySet = StrategySets(
+        self.set_scripts(StrategySets)
+
+    def set_scripts(self, strategySet: object):
+        self.StrategySet = strategySet(
             account_name=self.ACCOUNT_NAME,
             hold_day=self.getENV('HOLD_DAY', 'int'),
             is_simulation=self.simulation,

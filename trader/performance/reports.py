@@ -19,10 +19,8 @@ from .charts import export_figure, convert_encodings, SuplotHandler
 try:
     from ..scripts import __BacktestScripts__
 except:
-    logging.warning('Cannot import __BacktestScripts__ from package.')
+    logging.warning('Cannot import test scripts from package.')
     __BacktestScripts__ = None
-
-bts = __BacktestScripts__.__dict__ if __BacktestScripts__ else {}
 
 
 class FiguresSet:
@@ -31,6 +29,7 @@ class FiguresSet:
 
 class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
     def __init__(self, account: str):
+        self.set_report_scripts(__BacktestScripts__)
         self.account = account
         self.TablesFile = f'{PATH}/daily_info/{TODAY_STR[:-3]}-performance-{account}.xlsx'
         self.Tables = namedtuple(
@@ -38,11 +37,17 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
             field_names=['Configuration', 'Summary', 'Statement', 'Selection'],
             defaults=[None]*4
         )
-        self.Scripts = {
-            k[:-3]: v for k, v in bts.items()
-            if ('T' in k or 'D' in k) and (k[:-3] in SelectMethods)
-        }
         self.strategies = []
+
+    def set_report_scripts(self, report_scripts: object = None):
+        if report_scripts:
+            bts = report_scripts.__dict__
+            self.Scripts = {
+                k[:-3]: v for k, v in bts.items()
+                if ('T' in k or 'D' in k) and (k[:-3] in SelectMethods)
+            }
+        else:
+            self.Scripts = {}
 
     def getStrategyList(self, df: pd.DataFrame):
         '''Get strategy list in code order'''

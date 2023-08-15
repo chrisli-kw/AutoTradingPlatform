@@ -6,9 +6,8 @@ from dotenv import dotenv_values
 from concurrent.futures import as_completed
 
 from . import executor, notifier, picker, crawler1, crawler2, tdp, file_handler
+from .config import API, PATH, TODAY_STR, ACCOUNTS, TEnd, ConvertScales
 from .create_env import app
-from .config import API, PATH, TODAY_STR
-from .config import ACCOUNTS, TEnd, SelectMethods, ConvertScales
 from .utils.database import redis_tick
 from .utils.subscribe import Subscriber
 from .utils.accounts import AccountInfo
@@ -194,7 +193,6 @@ def runCrawlStockData(account):
 
 def runSelectStock():
     try:
-        picker.setScripts(SelectMethods)
         df = picker.pick(3, 1.8, 3)
         df = picker.melt_table(df)
         tb = df[df.Time == TODAY_STR].reset_index(drop=True)

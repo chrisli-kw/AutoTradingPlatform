@@ -13,13 +13,13 @@ from .file import FileHandler
 try:
     from ..scripts.features import KBarFeatureTool
 except:
-    logging.warning('Cannot import KBarFeatureTool from package.')
+    logging.warning('Cannot import KBar Scripts from package.')
     KBarFeatureTool = None
 
 
 class KBarTool(TechnicalSignals, TimeTool, FileHandler):
     def __init__(self, kbar_start_day=''):
-        self.set_kbar_scripts()
+        self.set_kbar_scripts(KBarFeatureTool)
         self.daysdata = self.__set_daysdata(kbar_start_day)
         self.maps = {
             'name': 'first',
@@ -60,45 +60,45 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
 
         return max((TODAY - kbar_start_day).days, 35)
 
-    def set_kbar_scripts(self):
+    def set_kbar_scripts(self, kbar_scripts: object = None):
         '''設定K線特徵腳本'''
 
-        if KBarFeatureTool:
-            featureScript = KBarFeatureTool()
-            if hasattr(featureScript, 'add_KDay_feature'):
+        if kbar_scripts:
+            kbar_scripts = kbar_scripts()
+            if hasattr(kbar_scripts, 'add_KDay_feature'):
                 @self.on_add_KDay_feature()
                 def _add_KDay_feature(df):
-                    return featureScript.add_KDay_feature(df)
+                    return kbar_scripts.add_KDay_feature(df)
 
-            if hasattr(featureScript, 'add_K1min_feature'):
+            if hasattr(kbar_scripts, 'add_K1min_feature'):
                 @self.on_add_K1min_feature()
                 def _add_K1min_feature(df):
-                    return featureScript.add_K1min_feature(df)
+                    return kbar_scripts.add_K1min_feature(df)
 
-            if hasattr(featureScript, 'add_K2min_feature'):
+            if hasattr(kbar_scripts, 'add_K2min_feature'):
                 @self.on_add_K2min_feature()
                 def _add_K2min_feature(df):
-                    return featureScript.add_K2min_feature(df)
+                    return kbar_scripts.add_K2min_feature(df)
 
-            if hasattr(featureScript, 'add_K5min_feature'):
+            if hasattr(kbar_scripts, 'add_K5min_feature'):
                 @self.on_add_K5min_feature()
                 def _add_K5min_feature(df):
-                    return featureScript.add_K5min_feature(df)
+                    return kbar_scripts.add_K5min_feature(df)
 
-            if hasattr(featureScript, 'add_K15min_feature'):
+            if hasattr(kbar_scripts, 'add_K15min_feature'):
                 @self.on_add_K15min_feature()
                 def _add_K15min_feature(df):
-                    return featureScript.add_K15min_feature(df)
+                    return kbar_scripts.add_K15min_feature(df)
 
-            if hasattr(featureScript, 'add_K30min_feature'):
+            if hasattr(kbar_scripts, 'add_K30min_feature'):
                 @self.on_add_K30min_feature()
                 def _add_K30min_feature(df):
-                    return featureScript.add_K30min_feature(df)
+                    return kbar_scripts.add_K30min_feature(df)
 
-            if hasattr(featureScript, 'add_K60min_feature'):
+            if hasattr(kbar_scripts, 'add_K60min_feature'):
                 @self.on_add_K60min_feature()
                 def _add_K60min_feature(df):
-                    return featureScript.add_K60min_feature(df)
+                    return kbar_scripts.add_K60min_feature(df)
 
     def add_KDay_feature(self, df: pd.DataFrame):
         return df

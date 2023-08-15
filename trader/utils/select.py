@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from datetime import timedelta
 
-from ..config import PATH, TODAY_STR, TODAY
+from ..config import PATH, TODAY_STR, TODAY, SelectMethods
 from .time import TimeTool
 from .file import FileHandler
 from .crawler import readStockList
@@ -12,15 +12,14 @@ from .database.tables import SelectedStocks
 try:
     from ..scripts.conditions import SelectConditions
 except:
-    logging.warning('Cannot import SelectConditions from package.')
+    logging.warning('Cannot import select scripts from package.')
     SelectConditions = None
 
 
 class SelectStock(TimeTool, FileHandler):
     def __init__(self, scale='1D'):
+        self.set_select_scripts(SelectConditions)
         self.scale = scale
-        self.Preprocess = {}
-        self.METHODS = {}
         self.categories = {
             1: '水泥工業',
             2: '食品工業',
@@ -57,19 +56,22 @@ class SelectStock(TimeTool, FileHandler):
             80: '管理股票'
         }
 
-    def setScripts(self, methods: list = []):
+    def set_select_scripts(self, select_scripts: object = None):
         '''Set preprocess & stock selection scripts'''
 
-        if SelectConditions:
-            scripts = SelectConditions()
+        if select_scripts:
+            select_scripts = select_scripts()
             self.Preprocess = {
-                m: getattr(scripts, f'preprocess_{m}') for m in methods}
+                m: getattr(select_scripts, f'preprocess_{m}') for m in SelectMethods}
             self.METHODS = {
-                m: getattr(scripts, f'condition_{m}') for m in methods}
+                m: getattr(select_scripts, f'condition_{m}') for m in SelectMethods}
 
-            if hasattr(scripts, 'preprocess_index'):
+            if hasattr(select_scripts, 'preprocess_index'):
                 self.Preprocess.update({
-                    'preprocess_index': scripts.preprocess_index})
+                    'preprocess_index': select_scripts.preprocess_index})
+        else:
+            self.Preprocess = {}
+            self.METHODS = {}
 
     def load_and_merge(self, targets):
         if db.HAS_DB:
