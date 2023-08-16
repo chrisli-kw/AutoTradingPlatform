@@ -430,8 +430,8 @@ class BackTester(BacktestPerformance, TimeTool):
 
     def examineClose(self, stocks: dict, inputs: dict, **kwargs):
         '''檢查出場條件'''
-        if inputs['Low'] < inputs['yLow']:
-            closePrice = inputs['yLow']
+        if inputs['Low'] < inputs['Open']:
+            closePrice = inputs['Open']
             return self.Action(100, '出場', 'msg', closePrice)
         return self.Action()
 
