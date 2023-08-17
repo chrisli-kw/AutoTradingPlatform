@@ -30,15 +30,15 @@ class ChipAnalysis:
         return self.group.transform(lambda x: x.rolling(d).mean())
 
     def short_margin(self):
-        ## 券資比 = 融券餘額 / 融資餘額
+        # 券資比 = 融券餘額 / 融資餘額
         shortMarginPercent = self.df.shortRemaining/self.df.marginRemaining
         return shortMarginPercent
 
     def close_short_index(self):
         # 券補力道 = 融券餘額 / 5 日成交均量
-        volume_ma5 = self.df.groupby('stockid').volume.transform(
+        V_1D_5_MA = self.df.groupby('stockid').volume.transform(
             lambda x: x.rolling(5).mean())
-        closeShortIndex = self.df.shortRemaining/volume_ma5
+        closeShortIndex = self.df.shortRemaining/V_1D_5_MA
         return closeShortIndex
 
 
