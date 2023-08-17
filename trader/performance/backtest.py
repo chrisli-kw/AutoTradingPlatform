@@ -804,7 +804,7 @@ class BackTester(BacktestPerformance, TimeTool):
 
         self.Kbars = {}
 
-    def run(self, Kbars: pd.DataFrame, **params):
+    def run(self, Kbars: dict, **params):
         '''
         回測
         參數:

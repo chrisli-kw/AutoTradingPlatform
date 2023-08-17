@@ -49,6 +49,12 @@ class TechnicalSignals:
     def _STD(self, df: pd.DataFrame, col: str, n=7, shift=0):
         return df.groupby('name')[col].transform(lambda x: x.shift(shift).rolling(n).std())
 
+    def _MAX(self, df: pd.DataFrame, col: str, n=7, shift=0):
+        return df.groupby('name')[col].transform(lambda x: x.shift(shift).rolling(n).max())
+
+    def _MIN(self, df: pd.DataFrame, col: str, n=7, shift=0):
+        return df.groupby('name')[col].transform(lambda x: x.shift(shift).rolling(n).min())
+
     def MACD(self, tb, d1=12, d2=26, dma=9):
         group = tb.groupby('name').Close
 
