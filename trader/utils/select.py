@@ -14,11 +14,16 @@ try:
 except:
     logging.warning('Cannot import select scripts from package.')
     SelectConditions = None
+try:
+    from ..scripts.features import FeaturesSelect
+except:
+    logging.warning('Cannot import feature scripts from package.')
+    FeaturesSelect = None
 
 
 class SelectStock(TimeTool, FileHandler):
     def __init__(self, scale='1D'):
-        self.set_select_scripts(SelectConditions)
+        self.set_select_scripts(SelectConditions, FeaturesSelect)
         self.scale = scale
         self.categories = {
             1: '水泥工業',
@@ -56,19 +61,21 @@ class SelectStock(TimeTool, FileHandler):
             80: '管理股票'
         }
 
-    def set_select_scripts(self, select_scripts: object = None):
+    def set_select_scripts(self, select_scripts: object = None, feature_scripts: object = None):
         '''Set preprocess & stock selection scripts'''
 
-        if select_scripts:
-            select_scripts = select_scripts()
+        if select_scripts and feature_scripts:
+            feature_scripts = feature_scripts()
             self.Preprocess = {
-                m: getattr(select_scripts, f'preprocess_{m}') for m in SelectMethods}
+                m: getattr(feature_scripts, f'preprocess_{m}') for m in SelectMethods}
+
+            if hasattr(feature_scripts, 'preprocess_index'):
+                self.Preprocess.update({
+                    'preprocess_index': feature_scripts.preprocess_index})
+
+            select_scripts = select_scripts()
             self.METHODS = {
                 m: getattr(select_scripts, f'condition_{m}') for m in SelectMethods}
-
-            if hasattr(select_scripts, 'preprocess_index'):
-                self.Preprocess.update({
-                    'preprocess_index': select_scripts.preprocess_index})
         else:
             self.Preprocess = {}
             self.METHODS = {}
@@ -81,7 +88,7 @@ class SelectStock(TimeTool, FileHandler):
             df = db.query(KBarTables[self.scale], condition1, condition2)
         else:
             dir_path = f'{PATH}/Kbars/{self.scale}'
-            df = self.read_tables_in_folder(dir_path)
+            df = self.read_tables_in_folder(dir_path, pattern='stocks')
 
         df = df.drop_duplicates(['name', 'Time'], keep='last')
         df = df.sort_values(['name', 'Time'])

@@ -837,7 +837,7 @@ class BackTester(BacktestPerformance, TimeTool):
                 del tb
 
                 self.nStocksLimit = self.computeOpenLimit(
-                    self.Kbars['1D'], day=time_)
+                    self.Kbars, day=time_)
                 self.day_trades = []
 
             # 檢查進場 & 出場
