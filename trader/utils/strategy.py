@@ -96,13 +96,15 @@ class StrategyTool:
         '''Set the number limit of securities of a portfolio can hold'''
         return 0
 
-    def _get_value(self, df: pd.DataFrame, stockid: str, col: str):
-        tb = df[df.name == stockid]
+    def _get_value(self, data: pd.DataFrame, stockid: str, col: str):
+        if isinstance(data, pd.DataFrame):
+            tb = data[data.name == stockid]
 
-        if tb.shape[0]:
-            return tb[col].values[-1]
+            if tb.shape[0]:
+                return tb[col].values[-1]
+            return 0
 
-        return 0
+        return data[stockid].get(col)
 
     def get_ex_dividends_list(self):
         '''取得當日除權息股票清單'''
