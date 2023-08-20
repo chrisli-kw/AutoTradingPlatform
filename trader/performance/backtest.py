@@ -419,9 +419,9 @@ class BackTester(BacktestPerformance, TimeTool):
             self.selectStocks = func
         return wrapper
 
-    def examineOpen(self, inputs: dict, **kwargs):
+    def examineOpen(self, inputs: dict, kbars: dict, **kwargs):
         '''檢查進場條件'''
-        return self.Action(100, '進場', 'msg', inputs['Open'])
+        return self.Action(100, '進場', 'msg', kbars['1D']['Open'])
 
     def on_examineOpen(self):
         def wrapper(func):
@@ -706,14 +706,15 @@ class BackTester(BacktestPerformance, TimeTool):
         #     unit = self.checkOpenUnitLimit(unit, inputs['volume_ma'])
 
         openInfo = self.examineOpen(
-            inputs,
+            None,
+            kbars=inputs,
             market_value=self.market_value,
             day_trades=self.day_trades
         )
 
         if openInfo.price > 0 and unit > 0:
-            data = inputs[self.Script.scale]
-            name = data['name']
+            name = inputs['name']
+            data = inputs[self.Script.scale][name]
             if name in self.stocks:
                 # 加碼部位
                 quantity = 1000*(self.stocks[name]['quantity']/1000)/3
@@ -748,8 +749,8 @@ class BackTester(BacktestPerformance, TimeTool):
         return margin < 1.35
 
     def checkClose(self, inputs: dict, stocksClosed: dict):
-        data = inputs[self.Script.scale]
-        name = data['name']
+        name = inputs['name']
+        data = inputs[self.Script.scale][name]
         value = data['High'] if self.isLong else data['Low']
         cum_max_min = min(self.stocks[name]['cum_max_min'], value)
         self.stocks[name].update({
@@ -845,10 +846,10 @@ class BackTester(BacktestPerformance, TimeTool):
             for row in rows:
                 name = row['name']
                 inputs = Kbars.copy()
-                inputs[self.Script.scale] = row
+                inputs[self.Script.scale] = {name: row}
+                inputs['name'] = name
                 if '1D' in Kbars:
-                    inputs['1D'] = self.Kbars['1D'][name]
-                    inputs['1D']['name'] = name
+                    inputs['1D'] = self.Kbars['1D']
 
                 if name in self.stocks:
                     self.checkClose(inputs, stocksClosed)
