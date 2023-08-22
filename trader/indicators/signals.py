@@ -64,8 +64,10 @@ class TechnicalSignals:
         # tb['diverge_MACD'] = (cond1 | cond2).astype(int)
 
         # DIFF (快線) = EMA (收盤價, 12) - EMA (收盤價, 26)
-        tb[f'ema_{d1}'] = group.transform(lambda x: x.ewm(span=d1, adjust=False).mean())
-        tb[f'ema_{d2}'] = group.transform(lambda x: x.ewm(span=d2, adjust=False).mean())
+        tb[f'ema_{d1}'] = group.transform(
+            lambda x: x.ewm(span=d1, adjust=False).mean())
+        tb[f'ema_{d2}'] = group.transform(
+            lambda x: x.ewm(span=d2, adjust=False).mean())
         tb['ema_diff'] = tb[f'ema_{d1}'] - tb[f'ema_{d2}']
 
         # DEA(慢線) = EMA (DIFF, 9)
@@ -80,7 +82,8 @@ class TechnicalSignals:
         '''背離(MACD)'''
 
         close_diff = df.groupby('name').Close.transform('diff').fillna(0)
-        diff_MACD_diff = df.groupby('name').diff_MACD.transform('diff').fillna(0)
+        diff_MACD_diff = df.groupby(
+            'name').diff_MACD.transform('diff').fillna(0)
         return ((close_diff >= 0) & (diff_MACD_diff <= 0)) | ((close_diff <= 0) & (diff_MACD_diff >= 0))
 
     def RSI(self, change, period=12):
@@ -103,8 +106,10 @@ class TechnicalSignals:
         return rsi
 
     def RSV(self, tb, d=9):
-        d_min = tb.groupby('name').Close.transform(lambda x: x.rolling(d).min())
-        d_max = tb.groupby('name').Close.transform(lambda x: x.rolling(d).max())
+        d_min = tb.groupby('name').Close.transform(
+            lambda x: x.rolling(d).min())
+        d_max = tb.groupby('name').Close.transform(
+            lambda x: x.rolling(d).max())
 
         try:
             (100*(tb.Close - d_min)/(d_max - d_min)).fillna(-1)
