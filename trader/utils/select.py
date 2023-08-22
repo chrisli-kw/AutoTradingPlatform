@@ -69,9 +69,9 @@ class SelectStock(TimeTool, FileHandler):
             self.Preprocess = {
                 m: getattr(feature_scripts, f'preprocess_{m}') for m in SelectMethods}
 
-            if hasattr(feature_scripts, 'preprocess_index'):
+            if hasattr(feature_scripts, 'preprocess_common'):
                 self.Preprocess.update({
-                    'preprocess_index': feature_scripts.preprocess_index})
+                    'preprocess_common': feature_scripts.preprocess_common})
 
             select_scripts = select_scripts()
             self.METHODS = {
@@ -105,8 +105,8 @@ class SelectStock(TimeTool, FileHandler):
             df.loc[
                 (df.name == '6548') & (df.Time < '2019-09-09'), col] /= 10
 
-        if 'preprocess_index' in self.Preprocess:
-            df = self.Preprocess['preprocess_index'](df)
+        if 'preprocess_common' in self.Preprocess:
+            df = self.Preprocess['preprocess_common'](df)
 
         return df
 
@@ -116,7 +116,7 @@ class SelectStock(TimeTool, FileHandler):
         df = self.preprocess(df)
 
         for m, func in self.Preprocess.items():
-            if m != 'preprocess_index':
+            if m != 'preprocess_common':
                 df = func(df)
 
         for i, (m, func) in enumerate(self.METHODS.items()):

@@ -825,8 +825,9 @@ class BackTester(BacktestPerformance, TimeTool):
             self.volume_prop = self.setVolumeProp(self.market_value)
 
             # 進場順序
+            stockids = list(self.stocks) + ['1', '101']
             rows = df[df.Time == time_].copy()
-            rows = rows[(rows.isIn == 1) | (rows.name.isin(self.stocks))]
+            rows = rows[(rows.isIn == 1) | (rows.name.isin(stockids))]
             rows = self.set_open_order(rows)
 
             # 取出當天(或某小時)所有股票資訊
@@ -842,11 +843,12 @@ class BackTester(BacktestPerformance, TimeTool):
                 self.day_trades = []
 
             # 檢查進場 & 出場
-            rows = np.array(rows.to_dict('records'))
-            for row in rows:
-                name = row['name']
+            rows = rows.set_index('name').to_dict('index')
+            for name, row in rows.items():
                 inputs = Kbars.copy()
-                inputs[self.Script.scale] = {name: row}
+                temp = {name: row}
+                temp.update({k: rows[k] for k in ['1', '101'] if k in rows})
+                inputs[self.Script.scale] = temp
                 inputs['name'] = name
                 if '1D' in Kbars:
                     inputs['1D'] = self.Kbars['1D']
