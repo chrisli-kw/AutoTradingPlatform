@@ -17,10 +17,10 @@ from .base import convert_statement
 from .backtest import BacktestPerformance
 from .charts import export_figure, convert_encodings, SuplotHandler
 try:
-    from ..scripts import __BacktestScripts__
+    from ..scripts import backtest_config
 except:
     logging.warning('Cannot import test scripts from package.')
-    __BacktestScripts__ = None
+    backtest_config = None
 
 
 class FiguresSet:
@@ -29,7 +29,7 @@ class FiguresSet:
 
 class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
     def __init__(self, account: str):
-        self.set_report_scripts(__BacktestScripts__)
+        self.set_report_scripts(backtest_config)
         self.account = account
         self.TablesFile = f'{PATH}/daily_info/{TODAY_STR[:-3]}-performance-{account}.xlsx'
         self.Tables = namedtuple(

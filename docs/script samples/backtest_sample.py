@@ -1,17 +1,12 @@
 import pandas as pd
 from datetime import timedelta
-from collections import namedtuple
 
 from trader.config import TODAY_STR
 from trader.performance.backtest import BackTester
 from trader.performance.reports import BacktestReport
-
-
-Action = namedtuple(
-    typename="Action",
-    field_names=['position', 'reason', 'msg', 'price'],
-    defaults=[0, '', '', 0]
-)
+from trader.scripts.conditions import SelectConditions
+from trader.scripts.StrategySet import StrategySet
+from trader.scripts.features import FeatureTrading, FeaturesSelect
 
 
 def dats_source(start='', end=''):
@@ -26,7 +21,7 @@ def dats_source(start='', end=''):
     return df
 
 
-class SampleScript:
+class SampleScript(StrategySet, FeaturesSelect, FeatureTrading, SelectConditions):
     '''
     ===================================================================
     This is a sample of formating a backtest script.
@@ -84,65 +79,88 @@ class SampleScript:
         your backtest strategy needs multi-scale kbar datasets.
         ===================================================================
         '''
-        df['yClose'] = df.groupby('name').Close.transform('shift')
+        df = self.preprocess_common(df)
+        df = getattr(self, f'preprocess_{self.strategy}')(df)
+        df = getattr(self, f'addFeatures_1D_{self.strategy}')(df, 'backtest')
         return df
 
-    def addFeatures(self, Kbars: dict):
+    def addFeatures_T(self, df: pd.DataFrame, scale: str):
         '''
         ===================================================================
         Functions of adding "other-frequency" features.
         ===================================================================
         '''
-        Kbars['1D'] = self.addFeatures_1D(Kbars['1D'])
+        func = getattr(self, f'addFeatures_{scale}_{self.strategy}')
+        df = func(df, 'backtest')
+        return df
+
+    def addFeatures(self, Kbars: dict):
+        for scale in self.kbarScales:
+            if scale == '1D':
+                Kbars[scale] = self.addFeatures_1D(Kbars[scale])
+            else:
+                Kbars[scale] = self.addFeatures_T(Kbars[scale], scale)
         return Kbars
 
-    def selectStocks(self, Kbars: dict):
+    def selectStocks(self, Kbars: dict, *args):
         '''
         ===================================================================
         Set conditions to select stocks.
         ===================================================================
         '''
-
-        df = Kbars[self.scale]
-
-        condition = df.Close/df.yClose > 1.05
-        df['isIn'] = df[condition]
+        df = Kbars['1D']
+        df['isIn'] = getattr(self, f'condition_{self.strategy}')(df, *args)
         df.isIn = df.groupby('name').isIn.shift(1).fillna(False)
+        Kbars['1D'] = df
 
-        Kbars[self.scale] = df
+        if len(self.kbarScales) > 1:
+            df = Kbars[self.scale]
+            isIn = Kbars['1D'][['date', 'name', 'isIn']]
+            df = df.merge(isIn, how='left', on=['date', 'name'])
+            Kbars[self.scale] = df
+
         return Kbars
 
-    def computeOpenLimit(self, data: dict, **kwargs):
+    def setVolumeProp(self, market_value):
+        return self.get_volume_prop(self.strategy, market_value)
+
+    def computeOpenLimit(self, KBars: dict, **kwargs):
         '''
         ===================================================================
         Determine the daily limit to open a position.
         ===================================================================
         '''
-        return 10000
+        if not hasattr(self, f'openLimit_{self.strategy}'):
+            return 2000
 
-    def examineOpen(self, inputs: dict, **kwargs):
+        func = getattr(self, f'openLimit_{self.strategy}')
+        return func(KBars, 'backtest')
+
+    def computeOpenUnit(self, kbars: dict):
+        if not hasattr(self, f'quantity_{self.strategy}'):
+            return 5
+
+        func = getattr(self, f'quantity_{self.strategy}')
+        quantity, _ = func(None, kbars, 'backtest')
+        return quantity
+
+    def examineOpen(self, inputs: dict, kbars: dict, **kwargs):
         '''
         ===================================================================
         Set conditions to open a position.
         ===================================================================
         '''
-        kbar1D = inputs['1D']
-        open_condition = kbar1D['Close'] > kbar1D['Open']
-        if open_condition:
-            return Action(100, 'reason', 'reason', kbar1D['Close'])
-        return Action()
+        func = self.mapFunction('Open', self.tradeType, self.strategy)
+        return func(inputs=inputs, kbars=kbars, mode='backtest', **kwargs)
 
-    def examineClose(self, stocks: dict, inputs: dict, **kwargs):
+    def examineClose(self, inputs: dict, kbars: dict, **kwargs):
         '''
         ===================================================================
         Set conditions to close a position.
         ===================================================================
         '''
-        kbar1D = inputs['1D']
-        sell_condition = kbar1D['Close'] < kbar1D['Open']
-        if sell_condition:
-            return Action(100, 'reason', 'reason', kbar1D['Close'])
-        return Action()
+        func = self.mapFunction('Close', self.tradeType, self.strategy)
+        return func(inputs=inputs, kbars=kbars, mode='backtest', **kwargs)
 
 
 backtestScript = SampleScript()

@@ -44,21 +44,21 @@ class StrategySet(StrategyTool):
             'Open': {
                 '當沖': {},
                 '非當沖': {
-                    'Strategy1': self.buyStrategy1,
-                    'Strategy2': self.sellStrategy2,
+                    'Strategy1': self.open_Strategy1,
+                    'Strategy2': self.open_Strategy2,
                 }
             },
             'Close': {
                 '當沖': {},
                 '非當沖': {
-                    'Strategy1': self.sellStrategy1,
-                    'Strategy2': self.buyStrategy2,
+                    'Strategy1': self.close_Strategy1,
+                    'Strategy2': self.close_Strategy2,
                 }
             }
         }
 
         self.QuantityFunc = {
-            'Strategy1': self.quantityStrategy1
+            'Strategy1': self.quantity_Strategy1
         }
 
     def update_indicators(self, now: datetime, kbars: dict):
@@ -109,7 +109,7 @@ class StrategySet(StrategyTool):
             return self.futures_limit
         return self.futures_limit
 
-    def quantityStrategy1(self, inputs: dict, kbars: pd.DataFrame, **kwargs):
+    def quantity_Strategy1(self, inputs: dict, kbars: dict, **kwargs):
         '''
         ===================================================================
 
@@ -127,7 +127,7 @@ class StrategySet(StrategyTool):
         quantity_limit = 499
         return quantity, quantity_limit
 
-    def buyStrategy1(self, inputs: dict, kbars: dict, **kwargs):
+    def open_Strategy1(self, inputs: dict, kbars: dict, **kwargs):
         '''
         ===================================================================
         Functions of determining if the system can open a LONG stock 
@@ -151,10 +151,10 @@ class StrategySet(StrategyTool):
         buy_condition = inputs['price'] > inputs['open']
         if buy_condition == True:
             buy_position = 100
-            return self.Action(buy_position, 'buy_type', 'buy_message')
+            return self.Action(buy_position, 'buy_reason', 'buy_message')
         return self.Action()
 
-    def sellStrategy1(self, inputs: dict, kbars: dict, **kwargs):
+    def close_Strategy1(self, inputs: dict, kbars: dict, **kwargs):
         '''
         ===================================================================
         Functions of determining if the system can close a LONG stock 
@@ -178,37 +178,10 @@ class StrategySet(StrategyTool):
         sell_condition = inputs['price'] < inputs['open']
         if sell_condition == True:
             sell_position = 100
-            return self.Action(sell_position, 'sell_type', 'sell_message')
+            return self.Action(sell_position, 'sell_reason', 'sell_message')
         return self.Action()
 
-    def buyStrategy2(self, inputs: dict, kbars: dict, **kwargs):
-        '''
-        ===================================================================
-        Functions of determining if the system can close a SHORT stock 
-        position.
-
-        Arguments:
-        inputs: daily quote data of a stock/futures security, including, 
-        open, high, low, close, volume, ..., etc
-        kbars: Kbar data for condition checking, supported kbar frequencies
-        are 1D, 60T, 30T, 15T, 5T, 1T.
-
-        Supported key-word arguments:
-        Quotes: current and history (for the past 1-min period) tick data.
-        pct_chg_DowJones: the percentage change of the previous trade-day
-        Dow-Jones index.
-
-        The function returns a namedtuple Object, including position(%), 
-        reason, and msg.
-        ===================================================================
-        '''
-        buy_condition = inputs['price'] > inputs['open']
-        if buy_condition == True:
-            buy_position = 100
-            return self.Action(buy_position, 'buy_type', 'buy_message')
-        return self.Action()
-
-    def sellStrategy2(self, inputs: dict, kbars: dict, **kwargs):
+    def open_Strategy2(self, inputs: dict, kbars: dict, **kwargs):
         '''
         ===================================================================
         Functions of determining if the system can open a SHORT stock 
@@ -232,5 +205,32 @@ class StrategySet(StrategyTool):
         sell_condition = inputs['price'] < inputs['open']
         if sell_condition == True:
             sell_position = 100
-            return self.Action(sell_position, 'sell_type', 'sell_message')
+            return self.Action(sell_position, 'sell_reason', 'sell_message')
+        return self.Action()
+
+    def close_Strategy2(self, inputs: dict, kbars: dict, **kwargs):
+        '''
+        ===================================================================
+        Functions of determining if the system can close a SHORT stock 
+        position.
+
+        Arguments:
+        inputs: daily quote data of a stock/futures security, including, 
+        open, high, low, close, volume, ..., etc
+        kbars: Kbar data for condition checking, supported kbar frequencies
+        are 1D, 60T, 30T, 15T, 5T, 1T.
+
+        Supported key-word arguments:
+        Quotes: current and history (for the past 1-min period) tick data.
+        pct_chg_DowJones: the percentage change of the previous trade-day
+        Dow-Jones index.
+
+        The function returns a namedtuple Object, including position(%), 
+        reason, and msg.
+        ===================================================================
+        '''
+        buy_condition = inputs['price'] > inputs['open']
+        if buy_condition == True:
+            buy_position = 100
+            return self.Action(buy_position, 'buy_reason', 'buy_message')
         return self.Action()
