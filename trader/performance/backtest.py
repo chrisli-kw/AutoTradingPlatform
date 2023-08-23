@@ -336,6 +336,7 @@ class BackTester(BacktestPerformance, TimeTool):
         self.TAX_RATE_FUTURES = .00002
         self.TimeCol = 'Time'
 
+        self.indexes = ['1', '101']
         self.nStocksLimit = 0
         self.nStocks_high = 20
         self.day_trades = []
@@ -358,7 +359,7 @@ class BackTester(BacktestPerformance, TimeTool):
             codes = readStockList().code.to_list()
         else:
             codes = ['TX']
-        codes += ['1', '101']
+        codes += self.indexes
 
         if not start:
             start = '2018-07-01'
@@ -405,51 +406,26 @@ class BackTester(BacktestPerformance, TimeTool):
     def addFeatures(self, Kbars: dict):
         return Kbars
 
-    def on_addFeatures(self):
-        def wrapper(func):
-            self.addFeatures = func
-        return wrapper
-
     def selectStocks(self, Kbars: dict):
         '''依照策略選股條件挑出可進場的股票，必須新增一個"isIn"欄位'''
         return Kbars
-
-    def on_selectStocks(self):
-        def wrapper(func):
-            self.selectStocks = func
-        return wrapper
 
     def examineOpen(self, inputs: dict, kbars: dict, **kwargs):
         '''檢查進場條件'''
         return self.Action(100, '進場', 'msg', kbars['1D']['Open'])
 
-    def on_examineOpen(self):
-        def wrapper(func):
-            self.examineOpen = func
-        return wrapper
-
-    def examineClose(self, stocks: dict, inputs: dict, **kwargs):
+    def examineClose(self, inputs: dict, kbars: dict, **kwargs):
         '''檢查出場條件'''
-        if inputs['Low'] < inputs['Open']:
-            closePrice = inputs['Open']
+        if inputs['low'] < inputs['open']:
+            closePrice = inputs['open']
             return self.Action(100, '出場', 'msg', closePrice)
         return self.Action()
 
-    def on_examineClose(self):
-        def wrapper(func):
-            self.examineClose = func
-        return wrapper
-
-    def computeOpenLimit(self, data: dict, **kwargs):
+    def computeOpenLimit(self, Kbars: dict, **kwargs):
         '''計算每日買進股票上限(可做幾支)'''
         return 2000
 
-    def on_computeOpenLimit(self):
-        def wrapper(func):
-            self.computeOpenLimit = func
-        return wrapper
-
-    def computeOpenUnit(self, inputs: dict):
+    def computeOpenUnit(self, Kbars: dict):
         '''
         計算買進股數
         參數:
@@ -457,57 +433,47 @@ class BackTester(BacktestPerformance, TimeTool):
         '''
         return 5
 
-    def on_computeOpenUnit(self):
-        def wrapper(func):
-            self.computeOpenUnit = func
-        return wrapper
-
     def setVolumeProp(self, market_value: float):
         '''根據成交量比例設定進場張數'''
         return 0.025
 
-    def on_setVolumeProp(self):
+    def on_set_script_function(self, testScript, attrName):
         def wrapper(func):
-            self.setVolumeProp = func
+            if hasattr(testScript, attrName):
+                setattr(self, attrName, func)
+            return func
         return wrapper
 
     def set_scripts(self, testScript: object):
         '''設定回測腳本'''
 
-        if hasattr(testScript, 'addFeatures'):
-            @self.on_addFeatures()
-            def add_scale_features(df):
-                return testScript.addFeatures(df)
+        @self.on_set_script_function(testScript, 'addFeatures')
+        def func1(df):
+            return testScript.addFeatures(df)
 
-        if hasattr(testScript, 'selectStocks'):
-            @self.on_selectStocks()
-            def select_stocks_(df):
-                return testScript.selectStocks(df)
+        @self.on_set_script_function(testScript, 'selectStocks')
+        def func2(df):
+            return testScript.selectStocks(df)
 
-        if hasattr(testScript, 'examineOpen'):
-            @self.on_examineOpen()
-            def open_(inputs, **kwargs):
-                return testScript.examineOpen(inputs, **kwargs)
+        @self.on_set_script_function(testScript, 'examineOpen')
+        def func3(inputs, kbars, **kwargs):
+            return testScript.examineOpen(inputs, kbars, **kwargs)
 
-        if hasattr(testScript, 'examineClose'):
-            @self.on_examineClose()
-            def close_(stocks, inputs, **kwargs):
-                return testScript.examineClose(stocks, inputs, **kwargs)
+        @self.on_set_script_function(testScript, 'examineClose')
+        def func4(inputs, kbars, **kwargs):
+            return testScript.examineClose(inputs, kbars, **kwargs)
 
-        if hasattr(testScript, 'computeOpenLimit'):
-            @self.on_computeOpenLimit()
-            def compute_limit(Kbars, **kwargs):
-                return testScript.computeOpenLimit(Kbars, **kwargs)
+        @self.on_set_script_function(testScript, 'computeOpenLimit')
+        def func5(Kbars, **kwargs):
+            return testScript.computeOpenLimit(Kbars, **kwargs)
 
-        if hasattr(testScript, 'computeOpenUnit'):
-            @self.on_computeOpenUnit()
-            def open_unit(inputs):
-                return testScript.computeOpenUnit(inputs)
+        @self.on_set_script_function(testScript, 'computeOpenUnit')
+        def func6(inputs):
+            return testScript.computeOpenUnit(inputs)
 
-        if hasattr(testScript, 'setVolumeProp'):
-            @self.on_setVolumeProp()
-            def open_unit(market_value):
-                return testScript.setVolumeProp(market_value)
+        @self.on_set_script_function(testScript, 'setVolumeProp')
+        def func7(market_value):
+            return testScript.setVolumeProp(market_value)
 
         self.Script = testScript
 
@@ -760,8 +726,8 @@ class BackTester(BacktestPerformance, TimeTool):
         })
 
         closeInfo = self.examineClose(
-            stocks=self.stocks,
-            inputs=inputs,
+            inputs=self.stocks,
+            kbars=inputs,
             stocksClosed=stocksClosed
         )
 
@@ -817,18 +783,18 @@ class BackTester(BacktestPerformance, TimeTool):
 
         t1 = time.time()
 
-        df = Kbars[self.Script.scale]
-        times = np.sort(df.Time.unique())
-        N = len(times)
-        for i, time_ in enumerate(times):
+        df = Kbars[self.Script.scale].sort_values('Time')
+        group = df.groupby('Time')
+        N = len(group)
+        for i, (time_, rows) in enumerate(group):
             self.nClose = 0
             self.volume_prop = self.setVolumeProp(self.market_value)
 
             # 進場順序
-            stockids = list(self.stocks) + ['1', '101']
-            rows = df[df.Time == time_].copy()
+            stockids = list(self.stocks) + self.indexes
             rows = rows[(rows.isIn == 1) | (rows.name.isin(stockids))]
-            rows = self.set_open_order(rows)
+            if rows.name.nunique() == 2:
+                continue
 
             # 取出當天(或某小時)所有股票資訊
             chance = rows.isIn.sum()
@@ -843,11 +809,15 @@ class BackTester(BacktestPerformance, TimeTool):
                 self.day_trades = []
 
             # 檢查進場 & 出場
+            rows = self.set_open_order(rows)
             rows = rows.set_index('name').to_dict('index')
             for name, row in rows.items():
+                if name in self.indexes:
+                    continue
+
                 inputs = Kbars.copy()
                 temp = {name: row}
-                temp.update({k: rows[k] for k in ['1', '101'] if k in rows})
+                temp.update({k: rows[k] for k in self.indexes if k in rows})
                 inputs[self.Script.scale] = temp
                 inputs['name'] = name
                 if '1D' in Kbars:
@@ -855,7 +825,7 @@ class BackTester(BacktestPerformance, TimeTool):
 
                 if name in self.stocks:
                     self.checkClose(inputs, stocksClosed)
-                elif row['isIn']:
+                else:
                     self.checkOpen(inputs)
 
             # 更新交易明細數據

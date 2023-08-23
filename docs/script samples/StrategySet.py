@@ -24,7 +24,7 @@ class StrategySet(StrategyTool):
     '''
 
     def __init__(self, **kwargs):
-        StrategyTool.__init__()
+        StrategyTool.__init__(self, **kwargs)
 
         # customized settings
         self.STRATEGIES = pd.DataFrame(
@@ -67,7 +67,7 @@ class StrategySet(StrategyTool):
 
         *****OPTIONAL*****
 
-        Functions of updating indicators for all SHORT strategies. Any new
+        Functions of updating indicators for all strategies. Any new
         indicator data can be created as an attribute in this module.This 
         function is OPTIONAL to use, which means if not determine this func, 
         the system will not be affected.
@@ -93,6 +93,24 @@ class StrategySet(StrategyTool):
             return self.stock_limit_long
         return self.stock_limit_long
 
+    def setNStockLimitShort(self, KBars: dict = None):
+        '''
+        ===================================================================
+
+        *****OPTIONAL*****
+
+        Functions of setting the number of STOCK limit to trade for all 
+        SHORT strategies. This function is OPTIONAL to use, which means 
+        if not determine this func, the system will automatically return 
+        the value of self.stock_limit_short for further operations.
+        ===================================================================
+        '''
+        if self.is_simulation:
+            return 3000
+        elif self.stock_limit_type != 'constant':
+            return self.stock_limit_short
+        return self.stock_limit_short
+
     def setNFuturesLimit(self, KBars: dict = None):
         '''
         ===================================================================
@@ -109,7 +127,7 @@ class StrategySet(StrategyTool):
             return self.futures_limit
         return self.futures_limit
 
-    def quantity_Strategy1(self, inputs: dict, kbars: dict, **kwargs):
+    def quantity_Strategy1(self, inputs: dict, kbars: dict, mode='trading', **kwargs):
         '''
         ===================================================================
 
@@ -127,7 +145,7 @@ class StrategySet(StrategyTool):
         quantity_limit = 499
         return quantity, quantity_limit
 
-    def open_Strategy1(self, inputs: dict, kbars: dict, **kwargs):
+    def open_Strategy1(self, inputs: dict, kbars: dict, mode='trading', **kwargs):
         '''
         ===================================================================
         Functions of determining if the system can open a LONG stock 
@@ -154,7 +172,7 @@ class StrategySet(StrategyTool):
             return self.Action(buy_position, 'buy_reason', 'buy_message')
         return self.Action()
 
-    def close_Strategy1(self, inputs: dict, kbars: dict, **kwargs):
+    def close_Strategy1(self, inputs: dict, kbars: dict, mode='trading', **kwargs):
         '''
         ===================================================================
         Functions of determining if the system can close a LONG stock 
@@ -181,7 +199,7 @@ class StrategySet(StrategyTool):
             return self.Action(sell_position, 'sell_reason', 'sell_message')
         return self.Action()
 
-    def open_Strategy2(self, inputs: dict, kbars: dict, **kwargs):
+    def open_Strategy2(self, inputs: dict, kbars: dict, mode='trading', **kwargs):
         '''
         ===================================================================
         Functions of determining if the system can open a SHORT stock 
@@ -208,7 +226,7 @@ class StrategySet(StrategyTool):
             return self.Action(sell_position, 'sell_reason', 'sell_message')
         return self.Action()
 
-    def close_Strategy2(self, inputs: dict, kbars: dict, **kwargs):
+    def close_Strategy2(self, inputs: dict, kbars: dict, mode='trading', **kwargs):
         '''
         ===================================================================
         Functions of determining if the system can close a SHORT stock 
