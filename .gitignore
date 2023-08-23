@@ -130,15 +130,14 @@ dmypy.json
 
 # projec-related files
 .vscode/
-*.ipynb
 data/
 documents/
 logs/
+*.ipynb
 *.properties.*
 *.DS_Store
 test.py
 dev.py
-python_practice.py
 
 trader/scripts/*
 !trader/scripts/README.md

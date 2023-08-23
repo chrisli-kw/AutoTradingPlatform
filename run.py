@@ -31,16 +31,19 @@ task = args.task
 account = args.account
 filename = account if task == 'auto_trader' else task
 
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s.%(msecs)03d|%(levelname)s: %(message)s',
     datefmt='%Y-%m-%d %a %H:%M:%S',
     handlers=[
-            logging.FileHandler(f'./logs/{filename}.log', 'a'),
+            logging.FileHandler(f'./logs/{filename}.log', 'a', encoding='utf-8'),
             logging.StreamHandler()
     ]
 )
-logging.info('—'*250)
+logging.info('—'*100)
 logging.info(f'Current trader version is {ver}')
 
 if __name__ == "__main__":
