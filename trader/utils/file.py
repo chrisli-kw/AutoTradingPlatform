@@ -101,8 +101,27 @@ class FileHandler:
         tb = pd.concat([tb, df]).reset_index(drop=True)
         return tb
 
-    def read_tables_in_folder(self, dir_path: str, pattern: str = None):
+    def read_tables_in_folder(self, dir_path: str, pattern: str = None, **kwargs):
         files = self.listdir(dir_path, pattern=pattern)
+
+        # filter files by time interval
+        start = kwargs.get('start')
+        if start:
+            if not isinstance(start, str):
+                start = str(start)
+            y1, m1 = int(start[:4]), int(start[5:7])
+            files = [
+                f for f in files if int(f[:4]) >= y1 and int(f[5:7]) >= m1]
+
+        end = kwargs.get('end')
+        if end:
+            if not isinstance(end, str):
+                end = str(end)
+            y2, m2 = int(end[:4]), int(end[5:7])
+            files = [
+                f for f in files if int(f[:4]) <= y2 and int(f[5:7]) <= m2]
+
+        # read tables
         N = len(files)
         if N:
             df = np.array([None]*N)

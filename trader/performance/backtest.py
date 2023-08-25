@@ -370,7 +370,7 @@ class BackTester(BacktestPerformance, TimeTool):
         Kbars = {scale: None for scale in self.Script.kbarScales}
         Kbars['1D'] = None
         for scale in Kbars:
-            scale_ = scale if market == 'Stocks' else '1T'
+            scale_ = scale if market == 'Stocks' and scale in ['1D', '30T', '60T'] else '1T'
 
             if db.HAS_DB:
                 df = db.query(
@@ -382,7 +382,9 @@ class BackTester(BacktestPerformance, TimeTool):
             else:
                 df = file_handler.read_tables_in_folder(
                     f'{dataPath if dataPath else PATH}/Kbars/{scale_}',
-                    pattern=market.lower()
+                    pattern=market.lower(),
+                    start=start,
+                    end=end
                 )
                 df = df[
                     (df.Time >= start) &
