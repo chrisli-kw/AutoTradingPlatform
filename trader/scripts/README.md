@@ -1,9 +1,11 @@
 # Script Design Instructions
 
-Overall, this framework is divided into two main parts: the trading system and the backtesting system. Whether it's the trading or backtesting system, both consist of three main components:
+Overall, this framework is divided into 3 main parts: the target selection system, the trading system and the backtesting system. Whether it's the selection, trading or backtesting system, they consist at least one of three main components:
 1. Indicator Features
 2. Target Selection
 3. Open/Close Positions
+
+![](https://cdn.discordapp.com/attachments/1085014224192929905/1145027926480404520/2023-08-27_12.12.00.png)
 
 Therefore, when writing scripts, they can be categorized into these three types. Whether you are running the trading system or the backtesting system, these three types of scripts will be invoked to form a complete trading strategy.
 
