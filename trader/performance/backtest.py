@@ -325,12 +325,11 @@ class BacktestPerformance(FileHandler):
 
 
 class BackTester(BacktestPerformance, TimeTool):
-    def __init__(self, script):
+    def __init__(self, script=None):
         self.set_scripts(script)
-        BacktestPerformance.__init__(self, script)
 
-        self.isLong = self.mode == 'long'
-        self.sign = 1 if self.isLong else -1
+        self.isLong = True
+        self.sign = 1
         self.FEE_RATE = .001425*.65
         self.TAX_RATE_STOCK = .003
         self.TAX_RATE_FUTURES = .00002
@@ -449,8 +448,16 @@ class BackTester(BacktestPerformance, TimeTool):
             return func
         return wrapper
 
-    def set_scripts(self, testScript: object):
+    def set_scripts(self, testScript: object = None):
         '''設定回測腳本'''
+
+        if not testScript:
+            return
+
+        BacktestPerformance.__init__(self, testScript)
+        self.Script = testScript
+        self.isLong = testScript.mode == 'long'
+        self.sign = 1 if self.isLong else -1
 
         @self.on_set_script_function(testScript, 'addFeatures')
         def func1(df):
@@ -479,8 +486,6 @@ class BackTester(BacktestPerformance, TimeTool):
         @self.on_set_script_function(testScript, 'setVolumeProp')
         def func7(market_value):
             return testScript.setVolumeProp(market_value)
-
-        self.Script = testScript
 
     def updateMarketValue(self):
         '''更新庫存市值'''
@@ -775,6 +780,10 @@ class BackTester(BacktestPerformance, TimeTool):
             self.buyOrder = params['buyOrder']
 
         self.Kbars = {}
+        self.day_trades = []
+        self.statements = []
+        self.stocks = {}
+        self.daily_info = {}
 
     def run(self, Kbars: dict, **params):
         '''
@@ -785,6 +794,8 @@ class BackTester(BacktestPerformance, TimeTool):
 
         self.set_params(**params)
         stocksClosed = {}
+        if hasattr(self, 'Script'):
+            print(f"Strategy: {self.Script.strategy}{self.Script.scale}")
 
         t1 = time.time()
 
@@ -859,16 +870,14 @@ class BackTester(BacktestPerformance, TimeTool):
             )
         self.daily_info[time_].update({'nClose': self.nClose})
 
-        params.update({
-            'statement': self.statements,
-            'startDate': df.Time.min(),
-            'endDate': df.Time.max(),
-            'daily_info': pd.DataFrame(self.daily_info).T,
-
-        })
-        del df, rows
-        return self.get_backtest_result(
+        result = self.get_backtest_result(
             **params,
+            statement=self.statements,
+            startDate=df.Time.min(),
+            endDate=df.Time.max(),
+            daily_info=pd.DataFrame(self.daily_info).T,
             isLong=self.isLong,
             Kbars=Kbars
         )
+        del df, rows
+        return result
