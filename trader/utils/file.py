@@ -3,8 +3,10 @@ import numpy as np
 import pandas as pd
 from io import BytesIO
 from zipfile import ZipFile
+from datetime import datetime
 
 from . import progress_bar
+from ..config import PATH, TODAY
 
 
 class FileHandler:
@@ -12,10 +14,20 @@ class FileHandler:
         if not os.path.exists(path):
             os.makedirs(path)
 
-    def listdir(self, dir_path: str, pattern: str = ''):
+    def listdir(self, dir_path: str, pattern: str = '', filter_out: list = ['desktop.ini']):
         if pattern:
-            return [f for f in os.listdir(dir_path) if pattern in f]
-        return os.listdir(dir_path)
+            result = [f for f in os.listdir(dir_path) if pattern in f]
+        else:
+            result = os.listdir(dir_path)
+        return [f for f in result if f not in filter_out]
+
+    def list_files(self, dir_path: str, pattern: str = '', filter_out: list = ['desktop.ini']):
+        file_list = []
+        for root, _, files in os.walk(dir_path):
+            for file in files:
+                if pattern in file and file not in filter_out:
+                    file_list.append(os.path.join(root, file))
+        return file_list
 
     def is_in_dir(self, filename: str, dir_path: str):
         '''Check if a filename is in dir_path.'''
@@ -107,17 +119,17 @@ class FileHandler:
         # filter files by time interval
         start = kwargs.get('start')
         if start:
-            if not isinstance(start, str):
-                start = str(start)
-            y1, m1 = int(start[:4]), int(start[5:7])
+            if not isinstance(start, pd.Timestamp):
+                start = pd.to_datetime(start)
+            y1, m1 = start.year, start.month
             files = [
                 f for f in files if int(f[:4]) >= y1 and int(f[5:7]) >= m1]
 
         end = kwargs.get('end')
         if end:
-            if not isinstance(end, str):
-                end = str(end)
-            y2, m2 = int(end[:4]), int(end[5:7])
+            if not isinstance(end, pd.Timestamp):
+                end = pd.to_datetime(end)
+            y2, m2 = end.year, end.month
             files = [
                 f for f in files if int(f[:4]) <= y2 and int(f[5:7]) <= m2]
 
@@ -132,3 +144,41 @@ class FileHandler:
             df = pd.concat(df).reset_index(drop=True)
             return df
         return pd.DataFrame()
+
+    def read_tick_data(self, market: str, **kwargs):
+        '''
+        合併逐筆交易明細表。以year為主，合併該年度的資料，可另外指定要合併的區間
+        '''
+
+        dir_path = f'{PATH}/ticks/{market.lower()}'
+        files = self.list_files(dir_path)
+
+        # Filter files by time interval
+        start = kwargs.get('start')
+        if start:
+            if not isinstance(start, pd.Timestamp):
+                start = pd.to_datetime(start)
+        else:
+            start = pd.to_datetime('1970-01-01')
+
+        end = kwargs.get('end')
+        if end:
+            if not isinstance(end, pd.Timestamp):
+                end = pd.to_datetime(end)
+        else:
+            end = TODAY
+
+        df = []
+        for f in files:
+            date = f.split('\\')[-1][:-4].split('_')[1:]
+            date = datetime(*(int(d) for d in date))
+            if start <= date <= end:
+                df.append(f)
+
+        N = len(df)
+        for i, f in enumerate(df):
+            df[i] = self.read_table(f)
+            status = f.split('\\')[-1]
+            progress_bar(N, i, status=f'[{status}]')
+        df = pd.concat(df)
+        return df

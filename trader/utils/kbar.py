@@ -331,60 +331,45 @@ class TickDataProcesser(TimeTool, FileHandler):
             df = self.convert_tick_2_kbar(df, scale, period='all')
         return df
 
-    def merge_futures_tick_data(self, year: list, months: list = None):
-        '''
-        合併期貨逐筆交易明細表
-        以year為主，合併該年度的資料，可另外指定要合併的月份(該年度)
-        '''
-
-        path = f'{PATH}/ticks/futures/{year}'
-
-        if not months:
-            Months = self.listdir(path, pattern='Daily')
-        else:
-            Months = [f'Daily_{year}_{str(m).zfill(2)}' for m in months]
-
-        df = []
-        for m in Months:
-            temp = self.read_tables_in_folder(f'{path}/{m}', pattern='Daily')
-            df.append(temp)
-        df = pd.concat(df)
-        df = df.reset_index(drop=True)
-        return df
-
     def preprocess_futures_tick(self, df, underlying='TX'):
-        df.商品代號 = df.商品代號.apply(lambda x: x.replace(' ', ''))
+        df = df.rename(columns={
+            '商品代號': 'name',
+            '成交價格': 'Price',
+            '成交數量(B+S)': 'Quantity',
+            '開盤集合競價 ': 'Simtrade',
+        })
+
+        df.name = df.name.apply(lambda x: x.replace(' ', ''))
         df['到期月份(週別)'] = df['到期月份(週別)'].apply(lambda x: x.replace(' ', ''))
         df.近月價格 = df.近月價格.replace('-', 0).astype(float)
         df.遠月價格 = df.遠月價格.replace('-', 0).astype(float)
 
         if underlying != 'all':
-            df = df[df.商品代號 == underlying].reset_index()
+            df = df[df.name == underlying].reset_index(drop=True)
 
         df['Time'] = pd.to_datetime(df.成交日期.astype(
             str) + df.成交時間.astype(str).str.zfill(6))
         df['date'] = pd.to_datetime(df.Time.dt.date)
-        df['hour'] = df.Time.dt.hour
-        df['minute'] = df.Time.dt.minute
-
+        # df['hour'] = df.Time.dt.hour
+        # df['minute'] = df.Time.dt.minute
+        df.Simtrade = df.Simtrade.apply(lambda x: True if x == '*' else False)
         df['due_month'] = df.date.apply(self.GetDueMonth)
-
         df['is_spread'] = df['到期月份(週別)'].apply(lambda x: 1 if '/' in x else 0)
         df['period'] = 2
-        df.loc[df.hour.isin(range(8, 14)), 'period'] = 1
+        df.loc[df.Time.dt.hour.isin(range(8, 14)), 'period'] = 1
 
         # 處理跨月委託交易(轉倉)
         # df['到期月份(週別)'] = df['到期月份(週別)'].apply(lambda x: x.split('/'))
-        # df.成交價格 += df.近月價格
+        # df.Price += df.近月價格
         # df = df.explode(['到期月份(週別)'])
 
-        df = df.rename(columns={'商品代號': 'name'})
+        df = df.drop(['成交日期', '成交時間', 'date'], axis=1)
         return df
 
     def convert_tick_2_kbar(self, df, scale, period='day_only'):
         '''將逐筆資料轉為K線資料。period = day_only(日盤), night_only(夜盤), all(日盤+夜盤)'''
-        df['Open'] = df['High'] = df['Low'] = df['Close'] = df.成交價格
-        df['Volume'] = df['成交數量(B+S)']/2
+        df['Open'] = df['High'] = df['Low'] = df['Close'] = df.Price
+        df['Volume'] = df['Quantity']/2
         df['Amount'] = df.Close*df.Volume
 
         df = df[(df.is_spread == False) & (df['到期月份(週別)'] == df.due_month)]

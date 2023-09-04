@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 API = sj.Shioaji()
 TODAY = datetime.today()
 TODAY_STR = TODAY.strftime("%Y-%m-%d")
-PATH = './data'
 
 SystemConfig = configparser.ConfigParser()
 SystemConfig.read('./lib/config.ini', encoding='utf8')
@@ -76,6 +75,8 @@ DB_PWD = get_settings('DB', 'DB_PWD')
 DB_NAME = get_settings('DB', 'DB_NAME')
 HAS_DB = all(x for x in [DB_HOST, DB_NAME, DB_PORT, DB_PWD, DB_USER])
 DB_URL = f'{DB_USER}:{DB_PWD}@{DB_HOST}:{DB_PORT}' if HAS_DB else ''
+
+PATH = get_settings('DATA', 'DATA_PATH')
 
 # LINE notify
 TOKEN_MONITOR = get_settings('LINENOTIFY', 'TOKEN_MONITOR')
