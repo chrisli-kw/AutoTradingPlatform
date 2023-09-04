@@ -212,7 +212,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
     def _set_futures_code_list(self):
         '''期貨商品代號與代碼對照表'''
-        if self.can_futures and self.HAS_FUTOPT_ACCOUNT and self.Futures_Code_List == {}:
+        if self.can_futures and self.Futures_Code_List == {}:
             logging.debug('Set Futures_Code_List')
             self.Futures_Code_List = {
                 f.code: f.symbol for m in API.Contracts.Futures for f in m}
@@ -390,6 +390,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         if self.HAS_FUTOPT_ACCOUNT:
             self.can_futures = 'futures' in self.MARKET
             self.account_id_futopt = API.futopt_account.account_id
+            self._set_futures_code_list()
             logging.info(f'Futures account ID: {self.account_id_futopt}')
 
         # 啟動憑證 (Mac 不需啟動)
@@ -555,7 +556,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         # 取得遠端庫存
         self.futures = self.get_securityInfo('Futures')
-        self._set_futures_code_list()
 
         # 庫存的處理
         self.futures = preprocess_(self.futures)
@@ -1404,7 +1404,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 self._update_K1(self.StrategySet.dividends, quotes=self.Quotes)
                 self._set_target_quote_default(all_stocks+all_futures)
                 self._set_index_quote_default()
-                self._set_futures_code_list()
                 self.StrategySet.update_indicators(now, self.KBars)
 
                 if now.minute % 2 == 0:
