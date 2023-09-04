@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 from datetime import timedelta
 
@@ -163,14 +164,17 @@ class SampleScript(StrategySet, FeaturesSelect, FeatureTrading, SelectConditions
         return func(inputs=inputs, kbars=kbars, mode='backtest', **kwargs)
 
 
+tester = BackTester()
 backtestScript = SampleScript()
-br = BacktestReport(backtestScript)
-tester = BackTester(backtestScript)
+tester.set_scripts(backtestScript)
+
 
 # Load & Merge datasets
-startDate = pd.to_datetime(TODAY_STR) - timedelta(days=365)
-dataPath = './data'
-Kbars = tester.load_datasets(start=startDate, end='', dataPath=dataPath)
+Kbars = tester.load_datasets(
+    start=pd.to_datetime(TODAY_STR) - timedelta(days=365),
+    end='',
+    dataPath=f'{os.getcwd()}/data'
+)
 
 # Add backtest features and select stocks
 Kbars = tester.addFeatures(Kbars)
@@ -185,6 +189,7 @@ if TestResult.Summary is not None:
     print(TestResult.Summary)
 
 # Plot figures
+br = BacktestReport(backtestScript)
 fig = br.plot_backtest_result(TestResult)
 
 # Output backtest results

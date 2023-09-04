@@ -18,6 +18,7 @@ def convert_statement(df, mode='trading', **kwargs):
     if not df.shape[0]:
         return df
 
+    init_position = kwargs.get('init_position', 1000000)
     if mode == 'trading':
         df = df.rename(columns={
             'code': 'Code',
@@ -53,7 +54,7 @@ def convert_statement(df, mode='trading', **kwargs):
         tb['CloseAmount'] = (tb.ClosePrice*tb.CloseQuantity).abs()
         tb['profit'] = (tb.CloseAmount - tb.OpenAmount)*(tb.isShort*(-2)+1)
         tb['returns'] = 100*(tb.profit/tb.OpenAmount).round(4)
-        tb['balance'] = kwargs['init_position'] + tb.profit.cumsum()
+        tb['balance'] = init_position + tb.profit.cumsum()
         tb = tb.dropna().reset_index(drop=True)
 
         for index, row in tb.iterrows():
@@ -90,7 +91,7 @@ def convert_statement(df, mode='trading', **kwargs):
         if not kwargs['isLong']:
             df.profit *= -1
             df.returns *= -1
-        df['balance'] = kwargs['init_position'] + df.profit.cumsum()
+        df['balance'] = init_position + df.profit.cumsum()
 
         return df
 
@@ -106,7 +107,8 @@ def compute_profits(tb):
     # 毛利/毛損
     gross_profit = df_profit.profit.sum() if has_profits else 0
     gross_loss = df_loss.profit.sum() if has_loss else 0
-    profit_factor = round(abs(gross_profit/gross_loss), 2) if gross_loss else np.inf
+    profit_factor = round(
+        abs(gross_profit/gross_loss), 2) if gross_loss else np.inf
     if total_profit < 0:
         profit_factor *= -1
 

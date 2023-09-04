@@ -45,8 +45,9 @@ class BacktestPerformance(FileHandler):
         nOpen = df.groupby('OpenTime').Code.count().to_dict()
 
         daily_info = result['daily_info'].copy()
+        init_position = result.get('init_position', 1000000)
         profit = pd.Series(daily_info.index).map(profit).fillna(0).cumsum()
-        daily_info['balance'] = result['init_position'] + profit.values
+        daily_info['balance'] = init_position + profit.values
         daily_info['nOpen'] = daily_info.index.map(nOpen).fillna(0)
         daily_info = daily_info.dropna()
         if self.Market != 'Stocks':
@@ -136,11 +137,12 @@ class BacktestPerformance(FileHandler):
     def get_backtest_result(self, **result):
         '''取得回測報告'''
 
+        init_position = result.get('init_position', 1000000)
         configs = {
-            '起始資金': AccountingNumber(result['init_position']),
+            '起始資金': AccountingNumber(init_position),
             '做多/做空': self.mode,
             '槓桿倍數': self.leverage,
-            '進場順序': result['buyOrder']
+            '進場順序': result.get('buyOrder', 'Close')
         }
         if isinstance(result['statement'], list):
             df = pd.DataFrame(result['statement'])
@@ -196,8 +198,8 @@ class BacktestPerformance(FileHandler):
 
             # 總報酬率
             profits = compute_profits(df)
-            balance = result['init_position'] + profits['TotalProfit']
-            total_return = balance/result['init_position']
+            balance = init_position + profits['TotalProfit']
+            total_return = balance/init_position
 
             # 年化報酬率
             days = (df.CloseTime.max() - df.OpenTime.min()).days
@@ -342,10 +344,10 @@ class BackTester(BacktestPerformance, TimeTool):
         self.statements = []
         self.stocks = {}
         self.daily_info = {}
-        self.balance = 1000000
         self.init_balance = 1000000
-        self.buyOrder = None
-        self.market_value = 0
+        self.balance = self.init_balance
+        self.market_value = self.init_balance
+        self.buyOrder = 'Close'
         self.Action = namedtuple(
             typename="Action",
             field_names=['position', 'reason', 'msg', 'price'],
@@ -771,14 +773,9 @@ class BackTester(BacktestPerformance, TimeTool):
     def set_params(self, **params):
         '''參數設定'''
 
-        if 'init_position' in params:
-            self.balance = params['init_position']
-            self.init_balance = params['init_position']
-            self.market_value = params['init_position']
-
-        if 'buyOrder' in params:
-            self.buyOrder = params['buyOrder']
-
+        init_position = params.get('init_position', 1000000)
+        self.balance = self.init_balance = self.market_value = init_position
+        self.buyOrder = params.get('buyOrder', None)
         self.Kbars = {}
         self.day_trades = []
         self.statements = []
