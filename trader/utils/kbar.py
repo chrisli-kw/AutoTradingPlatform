@@ -60,101 +60,67 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
 
         return max((TODAY - kbar_start_day).days, 35)
 
+    def add_KDay_feature(self, df: pd.DataFrame):
+        return df
+
+    def add_K60min_feature(self, df: pd.DataFrame):
+        return df
+
+    def add_K30min_feature(self, df: pd.DataFrame):
+        return df
+
+    def add_K15min_feature(self, df: pd.DataFrame):
+        return df
+
+    def add_K5min_feature(self, df: pd.DataFrame):
+        return df
+
+    def add_K2min_feature(self, df: pd.DataFrame):
+        return df
+
+    def add_K1min_feature(self, df: pd.DataFrame):
+        return df
+
+    def on_set_feature_function(self, kbar_scripts, attrName):
+        def wrapper(func):
+            if hasattr(kbar_scripts, attrName):
+                setattr(self, attrName, func)
+            return func
+        return wrapper
+
     def set_kbar_scripts(self, kbar_scripts: object = None):
         '''設定K線特徵腳本'''
 
         if kbar_scripts:
             kbar_scripts = kbar_scripts()
-            if hasattr(kbar_scripts, 'add_KDay_feature'):
-                @self.on_add_KDay_feature()
-                def _add_KDay_feature(df):
-                    return kbar_scripts.add_KDay_feature(df)
 
-            if hasattr(kbar_scripts, 'add_K1min_feature'):
-                @self.on_add_K1min_feature()
-                def _add_K1min_feature(df):
-                    return kbar_scripts.add_K1min_feature(df)
+            @self.on_set_feature_function(kbar_scripts, 'add_K1min_feature')
+            def _add_K1min_feature(df):
+                return kbar_scripts.add_K1min_feature(df)
 
-            if hasattr(kbar_scripts, 'add_K2min_feature'):
-                @self.on_add_K2min_feature()
-                def _add_K2min_feature(df):
-                    return kbar_scripts.add_K2min_feature(df)
+            @self.on_set_feature_function(kbar_scripts, 'add_K2min_feature')
+            def _add_K2min_feature(df):
+                return kbar_scripts.add_K2min_feature(df)
 
-            if hasattr(kbar_scripts, 'add_K5min_feature'):
-                @self.on_add_K5min_feature()
-                def _add_K5min_feature(df):
-                    return kbar_scripts.add_K5min_feature(df)
+            @self.on_set_feature_function(kbar_scripts, 'add_K5min_feature')
+            def _add_K5min_feature(df):
+                return kbar_scripts.add_K5min_feature(df)
 
-            if hasattr(kbar_scripts, 'add_K15min_feature'):
-                @self.on_add_K15min_feature()
-                def _add_K15min_feature(df):
-                    return kbar_scripts.add_K15min_feature(df)
+            @self.on_set_feature_function(kbar_scripts, 'add_K15min_feature')
+            def _add_K15min_feature(df):
+                return kbar_scripts.add_K15min_feature(df)
 
-            if hasattr(kbar_scripts, 'add_K30min_feature'):
-                @self.on_add_K30min_feature()
-                def _add_K30min_feature(df):
-                    return kbar_scripts.add_K30min_feature(df)
+            @self.on_set_feature_function(kbar_scripts, 'add_K30min_feature')
+            def _add_K30min_feature(df):
+                return kbar_scripts.add_K30min_feature(df)
 
-            if hasattr(kbar_scripts, 'add_K60min_feature'):
-                @self.on_add_K60min_feature()
-                def _add_K60min_feature(df):
-                    return kbar_scripts.add_K60min_feature(df)
+            @self.on_set_feature_function(kbar_scripts, 'add_K60min_feature')
+            def _add_K60min_feature(df):
+                return kbar_scripts.add_K60min_feature(df)
 
-    def add_KDay_feature(self, df: pd.DataFrame):
-        return df
-
-    def on_add_KDay_feature(self):
-        def wrapper(func):
-            self.add_KDay_feature = func
-        return wrapper
-
-    def add_K60min_feature(self, df: pd.DataFrame):
-        return df
-
-    def on_add_K60min_feature(self):
-        def wrapper(func):
-            self.add_K60min_feature = func
-        return wrapper
-
-    def add_K30min_feature(self, df: pd.DataFrame):
-        return df
-
-    def on_add_K30min_feature(self):
-        def wrapper(func):
-            self.add_K30min_feature = func
-        return wrapper
-
-    def add_K15min_feature(self, df: pd.DataFrame):
-        return df
-
-    def on_add_K15min_feature(self):
-        def wrapper(func):
-            self.add_K15min_feature = func
-        return wrapper
-
-    def add_K5min_feature(self, df: pd.DataFrame):
-        return df
-
-    def on_add_K5min_feature(self):
-        def wrapper(func):
-            self.add_K5min_feature = func
-        return wrapper
-
-    def add_K2min_feature(self, df: pd.DataFrame):
-        return df
-
-    def on_add_K2min_feature(self):
-        def wrapper(func):
-            self.add_K2min_feature = func
-        return wrapper
-
-    def add_K1min_feature(self, df: pd.DataFrame):
-        return df
-
-    def on_add_K1min_feature(self):
-        def wrapper(func):
-            self.add_K1min_feature = func
-        return wrapper
+            @self.on_set_feature_function(kbar_scripts, 'add_KDay_feature')
+            def _add_KDay_feature(df):
+                return kbar_scripts.add_KDay_feature(df)
 
     def _scale_converter(self, scale: str):
         '''Convert scale format from str to int'''
