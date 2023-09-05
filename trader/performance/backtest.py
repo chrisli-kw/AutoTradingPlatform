@@ -865,7 +865,7 @@ class BackTester(BacktestPerformance, TimeTool):
                 position=100,
                 reason='清空庫存'
             )
-        self.daily_info[time_].update({'nClose': self.nClose})
+        self.daily_info.update({time_: {'nClose': self.nClose}})
 
         result = self.get_backtest_result(
             **params,
