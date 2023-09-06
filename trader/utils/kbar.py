@@ -335,12 +335,15 @@ class TickDataProcesser(TimeTool, FileHandler):
         return df
 
     def convert_tick_2_kbar(self, df, scale, period='day_only'):
-        '''將逐筆資料轉為K線資料。period = day_only(日盤), night_only(夜盤), all(日盤+夜盤)'''
+        '''
+        將逐筆資料轉為K線資料(近月)。
+        period = day_only(日盤), night_only(夜盤), all(日盤+夜盤)
+        '''
         df['Open'] = df['High'] = df['Low'] = df['Close'] = df.Price
         df['Volume'] = df['Quantity']/2
         df['Amount'] = df.Close*df.Volume
 
-        due_month = pd.to_datetime(df.Time.dt.date).apply(self.GetDueMonth)
+        due_month = self.GetDueMonth(TODAY)
         df = df[
             (df.DueMonthOld == df.DueMonthNew) &
             (df.DueMonthOld == due_month)

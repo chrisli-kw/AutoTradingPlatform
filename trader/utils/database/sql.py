@@ -125,8 +125,7 @@ class SQLDatabase(FileHandler):
             session.commit()
         except:
             session.rollback()
-            logging.error(
-                f"Save data into {table.__tablename__} failed")
+            logging.exception(f"Save data into {table.__tablename__} failed:")
         finally:
             session.close()
 

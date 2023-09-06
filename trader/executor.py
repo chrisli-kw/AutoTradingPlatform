@@ -623,10 +623,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 self.remove_stock_monitor_list(target)
 
             if c4 or c5:
+                self.remove_futures_monitor_list(target)
                 if is_day_trade:
                     self.futures_to_monitor[target] = None
-                else:
-                    self.remove_futures_monitor_list(target)
 
         # append watchlist or udpate watchlist position
         self.update_watchlist_position(order, self.Quotes, strategies)
@@ -1381,11 +1380,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
             if self.is_not_trade_day(now):
                 logging.info('Non-trading time, stop monitoring')
-                self.updateKBars('2T')
-                self.updateKBars('5T')
-                self.updateKBars('15T')
-                self.updateKBars('30T')
-                self.updateKBars('60T')
+                for scale in ['2T', '5T', '15T', '30T', '60T']:
+                    self.updateKBars(scale)
                 break
             elif all(x == 0 for x in [
                 self.n_stocks_long, self.n_stocks_short,
