@@ -332,6 +332,7 @@ class TickDataProcesser(TimeTool, FileHandler):
         # df = df.explode(['DueMonth'])
 
         df = df.drop(['成交日期', '成交時間', 'date', 'DueMonth'], axis=1)
+        df = df.sort_values('Time').reset_index(drop=True)
         return df
 
     def convert_tick_2_kbar(self, df, scale, period='day_only'):
