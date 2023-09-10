@@ -151,7 +151,7 @@ class FileHandler:
         '''
 
         dir_path = f'{PATH}/ticks/{market.lower()}'
-        files = self.list_files(dir_path)
+        files = self.list_files(dir_path, pattern='.csv')
 
         # Filter files by time interval
         start = kwargs.get('start')
@@ -170,7 +170,7 @@ class FileHandler:
 
         df = []
         for f in files:
-            date = f.split('\\')[-1][:-4].split('_')[1:]
+            date = f.split('\\')[-1][:-4].split('_')[-3:]
             date = datetime(*(int(d) for d in date))
             if start <= date <= end:
                 df.append(f)
