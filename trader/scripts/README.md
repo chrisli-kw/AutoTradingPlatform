@@ -72,7 +72,7 @@ Add ```StrategySet.py``` to ```./trader/scripts/``` as a strategy module.
 ### Step 2: add strategy scripts
 The script should be an class object, see the [sample code](../../docs/script%20samples/StrategySet.py) for more details.
 
-<u>Be sure to update self.STRATEGIES, self.Funcs, and self.QuantityFunc (if exists) before running AutoTradingPlatform</u>
+<u>Be sure to update self.STRATEGIES_STOCK/self.STRATEGIES_FUTURES, self.Funcs, and self.QuantityFunc (if exists) within the object before running AutoTradingPlatform</u>
 
 
 

@@ -19,7 +19,10 @@ class StrategyTool:
         )
         self.pc_ratio = self.get_put_call_ratio()
         self.dividends = self.get_ex_dividends_list()
-        self.STRATEGIES = pd.DataFrame(
+        self.STRATEGIES_STOCK = pd.DataFrame(
+            columns=['name', 'long_weight', 'short_weight']
+        )
+        self.STRATEGIES_FUTURES = pd.DataFrame(
             columns=['name', 'long_weight', 'short_weight']
         )
         self.Funcs = {

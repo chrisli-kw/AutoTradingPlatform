@@ -1062,7 +1062,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         codes = pd.DataFrame(codes, columns=['code', 'symbol', 'name'])
         codes = codes.set_index('name').symbol.to_dict()
 
-        month = str((datetime.now() + timedelta(days=30)).month).zfill(2)
+        month = self.GetDueMonth(TODAY)[-2:]
         df['code'] = (df.商品別 + month).map(codes)
         return df.dropna().set_index('code')
 
@@ -1102,7 +1102,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 sort_order = ['long_weight', 'short_weight']
             else:
                 sort_order = ['short_weight', 'long_weight']
-            strategies = self.StrategySet.STRATEGIES.sort_values(
+            strategies = self.StrategySet.STRATEGIES_STOCK.sort_values(
                 sort_order, ascending=False).name.to_list()
 
             for s in strategies:
@@ -1119,15 +1119,34 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         pools = {}
 
         due_year_month = self.GetDueMonth(TODAY)
-        indexes = {
-            '放空小台': [f'MXF{due_year_month}'],
-            '做多小台': [f'MXF{due_year_month}'],
-            '放空大台': [f'TXF{due_year_month}'],
-            '做多大台': [f'TXF{due_year_month}'],
-        }
-        pools.update({
-            symbol: st for st in self.STRATEGY_FUTURES for symbol in indexes[st]
-        })
+        for st in self.STRATEGY_FUTURES:
+            if '小台' in st:
+                pools.update({f'MXF{due_year_month}': st})
+            elif '大台' in st:
+                pools.update({f'TXF{due_year_month}': st})
+
+        df = picker.get_selection_files()
+        if df.shape[0]:
+            # 排除不交易的股票
+            df = df[~df.code.isin(self.FILTER_OUT)]
+
+            df = df.sort_values('Close')
+
+            # 族群清單按照策略權重 & pc_ratio 決定
+            # 權重大的先加入，避免重複
+            if self.StrategySet.pc_ratio >= 115:
+                sort_order = ['long_weight', 'short_weight']
+            else:
+                sort_order = ['short_weight', 'long_weight']
+            strategies = self.StrategySet.STRATEGIES_FUTURES.sort_values(
+                sort_order, ascending=False).name.to_list()
+
+            for s in strategies:
+                if s in df.Strategy.values and s in self.STRATEGY_FUTURES:
+                    code = df[df.Strategy == s].code
+                    pools.update({stock: s for stock in code})
+                    df = df[~df.code.isin(code)]
+
         return pools
 
     def get_quantity(self, target: str, strategy: str, order_cond: str):
