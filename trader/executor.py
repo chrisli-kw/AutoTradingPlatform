@@ -945,7 +945,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             elif self.simulation and market == 'Futures':
                 # TODO: check the amount of New/Cover
                 price = self.Quotes.NowTargets[target]['price']
-                sign = -1 if content.octype == 'Sell' else 1
+                sign = -1 if content.octype == 'Cover' else 1
                 order_data = {
                     'Time': datetime.now(),
                     'market': market,
