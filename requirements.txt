@@ -1,3 +1,4 @@
+bs4==0.0.1
 cryptography==36.0.1
 dash==2.0.0
 dash-bootstrap-components==1.0.2
@@ -11,12 +12,14 @@ Flask-Compress==1.10.1
 Flask-Cors==3.0.10
 Flask-Excel==0.0.7
 kaleido==0.2.1
-numpy==1.21.5
+lxml==4.9.3
+numpy==1.26.0
 openpyxl==3.0.10
 pandas==1.4.4
 plotly==5.5.0
 python-dotenv==0.19.2
+pymysql==1.1.0
 redis==4.3.4
 shioaji==1.1.8
+sqlalchemy==1.4.49
 XlsxWriter==3.0.2
-lxml==4.8.0

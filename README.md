@@ -93,7 +93,10 @@ Go to ```./lib``` and create a ```config.ini``` file, which has 6 main sections:
 
 ```ini
 [ACCOUNT] # user names
-USERS = your env file name
+USERS = your_env_file_name
+
+[DATA]
+DATA_PATH = your/path/to/save/datasets
 
 [DB] # optional, can be left blank
 REDIS_HOST = your_redis_host
@@ -106,8 +109,8 @@ DB_PWD = your_DB_password
 DB_NAME = your_DB_schema_name
 
 [LINENOTIFY] # optional, can be left blank
-TOKEN_MONITOR = your_LINE_Notify_token1
-TOKEN_INFO = your_LINE_Notify_token2
+TOKEN_MONITOR = your_LINE_Notify_token_for_system_monitor
+TOKEN_INFO = your_LINE_Notify_token_for_trading_monitor
 
 [STRATEGY]
 Long = strategy1     # non-daytrade long strategies
