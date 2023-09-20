@@ -139,5 +139,6 @@ logs/
 test.py
 dev.py
 
+shell/*
 trader/scripts/*
 !trader/scripts/README.md

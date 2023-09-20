@@ -326,11 +326,6 @@ class TickDataProcesser(TimeTool, FileHandler):
         df['period'] = 2
         df.loc[df.Time.dt.hour.isin(range(8, 14)), 'period'] = 1
 
-        # 處理跨月委託交易(轉倉)
-        # df['DueMonth'] = df['DueMonth'].apply(lambda x: x.split('/'))
-        # df.Price += df.PriceOld
-        # df = df.explode(['DueMonth'])
-
         df = df.drop(['成交日期', '成交時間', 'date', 'DueMonth'], axis=1)
         df = df.sort_values('Time').reset_index(drop=True)
         return df
@@ -344,6 +339,7 @@ class TickDataProcesser(TimeTool, FileHandler):
         df['Volume'] = df['Quantity']/2
         df['Amount'] = df.Close*df.Volume
 
+        # 留下近月交割 & 非時間價差交易
         due_month = self.GetDueMonth(TODAY)
         df = df[
             (df.DueMonthOld == df.DueMonthNew) &
