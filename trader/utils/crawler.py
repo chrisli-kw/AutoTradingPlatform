@@ -509,7 +509,7 @@ class CrawlFromHTML(TimeTool, FileHandler):
         df.CashCapitalPrice = df.CashCapitalPrice.replace('尚未公告', -1)
         return df.sort_values('Date')
 
-    def DowJones(self, start: datetime, end: datetime):
+    def DowJones(self, start: str, end: str):
         '''鉅亨網道瓊報價'''
 
         url_dow_jones = 'https://ws.api.cnyes.com/ws/api/v1/charting/history'
