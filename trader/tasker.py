@@ -215,12 +215,24 @@ def runCrawlFromHTML():
         df_pcr_new = crawler2.put_call_ratio()
         crawler2.export_put_call_ratio(df_pcr_new)
         # notifier.post_put_call_ratio(df_pcr_new)
+    except KeyboardInterrupt:
+        notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
+    except:
+        logging.exception('Catch an exception:')
+        notifier.post(f"\n【Error】【爬蟲程式】{step}發生異常", msgType='Tasker')
 
+    try:
         # 爬除權息資料
         step = '爬除權息資料'
         dividends = crawler2.ex_dividend_list()
         crawler2.export_ex_dividend_list(dividends)
+    except KeyboardInterrupt:
+        notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
+    except:
+        logging.exception('Catch an exception:')
+        notifier.post(f"\n【Error】【爬蟲程式】{step}發生異常", msgType='Tasker')
 
+    try:
         # 期貨逐筆成交資料
         step = '期貨逐筆成交資料'
         crawler2.get_FuturesTickData(TODAY_STR)

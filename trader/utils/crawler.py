@@ -505,7 +505,7 @@ class CrawlFromHTML(TimeTool, FileHandler):
         df = df[(df.Code.apply(len) == 4)]
         df.Date = df.Date.apply(self.convert_date_format)
         df.Date = pd.to_datetime(df.Date)
-        df.CashDividend = df.CashDividend.astype(float)
+        df.CashDividend = df.CashDividend.replace('尚未公告', -1).astype(float)
         df.CashCapitalPrice = df.CashCapitalPrice.replace('尚未公告', -1)
         return df.sort_values('Date')
 
