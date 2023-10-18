@@ -43,19 +43,24 @@ class ChipAnalysis:
 
 
 class TechnicalSignals:
-    def _MA(self, df: pd.DataFrame, col: str, n=7, shift=0):
+    @staticmethod
+    def _MA(df: pd.DataFrame, col: str, n=7, shift=0):
         return df.groupby('name')[col].transform(lambda x: x.shift(shift).rolling(n).mean())
 
-    def _STD(self, df: pd.DataFrame, col: str, n=7, shift=0):
+    @staticmethod
+    def _STD(df: pd.DataFrame, col: str, n=7, shift=0):
         return df.groupby('name')[col].transform(lambda x: x.shift(shift).rolling(n).std())
 
-    def _MAX(self, df: pd.DataFrame, col: str, n=7, shift=0):
+    @staticmethod
+    def _MAX(df: pd.DataFrame, col: str, n=7, shift=0):
         return df.groupby('name')[col].transform(lambda x: x.shift(shift).rolling(n).max())
 
-    def _MIN(self, df: pd.DataFrame, col: str, n=7, shift=0):
+    @staticmethod
+    def _MIN(df: pd.DataFrame, col: str, n=7, shift=0):
         return df.groupby('name')[col].transform(lambda x: x.shift(shift).rolling(n).min())
 
-    def MACD(self, tb, d1=12, d2=26, dma=9):
+    @staticmethod
+    def MACD(tb, d1=12, d2=26, dma=9):
         group = tb.groupby('name').Close
 
         # # 股價與交易量/MACD背離
@@ -78,7 +83,8 @@ class TechnicalSignals:
         tb['diff_MACD'] = tb.ema_diff - tb.MACD
         return tb
 
-    def check_MACD_dev(self, df: pd.DataFrame):
+    @staticmethod
+    def check_MACD_dev(df: pd.DataFrame):
         '''背離(MACD)'''
 
         close_diff = df.groupby('name').Close.transform('diff').fillna(0)
@@ -86,7 +92,8 @@ class TechnicalSignals:
             'name').diff_MACD.transform('diff').fillna(0)
         return ((close_diff >= 0) & (diff_MACD_diff <= 0)) | ((close_diff <= 0) & (diff_MACD_diff >= 0))
 
-    def RSI(self, change, period=12):
+    @staticmethod
+    def RSI(change, period=12):
         '''
         change: stock close price daily quote change
 
@@ -105,7 +112,8 @@ class TechnicalSignals:
         rsi = 100*mean_u/(mean_u + mean_d)
         return rsi
 
-    def RSV(self, tb, d=9):
+    @staticmethod
+    def RSV(tb, d=9):
         d_min = tb.groupby('name').Close.transform(
             lambda x: x.rolling(d).min())
         d_max = tb.groupby('name').Close.transform(
@@ -119,7 +127,8 @@ class TechnicalSignals:
 
         return (100*(tb.Close - d_min)/(d_max - d_min)).fillna(-1)
 
-    def KD(self, tb):
+    @staticmethod
+    def KD(tb):
         '''
         Reference: https://medium.com/%E5%8F%B0%E8%82%A1etf%E8%B3%87%E6%96%99%E7%A7%91%E5%AD%B8-%E7%A8%8B%E5%BC%8F%E9%A1%9E/%E7%A8%8B%E5%BC%8F%E8%AA%9E%E8%A8%80-%E8%87%AA%E5%BB%BAkd%E5%80%BC-819d6fd707c8
         一、 要算出KD值，必先算出RSV強弱值，以下以 9 天為計算基準。
