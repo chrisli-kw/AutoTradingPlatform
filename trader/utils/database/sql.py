@@ -58,7 +58,7 @@ class SQLDatabase(FileHandler):
         if conditions.get('fields'):
             query = query.options(load_only(*conditions['fields']))
 
-        result = pd.read_sql(query.statement, session.bind)
+        result = pd.read_sql_query(query.statement, session.connection())
         session.close()
 
         for c in ['pk_id', 'create_time']:
