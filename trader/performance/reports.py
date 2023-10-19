@@ -115,14 +115,11 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
     def save_tables(self, Tables: namedtuple):
         writer = pd.ExcelWriter(self.TablesFile, engine='xlsxwriter')
 
-        Tables.Configuration.to_excel(
-            writer, encoding='utf-8-sig', index=False, sheet_name='Configuration')
-        Tables.Summary.to_excel(
-            writer, encoding='utf-8-sig', index=False, sheet_name='Summary')
-        Tables.Statement.to_excel(
-            writer, encoding='utf-8-sig', index=False, sheet_name='Statement')
+        Tables.Configuration.to_excel(writer, index=False, sheet_name='Configuration')
+        Tables.Summary.to_excel(writer, index=False, sheet_name='Summary')
+        Tables.Statement.to_excel(writer, index=False, sheet_name='Statement')
 
-        writer.save()
+        writer.close()
 
     def getSelections(self, statement):
         start = self.last_business_day(statement.OpenTime.values[0])
@@ -214,7 +211,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
         fig = make_subplots(
             rows=4, cols=2, subplot_titles=subplot_titles, specs=specs)
 
-        if self.strategies == []:
+        if len(self.strategies) == []:
             self.strategies = self.getStrategyList(df)
 
         colors = [

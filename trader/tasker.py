@@ -47,7 +47,7 @@ def runPerformanceReport(start=None, end=None):
                 )
     except:
         logging.exception('Catch an exception:')
-        notifier.post('\n【Error】【帳務資訊查詢】發生異常', msgType='Tasker')
+        notifier.post('\n【Error】【交易績效查詢】發生異常', msgType='Tasker')
         API.logout()
 
 
@@ -102,13 +102,11 @@ def runAccountInfo():
 
         for sheet in tables:
             try:
-                tables[sheet].to_excel(
-                    writer, encoding='utf-8-sig', index=False, sheet_name=sheet)
+                tables[sheet].to_excel(writer, index=False, sheet_name=sheet)
             except:
                 logging.exception('Catch an exception:')
-                tables[sheet].to_excel(
-                    sheet+'.csv', encoding='utf-8-sig', index=False)
-        writer.save()
+                tables[sheet].to_excel(sheet+'.csv', index=False)
+        writer.close()
     except:
         logging.exception('Catch an exception:')
         notifier.post('\n【Error】【帳務資訊查詢】發生異常', msgType='Tasker')

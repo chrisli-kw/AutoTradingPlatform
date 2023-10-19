@@ -323,7 +323,7 @@ class BacktestPerformance(FileHandler):
             writer, index=False,  sheet_name='Transaction Detail')
         reasons.to_excel(writer, sheet_name='Transaction Reasons')
         win_rates.to_excel(writer, index=False, sheet_name='Win Rate')
-        writer.save()
+        writer.close()
 
 
 class BackTester(BacktestPerformance, TimeTool):
