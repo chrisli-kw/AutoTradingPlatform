@@ -7,9 +7,9 @@ dash-daq==0.5.0
 dash-html-components==2.0.0
 dash-table==5.0.0
 dask==2021.12.0
-Flask==2.0.2
-Flask-Compress==1.10.1
-Flask-Cors==3.0.10
+Flask==3.0.0 
+Flask-Compress==1.14
+Flask-Cors==4.0.0
 Flask-Excel==0.0.7
 kaleido==0.2.1
 lxml==4.9.3
@@ -17,9 +17,10 @@ numpy==1.26.0
 openpyxl==3.0.10
 pandas==1.4.4
 plotly==5.5.0
-python-dotenv==0.19.2
+python-dotenv==1.0.0
 pymysql==1.1.0
 redis==4.3.4
-shioaji==1.1.8
-sqlalchemy==1.4.49
+requests==2.31.0
+shioaji==1.1.12
+sqlalchemy==2.0.22
 XlsxWriter==3.0.2
