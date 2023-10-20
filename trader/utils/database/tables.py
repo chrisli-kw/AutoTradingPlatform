@@ -99,7 +99,7 @@ class SecurityList(Base):
     underlying_kind = Column(String(50, collation))
     update_date = Column(TIMESTAMP(fsp=6), server_default=time_default)
     target_code = Column(String(10, collation))
-    reference = Column(FLOAT(2), nullable=False)
+    reference = Column(FLOAT(2), nullable=False, default=0)
     delivery_date = Column(String(10, collation))
     exchange = Column(String(3, collation))
     delivery_month = Column(String(6, collation))

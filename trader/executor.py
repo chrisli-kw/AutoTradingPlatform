@@ -192,6 +192,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         df = pd.DataFrame([crawler2.get_leverage(s) for s in stockids])
         if df.shape[0]:
+            df.columns = df.columns.str.replace(' ', '') 
             df.loc[df.個股融券信用資格 == 'N', '融券成數'] = 100
             df.代號 = df.代號.astype(str)
             df.融資成數 /= 100
