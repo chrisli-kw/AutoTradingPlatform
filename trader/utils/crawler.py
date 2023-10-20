@@ -68,6 +68,13 @@ class CrawlStockData(FileHandler):
     def export_security_list(self, df: pd.DataFrame):
         '''Export security data either to local or to DB'''
 
+        df.reference = df.reference.fillna(0)
+        df.limit_up = df.limit_up.fillna(0)
+        df.limit_down = df.limit_down.fillna(0)
+        df.margin_trading_balance = df.margin_trading_balance.fillna(0)
+        df.day_trade = df.day_trade.fillna(0)
+        df.short_selling_balance = df.short_selling_balance.fillna(0)
+        
         if db.HAS_DB:
             codes = db.query(SecurityList.code).code.values
 
