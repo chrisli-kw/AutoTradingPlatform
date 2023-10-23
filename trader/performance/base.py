@@ -48,7 +48,7 @@ def convert_statement(df, mode='trading', **kwargs):
         tb.OpenQuantity = tb.OpenQuantity.fillna(tb.CloseQuantity)
         for c in ['Time', 'Price', 'Amount', 'Reason']:
             col = f'Open{c}'
-            tb[col] = tb.groupby('Code')[col].fillna(method='ffill')
+            tb[col] = tb.groupby('Code')[col].ffill()
 
         tb['OpenAmount'] = (tb.OpenPrice*tb.OpenQuantity).abs()
         tb['CloseAmount'] = (tb.ClosePrice*tb.CloseQuantity).abs()

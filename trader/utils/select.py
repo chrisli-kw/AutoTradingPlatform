@@ -97,7 +97,7 @@ class SelectStock(TimeTool, FileHandler):
     def preprocess(self, df: pd.DataFrame):
         df = df.groupby('name').tail(365).reset_index(drop=True)
         df.name = df.name.astype(int).astype(str)
-        df.Close = df.Close.replace(0, np.nan).fillna(method='ffill')
+        df.Close = df.Close.replace(0, np.nan).ffill()
 
         for col in ['Open', 'High', 'Low', 'Close']:
             df.loc[
