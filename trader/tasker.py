@@ -1,3 +1,4 @@
+import os
 import time
 import logging
 import pandas as pd
@@ -40,11 +41,13 @@ def runPerformanceReport(start=None, end=None):
                 pr.save_tables(Tables)
                 pr.plot_performance_report(Tables, save=True)
 
-                notifier.post(
-                    pr.TablesFile.split('/')[-1][:-5],
-                    image_name=pr.TablesFile.replace('xlsx', 'jpg'),
-                    msgType='AccountInfo'
-                )
+                image_name = pr.TablesFile.replace('xlsx', 'jpg')
+                if os.path.exists(image_name):
+                    notifier.post(
+                        pr.TablesFile.split('/')[-1][:-5],
+                        image_name=pr.TablesFile.replace('xlsx', 'jpg'),
+                        msgType='AccountInfo'
+                    )
     except:
         logging.exception('Catch an exception:')
         notifier.post('\n【Error】【交易績效查詢】發生異常', msgType='Tasker')
