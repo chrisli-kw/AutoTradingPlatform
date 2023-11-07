@@ -63,7 +63,7 @@ class SQLDatabase(FileHandler):
 
         for c in ['pk_id', 'create_time']:
             if c in result.columns:
-                result = result.drop(['pk_id', 'create_time'], axis=1)
+                result = result.drop(c, axis=1)
         return result
 
     def update(self, table, update_content: dict, *filterBy):
