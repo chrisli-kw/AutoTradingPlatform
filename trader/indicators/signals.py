@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 
@@ -159,3 +160,87 @@ class TechnicalSignals:
         tb['K'] = tb.groupby('name').RSV.transform(_getK)
         tb['D'] = tb.groupby('name').K.transform(_getD)
         return tb
+
+    @staticmethod
+    def Williams_Indicator(df, window_size=14):
+        '''
+        Williams %R
+        R = (max(high) - close)/(max(high) - min(low))*(-100)
+        '''
+
+        group = df.groupby('name')
+
+        # 計算n日內最高價
+        highest_high = group.High.transform(
+            lambda x: x.rolling(window=window_size).max())
+
+        # 計算n日內最低價
+        lowest_low = group.Low.transform(
+            lambda x: x.rolling(window=window_size).min())
+
+        # 計算威廉指標倒傳遞(William %R Echo)
+        Williams = (highest_high - df.Close)/(highest_high - lowest_low) * -100
+
+        return Williams
+
+    @staticmethod
+    def EMA(data: pd.DataFrame, col: str, window_size: int = 5, shift: int = 0):
+        '''Exponential Moving Average'''
+
+        def EMA_(x):
+            return x.shift(shift).ewm(span=window_size, adjust=False).mean()
+
+        if isinstance(data, pd.Series):
+            return EMA_(data)
+
+        return data.groupby('name')[col].transform(lambda x: EMA_(x))
+
+    @staticmethod
+    def WMA(data: pd.DataFrame, col: str, window_size: int = 5, shift: int = 0):
+        '''Weighted Moving Average'''
+
+        weights = np.arange(window_size)
+        weights = weights/weights.sum()
+
+        def WMA_(x):
+            return x.shift(shift).rolling(window_size).apply(lambda x: np.sum(weights*x))
+
+        if isinstance(data, pd.Series):
+            return WMA_(data)
+        return data.groupby('name')[col].transform(lambda x: WMA_(x))
+
+    def HMA(self, df: pd.DataFrame, col: str, window_size: int = 5, shift: int = 0):
+        '''
+        Hull Moving Average
+        WMA(M; n) = WMA(2*WMA(n/2) - WMA(n)); sqrt(n)
+        '''
+
+        wma1 = 2*self.WMA(df, col, window_size//2, shift)
+        wma2 = self.WMA(df, col, window_size, shift)
+        sqrt_window = int(np.sqrt(window_size))
+        return self.WMA(wma1-wma2, col, sqrt_window, shift)
+
+    def TMA(self, df: pd.DataFrame, col: str, window_size: int = 5, shift: int = 0):
+        '''
+        Triple Exponential Moving Average
+        (3*EMA - 3*EMA(EMA)) + EMA(EMA(EMA))
+        '''
+
+        ema1 = self.EMA(df, col, window_size, shift)
+        ema2 = self.EMA(ema1, col, window_size, shift)
+        ema3 = self.EMA(ema2, col, window_size, shift)
+        return 3*ema1 - 3*ema2 + ema3
+
+    @staticmethod
+    def CCI(df: pd.DataFrame, window_size: int = 5, shift: int = 0):
+        '''
+        Commodity Channel Index
+        CCI = (TypicalPrice - SMA(TP))/.015*MeanDeviation
+        TypicalPrice(TP) = (High + Low + Close)/3
+        MeanDeviation = Mean(Abs(TypicalPrice - SMA(TP)))
+        '''
+
+        tp = (df.High + df.Low + df.Close)/3
+        sma = tp.shift(shift).rolling(window_size).mean()
+        md = (tp - sma).abs().shift(shift).rolling(window_size).mean()
+        return (tp - sma)/(.015*md)
