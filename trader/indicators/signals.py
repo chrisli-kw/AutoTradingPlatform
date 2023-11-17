@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from sys import float_info as sflt
 
 
 class ChipAnalysis:
@@ -184,7 +185,7 @@ class TechnicalSignals:
         return Williams
 
     @staticmethod
-    def EMA(data: pd.DataFrame, col: str, window_size: int = 5, shift: int = 0):
+    def EMA(data: pd.DataFrame, col: str = '', window_size: int = 5, shift: int = 0):
         '''Exponential Moving Average'''
 
         def EMA_(x):
@@ -196,7 +197,7 @@ class TechnicalSignals:
         return data.groupby('name')[col].transform(lambda x: EMA_(x))
 
     @staticmethod
-    def WMA(data: pd.DataFrame, col: str, window_size: int = 5, shift: int = 0):
+    def WMA(data: pd.DataFrame, col: str = '', window_size: int = 5, shift: int = 0):
         '''Weighted Moving Average'''
 
         weights = np.arange(window_size)
@@ -209,7 +210,7 @@ class TechnicalSignals:
             return WMA_(data)
         return data.groupby('name')[col].transform(lambda x: WMA_(x))
 
-    def HMA(self, df: pd.DataFrame, col: str, window_size: int = 5, shift: int = 0):
+    def HMA(self, df: pd.DataFrame, col: str = '', window_size: int = 5, shift: int = 0):
         '''
         Hull Moving Average
         WMA(M; n) = WMA(2*WMA(n/2) - WMA(n)); sqrt(n)
@@ -220,7 +221,7 @@ class TechnicalSignals:
         sqrt_window = int(np.sqrt(window_size))
         return self.WMA(wma1-wma2, col, sqrt_window, shift)
 
-    def TMA(self, df: pd.DataFrame, col: str, window_size: int = 5, shift: int = 0):
+    def TMA(self, df: pd.DataFrame, col: str = '', window_size: int = 5, shift: int = 0):
         '''
         Triple Exponential Moving Average
         (3*EMA - 3*EMA(EMA)) + EMA(EMA(EMA))
@@ -244,3 +245,102 @@ class TechnicalSignals:
         sma = tp.shift(shift).rolling(window_size).mean()
         md = (tp - sma).abs().shift(shift).rolling(window_size).mean()
         return (tp - sma)/(.015*md)
+
+    @staticmethod
+    def CMO(data: pd.Series, window_size: int = 12):
+        '''
+        Chande Momentum Oscilator Indicator
+        CMO = 100*(Su - Sd)/(Su + Sd)
+        # Su = the sum of the momentum of up days
+        # Sd = the sum of the momentum of down days
+        '''
+
+        change = data.diff(1)
+        ups = change.copy().clip(lower=0)
+        downs = change.copy().clip(upper=0).abs()
+
+        Su = ups.rolling(window_size).sum()
+        Sd = downs.rolling(window_size).sum()
+
+        # 計算 RSI
+        cmo = 100*(Su - Sd)/(Su + Sd)
+        return cmo
+
+    def PPO(self, data: pd.Series, fast: int = 12, slow: int = 26, signal_day: int = 9):
+        '''
+        Percentage Price Oscillator
+        PPO = 100*(EMA(12) - EMA(26))/EMA(26)
+        Signal Line : EMA(9) of PPO
+        '''
+
+        ema_fast = self.EMA(data, '', fast, 0)
+        ema_slow = self.EMA(data, '', slow, 0)
+        ppo = 100*(ema_fast - ema_slow)/ema_slow
+        ema_signal = self.EMA(ppo, '', signal_day, 0)
+
+        return ppo, ema_signal
+
+    @staticmethod
+    def CMF(df: pd.DataFrame, window_size: int = 21):
+        '''
+        Chaikin Money Flow Indicator
+        Multiplier = ((Close - Low) - (High - Close))/(High - Low)
+        Money Flow Volume (MFV) = Volume * Multiplier
+        21 Period CMF = 21 Period Sum of MFV / 21 Period Sum of V olume
+        '''
+
+        multiplier = (2*df.Close - df.High - df.Low)/(df.High - df.Low)
+        mfv = df.Volume*multiplier.fillna(sflt.epsilon)
+
+        cmf = mfv.rolling(window_size).sum()
+        cmf /= df.Volume.rolling(window_size).sum()
+
+        return cmf  # TODO: NaN
+
+    @staticmethod
+    def ATR(df: pd.DataFrame, window_size: int = 14):
+        tb = df[['High', 'Low', 'Close']].copy()
+        tb['tr0'] = abs(tb.High - tb.Low)
+        tb['tr1'] = abs(tb.High - tb.Close.shift())
+        tb['tr2'] = abs(tb.Low - tb.Close.shift())
+        tr = tb[['tr0', 'tr1', 'tr2']].max(axis=1)
+        atr = tr.ewm(alpha=1/window_size, adjust=False).mean()
+        return atr
+
+    def ADX(self, df: pd.DataFrame, window_size: int = 21, atr_window: int = 10, shift: int = 0):
+        '''
+        Average Directional Index
+        Procedure of Calculating DMI:
+        * UpMove = CurrentHigh - PreviousHigh
+        * DownMove = CurrentLow - PreviousLow
+
+        If (UpMove > DownMove and UpMove > 0):
+            +DMI = UpMove
+        else:
+            +DMI = 0
+
+        If (DownMove > Upmove and DownMove > 0):
+            -DMI = DownMove
+        else
+            -DMI = 0
+
+        +DI = 100*EMA(+DMI/ATR)
+        -DI = 100*EMA(-DMI/ATR)
+        ADX = 100*EMA(Abs((+DI - -DI)/(+DI + -DI)))
+        '''
+
+        up = df.High.diff(1)
+        down = df.Low.diff(1)
+
+        pos_dmi = ((up > down) & (up > 0)) * up
+        neg_dmi = ((down > up) & (down > 0)) * down
+
+        pos_dm = 100*self.EMA(
+            pos_dmi/self.ATR(df, atr_window), '', window_size, shift)
+        neg_dm = 100*self.EMA(
+            neg_dmi/self.ATR(df, atr_window), '', window_size, shift)
+
+        adx = abs((pos_dm - neg_dm)/(pos_dm + neg_dm))
+        adx = 100*self.EMA(adx, '', window_size, shift)
+
+        return adx
