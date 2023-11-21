@@ -699,7 +699,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         return np.unique(all)
 
     def monitor_stocks(self, target: str, strategies: Dict[str, str]):
-        if target in self.Quotes.NowTargets and self.Quotes.NowIndex:
+        if target in self.Quotes.NowTargets: # and self.Quotes.NowIndex:
             inputs = self.Quotes.NowTargets[target].copy()
             data = self.stocks_to_monitor[target]
             strategy = strategies[target]
