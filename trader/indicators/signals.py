@@ -46,8 +46,15 @@ class ChipAnalysis:
 
 class TechnicalSignals:
     @staticmethod
-    def _MA(df: pd.DataFrame, col: str, n=7, shift=0):
-        return df.groupby('name')[col].transform(lambda x: x.shift(shift).rolling(n).mean())
+    def SMA(data: pd.DataFrame, col: str, n=7, shift=0):
+
+        def SMA_(x):
+            return x.shift(shift).rolling(n).mean()
+
+        if isinstance(data, pd.Series):
+            return SMA_(data)
+
+        return data.groupby('name')[col].transform(lambda x: SMA_(x))
 
     @staticmethod
     def _STD(df: pd.DataFrame, col: str, n=7, shift=0):
