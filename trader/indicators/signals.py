@@ -57,36 +57,47 @@ class TechnicalSignals:
         return data.groupby('name')[col].transform(lambda x: SMA_(x))
 
     @staticmethod
-    def _STD(df: pd.DataFrame, col: str, n=7, shift=0):
-        return df.groupby('name')[col].transform(lambda x: x.shift(shift).rolling(n).std())
+    def STD(data: pd.DataFrame, col: str, n=7, shift=0):
+
+        def STD_(x):
+            return x.shift(shift).rolling(n).std()
+
+        if isinstance(data, pd.Series):
+            return STD_(data)
+
+        return data.groupby('name')[col].transform(lambda x: STD_(x))
 
     @staticmethod
-    def _MAX(df: pd.DataFrame, col: str, n=7, shift=0):
-        return df.groupby('name')[col].transform(lambda x: x.shift(shift).rolling(n).max())
+    def MAX(data: pd.DataFrame, col: str, n=7, shift=0):
+
+        def MAX_(x):
+            return x.shift(shift).rolling(n).max()
+
+        if isinstance(data, pd.Series):
+            return MAX_(data)
+
+        return data.groupby('name')[col].transform(lambda x: MAX_(x))
 
     @staticmethod
-    def _MIN(df: pd.DataFrame, col: str, n=7, shift=0):
-        return df.groupby('name')[col].transform(lambda x: x.shift(shift).rolling(n).min())
+    def MIN(data: pd.DataFrame, col: str, n=7, shift=0):
 
-    @staticmethod
-    def MACD(tb, d1=12, d2=26, dma=9):
-        group = tb.groupby('name').Close
+        def MIN_(x):
+            return x.shift(shift).rolling(n).min()
 
-        # # 股價與交易量/MACD背離
-        # cond1 = (tb.quotechange > 0) & (tb.ema_diff < 0)
-        # cond2 = (tb.quotechange < 0) & (tb.ema_diff > 0)
-        # tb['diverge_MACD'] = (cond1 | cond2).astype(int)
+        if isinstance(data, pd.Series):
+            return MIN_(data)
 
+        return data.groupby('name')[col].transform(lambda x: MIN_(x))
+
+    @classmethod
+    def MACD(cls, tb, d1=12, d2=26, dma=9):
         # DIFF (快線) = EMA (收盤價, 12) - EMA (收盤價, 26)
-        tb[f'ema_{d1}'] = group.transform(
-            lambda x: x.ewm(span=d1, adjust=False).mean())
-        tb[f'ema_{d2}'] = group.transform(
-            lambda x: x.ewm(span=d2, adjust=False).mean())
+        tb[f'ema_{d1}'] = cls.EMA(tb, 'Close', d1, 0)
+        tb[f'ema_{d2}'] = cls.EMA(tb, 'Close', d2, 0)
         tb['ema_diff'] = tb[f'ema_{d1}'] - tb[f'ema_{d2}']
 
         # DEA(慢線) = EMA (DIFF, 9)
-        tb['MACD'] = tb.groupby('name').ema_diff.transform(
-            lambda x: x.ewm(span=dma, adjust=False).mean())
+        tb['MACD'] = cls.EMA(tb, 'ema_diff', dma, 0)
 
         # MACD紅綠柱狀體 = DIFF - DEA
         tb['diff_MACD'] = tb.ema_diff - tb.MACD
@@ -95,14 +106,18 @@ class TechnicalSignals:
     @staticmethod
     def check_MACD_dev(df: pd.DataFrame):
         '''背離(MACD)'''
+        # # 股價與交易量/MACD背離
+        # cond1 = (tb.quotechange > 0) & (tb.ema_diff < 0)
+        # cond2 = (tb.quotechange < 0) & (tb.ema_diff > 0)
+        # tb['diverge_MACD'] = (cond1 | cond2).astype(int)
 
         close_diff = df.groupby('name').Close.transform('diff').fillna(0)
         diff_MACD_diff = df.groupby(
             'name').diff_MACD.transform('diff').fillna(0)
         return ((close_diff >= 0) & (diff_MACD_diff <= 0)) | ((close_diff <= 0) & (diff_MACD_diff >= 0))
 
-    @staticmethod
-    def RSI(change, period=12):
+    @classmethod
+    def RSI(cls, change, period=12):
         '''
         change: stock close price daily quote change
 
@@ -114,19 +129,17 @@ class TechnicalSignals:
         downs = pd.Series(index=change.index, data=-change[change < 0])
 
         # 計算d日平均漲跌
-        mean_u = ups.fillna(0).rolling(period).mean()
-        mean_d = downs.fillna(0).rolling(period).mean()
+        mean_u = cls.SMA(ups.fillna(0), '', period, shift=0)
+        mean_d = cls.SMA(downs.fillna(0), '', period, shift=0)
 
         # 計算 RSI
         rsi = 100*mean_u/(mean_u + mean_d)
         return rsi
 
-    @staticmethod
-    def RSV(tb, d=9):
-        d_min = tb.groupby('name').Close.transform(
-            lambda x: x.rolling(d).min())
-        d_max = tb.groupby('name').Close.transform(
-            lambda x: x.rolling(d).max())
+    @classmethod
+    def RSV(cls, tb, d=9):
+        d_min = cls.MIN(tb, 'Close', d, shift=0)
+        d_max = cls.MAX(tb, 'Close', d, shift=0)
 
         try:
             (100*(tb.Close - d_min)/(d_max - d_min)).fillna(-1)
@@ -169,8 +182,8 @@ class TechnicalSignals:
         tb['D'] = tb.groupby('name').K.transform(_getD)
         return tb
 
-    @staticmethod
-    def Williams_Indicator(df, window_size=14):
+    @classmethod
+    def Williams_Indicator(cls, df, window_size=14):
         '''
         Williams %R
         R = (max(high) - close)/(max(high) - min(low))*(-100)
@@ -179,12 +192,10 @@ class TechnicalSignals:
         group = df.groupby('name')
 
         # 計算n日內最高價
-        highest_high = group.High.transform(
-            lambda x: x.rolling(window=window_size).max())
+        highest_high = cls.MAX(df, 'High', window_size, shift=0)
 
         # 計算n日內最低價
-        lowest_low = group.Low.transform(
-            lambda x: x.rolling(window=window_size).min())
+        lowest_low = cls.MIN(df, 'Low', window_size, shift=0)
 
         # 計算威廉指標倒傳遞(William %R Echo)
         Williams = (highest_high - df.Close)/(highest_high - lowest_low) * -100
@@ -215,32 +226,35 @@ class TechnicalSignals:
 
         if isinstance(data, pd.Series):
             return WMA_(data)
+
         return data.groupby('name')[col].transform(lambda x: WMA_(x))
 
-    def HMA(self, df: pd.DataFrame, col: str = '', window_size: int = 5, shift: int = 0):
+    @classmethod
+    def HMA(cls, df: pd.DataFrame, col: str = '', window_size: int = 5, shift: int = 0):
         '''
         Hull Moving Average
         WMA(M; n) = WMA(2*WMA(n/2) - WMA(n)); sqrt(n)
         '''
 
-        wma1 = 2*self.WMA(df, col, window_size//2, shift)
-        wma2 = self.WMA(df, col, window_size, shift)
+        wma1 = 2*cls.WMA(df, col, window_size//2, shift)
+        wma2 = cls.WMA(df, col, window_size, shift)
         sqrt_window = int(np.sqrt(window_size))
-        return self.WMA(wma1-wma2, col, sqrt_window, shift)
+        return cls.WMA(wma1-wma2, col, sqrt_window, shift)
 
-    def TMA(self, df: pd.DataFrame, col: str = '', window_size: int = 5, shift: int = 0):
+    @classmethod
+    def TMA(cls, df: pd.DataFrame, col: str = '', window_size: int = 5, shift: int = 0):
         '''
         Triple Exponential Moving Average
         (3*EMA - 3*EMA(EMA)) + EMA(EMA(EMA))
         '''
 
-        ema1 = self.EMA(df, col, window_size, shift)
-        ema2 = self.EMA(ema1, col, window_size, shift)
-        ema3 = self.EMA(ema2, col, window_size, shift)
+        ema1 = cls.EMA(df, col, window_size, shift)
+        ema2 = cls.EMA(ema1, col, window_size, shift)
+        ema3 = cls.EMA(ema2, col, window_size, shift)
         return 3*ema1 - 3*ema2 + ema3
 
-    @staticmethod
-    def CCI(df: pd.DataFrame, window_size: int = 5, shift: int = 0):
+    @classmethod
+    def CCI(cls, df: pd.DataFrame, window_size: int = 5, shift: int = 0):
         '''
         Commodity Channel Index
         CCI = (TypicalPrice - SMA(TP))/.015*MeanDeviation
@@ -249,8 +263,8 @@ class TechnicalSignals:
         '''
 
         tp = (df.High + df.Low + df.Close)/3
-        sma = tp.shift(shift).rolling(window_size).mean()
-        md = (tp - sma).abs().shift(shift).rolling(window_size).mean()
+        sma = cls.SMA(tp, '', window_size, shift=shift)
+        md = cls.SMA((tp - sma).abs(), '', window_size, shift=shift)
         return (tp - sma)/(.015*md)
 
     @staticmethod
@@ -273,17 +287,18 @@ class TechnicalSignals:
         cmo = 100*(Su - Sd)/(Su + Sd)
         return cmo
 
-    def PPO(self, data: pd.Series, fast: int = 12, slow: int = 26, signal_day: int = 9):
+    @classmethod
+    def PPO(cls, data: pd.Series, fast: int = 12, slow: int = 26, signal_day: int = 9):
         '''
         Percentage Price Oscillator
         PPO = 100*(EMA(12) - EMA(26))/EMA(26)
         Signal Line : EMA(9) of PPO
         '''
 
-        ema_fast = self.EMA(data, '', fast, 0)
-        ema_slow = self.EMA(data, '', slow, 0)
+        ema_fast = cls.EMA(data, '', fast, 0)
+        ema_slow = cls.EMA(data, '', slow, 0)
         ppo = 100*(ema_fast - ema_slow)/ema_slow
-        ema_signal = self.EMA(ppo, '', signal_day, 0)
+        ema_signal = cls.EMA(ppo, '', signal_day, 0)
 
         return ppo, ema_signal
 
@@ -314,7 +329,8 @@ class TechnicalSignals:
         atr = tr.ewm(alpha=1/window_size, adjust=False).mean()
         return atr
 
-    def ADX(self, df: pd.DataFrame, window_size: int = 21, atr_window: int = 10, shift: int = 0):
+    @classmethod
+    def ADX(cls, df: pd.DataFrame, window_size: int = 21, atr_window: int = 10, shift: int = 0):
         '''
         Average Directional Index
         Procedure of Calculating DMI:
@@ -342,12 +358,12 @@ class TechnicalSignals:
         pos_dmi = ((up > down) & (up > 0)) * up
         neg_dmi = ((down > up) & (down > 0)) * down
 
-        pos_dm = 100*self.EMA(
-            pos_dmi/self.ATR(df, atr_window), '', window_size, shift)
-        neg_dm = 100*self.EMA(
-            neg_dmi/self.ATR(df, atr_window), '', window_size, shift)
+        pos_dm = 100*cls.EMA(
+            pos_dmi/cls.ATR(df, atr_window), '', window_size, shift)
+        neg_dm = 100*cls.EMA(
+            neg_dmi/cls.ATR(df, atr_window), '', window_size, shift)
 
         adx = abs((pos_dm - neg_dm)/(pos_dm + neg_dm))
-        adx = 100*self.EMA(adx, '', window_size, shift)
+        adx = 100*cls.EMA(adx, '', window_size, shift)
 
         return adx
