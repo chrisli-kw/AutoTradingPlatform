@@ -100,7 +100,7 @@ class TechnicalSignals:
         tb['MACD'] = cls.EMA(tb, 'MACD_ema_diff', dma, 0)
 
         # MACD紅綠柱狀體 = DIFF - DEA
-        tb['MACD_hist'] = tb.ema_diff - tb.MACD
+        tb['MACD_hist'] = tb.MACD_ema_diff - tb.MACD
         return tb
 
     @staticmethod
@@ -142,12 +142,12 @@ class TechnicalSignals:
         d_max = cls.MAX(tb, 'Close', d, shift=0)
 
         try:
-            (100*(tb.Close - d_min)/(d_max - d_min))  # .fillna(-1)
+            (100*(tb.Close - d_min)/(d_max - d_min)).fillna(-1)
         except:
             tb['d_min'] = d_min
             tb['d_max'] = d_max
 
-        return (100*(tb.Close - d_min)/(d_max - d_min))  # .fillna(-1)
+        return (100*(tb.Close - d_min)/(d_max - d_min)).fillna(-1)
 
     @staticmethod
     def KD(tb):
