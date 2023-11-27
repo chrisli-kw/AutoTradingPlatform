@@ -92,15 +92,15 @@ class TechnicalSignals:
     @classmethod
     def MACD(cls, tb, d1=12, d2=26, dma=9):
         # DIFF (快線) = EMA (收盤價, 12) - EMA (收盤價, 26)
-        tb[f'ema_{d1}'] = cls.EMA(tb, 'Close', d1, 0)
-        tb[f'ema_{d2}'] = cls.EMA(tb, 'Close', d2, 0)
-        tb['ema_diff'] = tb[f'ema_{d1}'] - tb[f'ema_{d2}']
+        tb[f'MACD_fast_{d1}'] = cls.EMA(tb, 'Close', d1, 0)
+        tb[f'MACD_slow_{d2}'] = cls.EMA(tb, 'Close', d2, 0)
+        tb['MACD_ema_diff'] = tb[f'MACD_fast_{d1}'] - tb[f'MACD_slow_{d2}']
 
         # DEA(慢線) = EMA (DIFF, 9)
-        tb['MACD'] = cls.EMA(tb, 'ema_diff', dma, 0)
+        tb['MACD'] = cls.EMA(tb, 'MACD_ema_diff', dma, 0)
 
         # MACD紅綠柱狀體 = DIFF - DEA
-        tb['diff_MACD'] = tb.ema_diff - tb.MACD
+        tb['MACD_hist'] = tb.ema_diff - tb.MACD
         return tb
 
     @staticmethod
@@ -142,12 +142,12 @@ class TechnicalSignals:
         d_max = cls.MAX(tb, 'Close', d, shift=0)
 
         try:
-            (100*(tb.Close - d_min)/(d_max - d_min)).fillna(-1)
+            (100*(tb.Close - d_min)/(d_max - d_min))  # .fillna(-1)
         except:
             tb['d_min'] = d_min
             tb['d_max'] = d_max
 
-        return (100*(tb.Close - d_min)/(d_max - d_min)).fillna(-1)
+        return (100*(tb.Close - d_min)/(d_max - d_min))  # .fillna(-1)
 
     @staticmethod
     def KD(tb):
@@ -257,9 +257,9 @@ class TechnicalSignals:
     def CCI(cls, df: pd.DataFrame, window_size: int = 5, shift: int = 0):
         '''
         Commodity Channel Index
-        CCI = (TypicalPrice - SMA(TP))/.015*MeanDeviation
-        TypicalPrice(TP) = (High + Low + Close)/3
-        MeanDeviation = Mean(Abs(TypicalPrice - SMA(TP)))
+        1. TypicalPrice(TP) = (High + Low + Close)/3
+        2. MeanDeviation = Mean(Abs(TypicalPrice - SMA(TP)))
+        3. CCI = (TypicalPrice - SMA(TP))/.015*MeanDeviation
         '''
 
         tp = (df.High + df.Low + df.Close)/3
@@ -283,7 +283,6 @@ class TechnicalSignals:
         Su = ups.rolling(window_size).sum()
         Sd = downs.rolling(window_size).sum()
 
-        # 計算 RSI
         cmo = 100*(Su - Sd)/(Su + Sd)
         return cmo
 

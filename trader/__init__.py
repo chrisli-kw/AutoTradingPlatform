@@ -8,7 +8,7 @@ from .utils.notify import Notification
 from .utils.crawler import CrawlStockData, CrawlFromHTML
 
 
-__version__ = '1.10.4'
+__version__ = '1.10.5'
 
 executor = ThreadPoolExecutor(max_workers=5)
 file_handler = FileHandler()
