@@ -143,7 +143,7 @@ def runAutoTrader(account):
     del se
 
 
-def runCrawlStockData(account):
+def runCrawlStockData(account, start=None, end=None):
     target = pd.to_datetime('15:05:00')
     config = dotenv_values(f'./lib/envs/{account}.env')
     aInfo = AccountInfo()
@@ -157,23 +157,28 @@ def runCrawlStockData(account):
 
         logging.info('開始爬蟲')
 
-        # 登入
+        # Log-in account
         API_KEY = config['API_KEY']
         SECRET_KEY = config['SECRET_KEY']
         acct = config['ACCOUNT_NAME']
         aInfo._login(API_KEY, SECRET_KEY, acct)
         time.sleep(30)
 
-        # 更新股票清單
+        # Update stock list
         logging.info('Updating stock list')
         stock_list = crawler1.get_security_list(stock_only=True)
         crawler1.export_security_list(stock_list)
 
-        # 爬當天股價資料
-        crawler1.crawl_from_sinopac(stockids='all', update=True)
+        # Crawler daily stock data from Sinopac
+        crawler1.crawl_from_sinopac(
+            stockids='all',
+            update=True,
+            start=start,
+            end=end
+        )
         crawler1.merge_stockinfo()
 
-        # 更新歷史資料
+        # Update historical data
         for scale in ConvertScales:
             crawler1.add_new_data(scale, save=True, start=TODAY_STR)
             crawler1.merge_daily_data(TODAY_STR, scale, save=True)

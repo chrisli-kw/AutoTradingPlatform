@@ -74,7 +74,7 @@ class CrawlStockData(FileHandler):
         df.margin_trading_balance = df.margin_trading_balance.fillna(0)
         df.day_trade = df.day_trade.fillna(0)
         df.short_selling_balance = df.short_selling_balance.fillna(0)
-        
+
         if db.HAS_DB:
             codes = db.query(SecurityList.code).code.values
 
@@ -127,6 +127,9 @@ class CrawlStockData(FileHandler):
         N = q.qsize()
 
         if not start:
+            # If not assigned "start", then the crawler automatically determine
+            # a start date either by querying the database (update=True) or
+            # by setting start = '2017-01-01'.
             if update:
                 if db.HAS_DB:
                     dates = db.query(KBarTables[self.scale].Time)
