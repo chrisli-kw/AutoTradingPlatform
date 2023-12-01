@@ -143,14 +143,14 @@ def runAutoTrader(account):
     del se
 
 
-def runCrawlStockData(account, start=None, end=None):
+def runCrawlStockData(account: str, start=None, end=None):
     target = pd.to_datetime('15:05:00')
     config = dotenv_values(f'./lib/envs/{account}.env')
     aInfo = AccountInfo()
 
     try:
         now = datetime.now()
-        if now < target:
+        if now < target and not start:
             logging.info(
                 f'Current time is still early, will start to crawl after {target}')
             aInfo.CountDown(target)
