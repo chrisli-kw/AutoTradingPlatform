@@ -119,6 +119,7 @@ class TechnicalSignals:
     @classmethod
     def RSI(cls, change, period=12):
         '''
+        Range: [0, 100]
         change: stock close price daily quote change
 
         RSI = RS/(1+RS), where RS = Up/Down
@@ -138,6 +139,9 @@ class TechnicalSignals:
 
     @classmethod
     def RSV(cls, tb, d=9):
+        '''
+        Range: [0, 100]
+        '''
         d_min = cls.MIN(tb, 'Close', d, shift=0)
         d_max = cls.MAX(tb, 'Close', d, shift=0)
 
@@ -152,6 +156,7 @@ class TechnicalSignals:
     @staticmethod
     def KD(tb):
         '''
+        Range: [0, 100]
         Reference: https://medium.com/%E5%8F%B0%E8%82%A1etf%E8%B3%87%E6%96%99%E7%A7%91%E5%AD%B8-%E7%A8%8B%E5%BC%8F%E9%A1%9E/%E7%A8%8B%E5%BC%8F%E8%AA%9E%E8%A8%80-%E8%87%AA%E5%BB%BAkd%E5%80%BC-819d6fd707c8
         一、 要算出KD值，必先算出RSV強弱值，以下以 9 天為計算基準。
             RSV=( 收盤 - 9日內的最低 ) / ( 9日內的最高 - 9日內的最低 ) * 100
@@ -180,12 +185,14 @@ class TechnicalSignals:
 
         tb['K'] = tb.groupby('name').RSV.transform(_getK)
         tb['D'] = tb.groupby('name').K.transform(_getD)
+        tb.RSV = tb.RSV.replace(-1, None)
         return tb
 
     @classmethod
     def Williams_Indicator(cls, df, window_size=14):
         '''
         Williams %R
+        Range: [-100, 0]
         R = (max(high) - close)/(max(high) - min(low))*(-100)
         '''
 
@@ -257,6 +264,8 @@ class TechnicalSignals:
     def CCI(cls, df: pd.DataFrame, window_size: int = 5, shift: int = 0):
         '''
         Commodity Channel Index
+        Range: [-100, 100]
+
         1. TypicalPrice(TP) = (High + Low + Close)/3
         2. MeanDeviation = Mean(Abs(TypicalPrice - SMA(TP)))
         3. CCI = (TypicalPrice - SMA(TP))/.015*MeanDeviation
@@ -271,6 +280,7 @@ class TechnicalSignals:
     def CMO(data: pd.Series, window_size: int = 12):
         '''
         Chande Momentum Oscilator Indicator
+        Range: [-100, 100]
         CMO = 100*(Su - Sd)/(Su + Sd)
         # Su = the sum of the momentum of up days
         # Sd = the sum of the momentum of down days
@@ -305,6 +315,7 @@ class TechnicalSignals:
     def CMF(df: pd.DataFrame, window_size: int = 21):
         '''
         Chaikin Money Flow Indicator
+        Range: [-1, 1]
         Multiplier = ((Close - Low) - (High - Close))/(High - Low)
         Money Flow Volume (MFV) = Volume * Multiplier
         21 Period CMF = 21 Period Sum of MFV / 21 Period Sum of V olume
@@ -332,6 +343,7 @@ class TechnicalSignals:
     def ADX(cls, df: pd.DataFrame, window_size: int = 21, atr_window: int = 10, shift: int = 0):
         '''
         Average Directional Index
+        Range: [0, 100]
         Procedure of Calculating DMI:
         * UpMove = CurrentHigh - PreviousHigh
         * DownMove = CurrentLow - PreviousLow
