@@ -185,7 +185,7 @@ class TechnicalSignals:
 
         tb['K'] = tb.groupby('name').RSV.transform(_getK)
         tb['D'] = tb.groupby('name').K.transform(_getD)
-        tb.RSV = tb.RSV.replace(-1, None)
+        tb.RSV = tb.RSV.replace(-1, np.nan)
         return tb
 
     @classmethod
