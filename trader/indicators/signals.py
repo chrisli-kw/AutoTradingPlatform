@@ -92,9 +92,9 @@ class TechnicalSignals:
     @classmethod
     def MACD(cls, tb, d1=12, d2=26, dma=9):
         # DIFF (快線) = EMA (收盤價, 12) - EMA (收盤價, 26)
-        tb[f'MACD_fast_{d1}'] = cls.EMA(tb, 'Close', d1, 0)
-        tb[f'MACD_slow_{d2}'] = cls.EMA(tb, 'Close', d2, 0)
-        tb['MACD_ema_diff'] = tb[f'MACD_fast_{d1}'] - tb[f'MACD_slow_{d2}']
+        tb['MACD_fast'] = cls.EMA(tb, 'Close', d1, 0)
+        tb['MACD_slow'] = cls.EMA(tb, 'Close', d2, 0)
+        tb['MACD_ema_diff'] = tb['MACD_fast'] - tb['MACD_slow']
 
         # DEA(慢線) = EMA (DIFF, 9)
         tb['MACD'] = cls.EMA(tb, 'MACD_ema_diff', dma, 0)
