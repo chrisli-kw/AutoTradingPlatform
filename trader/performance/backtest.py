@@ -162,7 +162,7 @@ class BacktestPerformance(FileHandler):
             start = str(df.OpenTime.min().date())
             end = str(df.CloseTime.max().date())
 
-            win_loss = computeWinLoss(df)
+            # win_loss = computeWinLoss(df)
 
             if 'daily_info' in result:
                 Kbars = result.get('Kbars')
@@ -240,10 +240,10 @@ class BacktestPerformance(FileHandler):
                 '全部平均持倉K線數': round(df.KRun.mean(), 1),
                 '獲利平均持倉K線數': profits['KRunProfit'],
                 '虧損平均持倉K線數': profits['KRunLoss'],
-                '獲利交易筆數': win_loss[True],
-                '虧損交易筆數': win_loss[False],
-                '總交易筆數': df.shape[0],
-                '勝率': f"{round(100*win_loss[True]/df.shape[0], 2)}%",
+                '獲利交易筆數': profits['Wins'],
+                '虧損交易筆數': profits['Losses'],
+                '總交易筆數': profits['TotalTrade'],
+                '勝率': f"{round(100*profits['Wins']/df.shape[0], 2)}%",
                 '獲利因子': profits['ProfitFactor'],
                 '盈虧比': profits['ProfitRatio'],
             }]).T.reset_index()

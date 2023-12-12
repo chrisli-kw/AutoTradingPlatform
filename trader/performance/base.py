@@ -97,6 +97,7 @@ def convert_statement(df, mode='trading', **kwargs):
 
 
 def compute_profits(tb):
+    win_loss = computeWinLoss(tb)
     total_profit = tb.profit.sum()
     df_profit = tb[tb.profit > 0]
     df_loss = tb[tb.profit <= 0]
@@ -120,6 +121,9 @@ def compute_profits(tb):
 
     ratio1 = round(abs(mean_profit/mean_loss), 4) if mean_loss else np.inf
     profits = {
+        'TotalTrade': tb.shape[0],
+        'Wins': win_loss[True],
+        'Losses': win_loss[False],
         'TotalProfit': round(total_profit),
         'GrossProfit': round(gross_profit),
         'GrossLoss': round(gross_loss),
