@@ -243,7 +243,7 @@ class BacktestPerformance(FileHandler):
                 '獲利交易筆數': profits['Wins'],
                 '虧損交易筆數': profits['Losses'],
                 '總交易筆數': profits['TotalTrade'],
-                '勝率': f"{round(100*profits['Wins']/df.shape[0], 2)}%",
+                '勝率': f"{profits['WinRate']}%",
                 '獲利因子': profits['ProfitFactor'],
                 '盈虧比': profits['ProfitRatio'],
             }]).T.reset_index()

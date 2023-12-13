@@ -124,6 +124,7 @@ def compute_profits(tb):
         'TotalTrade': tb.shape[0],
         'Wins': win_loss[True],
         'Losses': win_loss[False],
+        'WinRate': round(100*win_loss[True]/tb.shape[0], 2),
         'TotalProfit': round(total_profit),
         'GrossProfit': round(gross_profit),
         'GrossLoss': round(gross_loss),

@@ -115,7 +115,8 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
     def save_tables(self, Tables: namedtuple):
         writer = pd.ExcelWriter(self.TablesFile, engine='xlsxwriter')
 
-        Tables.Configuration.to_excel(writer, index=False, sheet_name='Configuration')
+        Tables.Configuration.to_excel(
+            writer, index=False, sheet_name='Configuration')
         Tables.Summary.to_excel(writer, index=False, sheet_name='Summary')
         Tables.Statement.to_excel(writer, index=False, sheet_name='Statement')
 
@@ -389,7 +390,8 @@ class BacktestReport(SuplotHandler, FileHandler):
 
         df = TestResult.DailyInfo
         df['profit'] = df.index.map(profit).fillna(0).values
-        df = df.resample('1D', closed='left', label='left').apply(self.col_maps)
+        df = df.resample('1D', closed='left',
+                         label='left').apply(self.col_maps)
         df = df.dropna()
         df['profits'] = (df.profit*(df.profit > 0)).cumsum()
         df['losses'] = (df.profit*(df.profit <= 0)).cumsum()
