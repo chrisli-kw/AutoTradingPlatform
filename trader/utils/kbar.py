@@ -297,12 +297,30 @@ class TickDataProcesser(TimeTool, FileHandler):
             df = self.convert_tick_2_kbar(df, scale, period='all')
         return df
 
+    def add_period(self, df: pd.DataFrame):
+        '''period: 日盤(1)/夜盤(2)/隔日夜盤(3, 凌晨0:00後)'''
+
+        if isinstance(df, pd.DataFrame):
+            df['period'] = 2
+            df.loc[df.Time.dt.hour.isin(range(8, 14)), 'period'] = 1
+            df.loc[df.Time.dt.hour.isin(range(0, 8)), 'period'] = 3
+        elif isinstance(df, dict):
+            hour = df['datetime'].hour
+            if hour in range(8, 14):
+                df['period'] = 1
+            elif hour in range(0, 8):
+                df['period'] = 3
+            else:
+                df['period'] = 2
+        return df
+
     def preprocess_futures_tick(self, df, underlying='TX'):
         df = df.rename(columns={
             '商品代號': 'name',
             '成交價格': 'Price',
             '成交數量(B+S)': 'Quantity',
             '開盤集合競價 ': 'Simtrade',
+            '開盤集合競價': 'Simtrade',
             '近月價格': 'PriceOld',
             '遠月價格': 'PriceNew',
             '到期月份(週別)': 'DueMonth'
@@ -323,11 +341,16 @@ class TickDataProcesser(TimeTool, FileHandler):
         df.Simtrade = df.Simtrade.apply(lambda x: True if x == '*' else False)
         df['DueMonthOld'] = df.DueMonth.apply(lambda x: x[0])
         df['DueMonthNew'] = df.DueMonth.apply(lambda x: x[-1])
-        df['period'] = 2
-        df.loc[df.Time.dt.hour.isin(range(8, 14)), 'period'] = 1
+        df = self.add_period(df)
 
         df = df.drop(['成交日期', '成交時間', 'date', 'DueMonth'], axis=1)
         df = df.sort_values('Time').reset_index(drop=True)
+        return df
+
+    def expand_columns(self, df: pd.DataFrame):
+        df['Open'] = df['High'] = df['Low'] = df['Close'] = df.Price
+        df['Volume'] = df['Quantity']/2
+        df['Amount'] = df.Close*df.Volume
         return df
 
     def convert_tick_2_kbar(self, df, scale, period='day_only'):
@@ -335,18 +358,19 @@ class TickDataProcesser(TimeTool, FileHandler):
         將逐筆資料轉為K線資料(近月)。
         period = day_only(日盤), night_only(夜盤), all(日盤+夜盤)
         '''
-        df['Open'] = df['High'] = df['Low'] = df['Close'] = df.Price
-        df['Volume'] = df['Quantity']/2
-        df['Amount'] = df.Close*df.Volume
 
         # 留下近月交割 & 非時間價差交易
-        due_month = self.GetDueMonth(TODAY)
+        df['due'] = df.Time.apply(self.GetDueMonth)
         df = df[
+            (df.Simtrade == False) &
             (df.DueMonthOld == df.DueMonthNew) &
-            (df.DueMonthOld == due_month)
+            (df.DueMonthOld == df.due)
         ]
         if period == 'day_only':
             df = df[df.period == 1]
 
-        df = KBarTool().convert_kbar(df, scale=scale)
+        if scale != 'tick':
+            df = self.expand_columns(df.copy())
+            df = KBarTool().convert_kbar(df, scale=scale)
+
         return df

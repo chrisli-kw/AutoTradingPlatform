@@ -69,8 +69,10 @@ class FileHandler:
             elif '.rpt' in folder:
                 file = BytesIO(folders.read(folder))
                 file = self.rpt_2_df(file)
-                folderPath = filepath if filepath else (filename if N > 1 else '.')
-                self.save_table(file, f"{folderPath}/{folder.replace('.rpt', '.csv')}")
+                folderPath = filepath if filepath else (
+                    filename if N > 1 else '.')
+                self.save_table(
+                    file, f"{folderPath}/{folder.replace('.rpt', '.csv')}")
                 progress_bar(N, i)
 
     def remove_files(self, dirpath: str, files: list = None, pattern: str = ''):
@@ -97,7 +99,7 @@ class FileHandler:
                 tb = pd.read_excel(filename)
             else:
                 try:
-                    tb = pd.read_csv(filename)
+                    tb = pd.read_csv(filename, low_memory=False)
                 except:
                     tb = pd.read_csv(
                         filename, low_memory=False, encoding='big5')
@@ -145,9 +147,9 @@ class FileHandler:
             return df
         return pd.DataFrame()
 
-    def read_tick_data(self, market: str, **kwargs):
+    def filter_file_dates(self, market: str, **kwargs):
         '''
-        合併逐筆交易明細表。以year為主，合併該年度的資料，可另外指定要合併的區間
+        取得逐筆交易明細表的日期清單。以year為主，取得該年度的資料日期，可另外指定要合併的區間
         '''
 
         dir_path = f'{PATH}/ticks/{market.lower()}'
@@ -168,17 +170,10 @@ class FileHandler:
         else:
             end = TODAY
 
-        df = []
+        dates = []
         for f in files:
-            date = f.split('\\')[-1][:-4].split('_')[-3:]
-            date = datetime(*(int(d) for d in date))
-            if start <= date <= end:
-                df.append(f)
+            date = f.split('\\')[-1][:-4]
+            if start <= datetime(*(int(d) for d in date.split('_')[-3:])) <= end:
+                dates.append(date.replace('Daily_', '').replace('_', '-'))
 
-        N = len(df)
-        for i, f in enumerate(df):
-            df[i] = self.read_table(f)
-            status = f.split('\\')[-1]
-            progress_bar(N, i, status=f'[{status}]')
-        df = pd.concat(df)
-        return df
+        return dates
