@@ -172,7 +172,8 @@ class FileHandler:
 
         dates = []
         for f in files:
-            date = f.split('\\')[-1][:-4]
+            # date = f.split('\\')[-1][:-4]
+            date = f.split('Daily_')[-1][:-4]
             if start <= datetime(*(int(d) for d in date.split('_')[-3:])) <= end:
                 dates.append(date.replace('Daily_', '').replace('_', '-'))
 
