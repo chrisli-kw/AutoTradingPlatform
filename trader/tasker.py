@@ -34,20 +34,25 @@ def runPerformanceReport(start=None, end=None):
         for env in ACCOUNTS:
             logging.debug(f'Load 【{env}】 config')
             config = dotenv_values(f'./lib/envs/{env}.env')
+            init_position = int(config['INIT_POSITION'])
+            
+            markets = config['MARKET']
+            markets = markets.replace('stock', 'stocks').replace('and', '')
+            markets = [m.capitalize() for m in markets.split('  ')]
+            for market in markets:
+                pr = PerformanceReport(env, market)
+                Tables = pr.getTables(init_position, start=start, end=end)
+                if Tables is not None:
+                    pr.save_tables(Tables)
+                    pr.plot_performance_report(Tables, save=True)
 
-            pr = PerformanceReport(env)
-            Tables = pr.getTables(config, start=start, end=end)
-            if Tables is not None:
-                pr.save_tables(Tables)
-                pr.plot_performance_report(Tables, save=True)
-
-                image_name = pr.TablesFile.replace('xlsx', 'jpg')
-                if os.path.exists(image_name):
-                    notifier.post(
-                        pr.TablesFile.split('/')[-1][:-5],
-                        image_name=pr.TablesFile.replace('xlsx', 'jpg'),
-                        msgType='AccountInfo'
-                    )
+                    image_name = pr.TablesFile.replace('xlsx', 'jpg')
+                    if os.path.exists(image_name):
+                        notifier.post(
+                            pr.TablesFile.split('/')[-1][:-5],
+                            image_name=pr.TablesFile.replace('xlsx', 'jpg'),
+                            msgType='AccountInfo'
+                        )
     except:
         logging.exception('Catch an exception:')
         notifier.post('\n【Error】【交易績效查詢】發生異常', msgType='Tasker')

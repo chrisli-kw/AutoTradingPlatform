@@ -19,6 +19,8 @@ def convert_statement(df, mode='trading', **kwargs):
         return df
 
     init_position = kwargs.get('init_position', 1000000)
+    market = kwargs.get('market', 'Stocks')
+    multipler = kwargs['multipler']
     if mode == 'trading':
         df = df.rename(columns={
             'code': 'Code',
@@ -30,10 +32,13 @@ def convert_statement(df, mode='trading', **kwargs):
         df['Strategy'] = df.Reason.apply(extract_strategy)
         df['isLong'] = df.Strategy.apply(lambda x: x in StrategyList.Long)
         df['isShort'] = df.isLong == False
-        df['isOpen'] = (
-            ((df.isLong == True) & (df.action == 'Buy')) |
-            ((df.isShort == True) & (df.action == 'Sell'))
-        )
+        if market == 'Stocks':
+            df['isOpen'] = (
+                ((df.isLong == True) & (df.action == 'Buy')) |
+                ((df.isShort == True) & (df.action == 'Sell'))
+            )
+        else:
+            df['isOpen'] = (df.op_type == 'New')
 
         target_columns1 = ['Strategy', 'Code', 'isLong', 'isShort']
         target_columns2 = ['Time', 'Price', 'Quantity', 'Amount', 'Reason']
@@ -53,6 +58,8 @@ def convert_statement(df, mode='trading', **kwargs):
         tb['OpenAmount'] = (tb.OpenPrice*tb.OpenQuantity).abs()
         tb['CloseAmount'] = (tb.ClosePrice*tb.CloseQuantity).abs()
         tb['profit'] = (tb.CloseAmount - tb.OpenAmount)*(tb.isShort*(-2)+1)
+        totalExpense = 0
+        tb.profit = tb.profit*tb.Strategy.map(multipler) - totalExpense
         tb['returns'] = 100*(tb.profit/tb.OpenAmount).round(4)
         tb['balance'] = init_position + tb.profit.cumsum()
         tb = tb.dropna().reset_index(drop=True)
@@ -70,7 +77,7 @@ def convert_statement(df, mode='trading', **kwargs):
         df.CloseAmount = df.CloseAmount.astype('int64')
         df.ClosePrice = df.ClosePrice.round(2)
 
-        if kwargs['market'] == 'Stocks':
+        if market == 'Stocks':
             netOpenAmount = (df.OpenAmount + df.OpenFee)
             netCloseAmount = (df.CloseAmount - df.CloseFee - df.Tax)
             df['profit'] = (netCloseAmount - netOpenAmount).astype('int64')
@@ -81,7 +88,7 @@ def convert_statement(df, mode='trading', **kwargs):
 
             df['profit'] = (df.ClosePrice - df.OpenPrice)*df.CloseQuantity
             totalExpense = (df.OpenFee + df.CloseFee + df.Tax)*sign
-            df.profit = df.profit*kwargs['multipler'] - totalExpense
+            df.profit = df.profit*multipler - totalExpense
             df['returns'] = (
                 sign*100*((df.ClosePrice/df.OpenPrice)**sign - 1)).round(2)
 

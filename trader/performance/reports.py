@@ -28,10 +28,11 @@ class FiguresSet:
 
 
 class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
-    def __init__(self, account: str):
-        self.set_report_scripts(backtest_config)
+    def __init__(self, account: str, market: str):
         self.account = account
-        self.TablesFile = f'{PATH}/daily_info/{TODAY_STR[:-3]}-performance-{account}.xlsx'
+        self.market = market
+        self.set_report_scripts(backtest_config)
+        self.TablesFile = f'{PATH}/daily_info/{TODAY_STR[:-3]}-{market}-performance-{account}.xlsx'
         self.Tables = namedtuple(
             typename='Tables',
             field_names=['Configuration', 'Summary', 'Statement', 'Selection'],
@@ -42,10 +43,15 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
     def set_report_scripts(self, report_scripts: object = None):
         if report_scripts:
             bts = report_scripts.__dict__
-            self.Scripts = {
-                k[:-3]: v for k, v in bts.items()
-                if ('T' in k or 'D' in k) and (k[:-3] in SelectMethods)
-            }
+            if self.market == 'Stocks':
+                self.Scripts = {
+                    k[:-3]: v for k, v in bts.items()
+                    if ('T' in k or 'D' in k) and (k[:-3] in SelectMethods)
+                }
+            else:
+                self.Scripts = {
+                    k: v for k, v in bts.items() if hasattr(v, 'market') and v.market == 'Futures'
+                }
         else:
             self.Scripts = {}
 
@@ -57,7 +63,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
         strategies = strategies[strategies.name.isin(df.Strategy)].name.values
         return strategies
 
-    def getTables(self, config, start=None, end=None):
+    def getTables(self, init_position, start=None, end=None):
 
         def concat_strategy_table(results: dict, table_name: str):
             df = pd.DataFrame()
@@ -71,14 +77,17 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
                 df = pd.concat([df, temp], axis=1)
             return df.reset_index()
 
-        init_position = int(config['INIT_POSITION'])
-
         df = self.read_statement(f'simulate-{self.account}')
 
         if not df.shape[0]:
             return None
 
-        df = convert_statement(df, init_position=init_position)
+        df = convert_statement(
+            df, 
+            init_position=init_position, 
+            market=self.market,
+            multipler={k: v.multipler for k, v in self.Scripts.items()}
+        )
 
         # filter data
         if start is None and end is None:
@@ -332,7 +341,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
 
         start = df.OpenTime.min()
         end = df.CloseTime.max()
-        title = f'{start} ~ {end} Trading Performance'
+        title = f'{start} ~ {end} {self.market} Trading Performance'
         fig.update_layout(
             title=title,
             title_x=0.5,
