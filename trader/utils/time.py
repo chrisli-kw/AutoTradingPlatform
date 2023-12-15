@@ -20,9 +20,10 @@ class TimeTool:
         '''將字串時間轉為datetime, 輸入格式:YYYY-MM-DD'''
         return datetime.strptime(date, "%Y-%m-%d")
 
-    def now_str(self):
+    @staticmethod
+    def now_str(format='%Y-%m-%d %a %H:%M:%S.%f'):
         '''取得當下時間戳的字串格式'''
-        return datetime.now().strftime('%Y-%m-%d %a %H:%M:%S.%f')
+        return datetime.now().strftime(format)
 
     def now_for_log(self):
         return f"【{self.now_str()}】"
