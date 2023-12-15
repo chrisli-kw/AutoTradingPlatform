@@ -326,24 +326,24 @@ class TickDataProcesser(TimeTool, FileHandler):
             '到期月份(週別)': 'DueMonth'
         })
 
-        df.name = df.name.apply(lambda x: x.replace(' ', ''))
-        df.DueMonth = df.DueMonth.apply(
-            lambda x: x.replace(' ', '').split('/'))
-        df.PriceOld = df.PriceOld.replace('-', 0).astype(float)
-        df.PriceNew = df.PriceNew.replace('-', 0).astype(float)
-
+        df.name = df.name.str.replace(' ', '')
         if underlying != 'all':
             df = df[df.name == underlying].reset_index(drop=True)
 
-        df['Time'] = pd.to_datetime(df.成交日期.astype(
-            str) + df.成交時間.astype(str).str.zfill(6))
-        df['date'] = pd.to_datetime(df.Time.dt.date)
-        df.Simtrade = df.Simtrade.apply(lambda x: True if x == '*' else False)
-        df['DueMonthOld'] = df.DueMonth.apply(lambda x: x[0])
-        df['DueMonthNew'] = df.DueMonth.apply(lambda x: x[-1])
+        df.PriceOld = df.PriceOld.replace('-', 0).astype(float)
+        df.PriceNew = df.PriceNew.replace('-', 0).astype(float)
+        df['Time'] = pd.to_datetime(
+            df.成交日期.astype(str) + df.成交時間.astype(str).str.zfill(6),
+            format="%Y%m%d%H%M%S"
+        )
+        df.Simtrade = df.Simtrade == '*'
+        df.DueMonth = df.DueMonth.apply(
+            lambda x: x.replace(' ', '').split('/'))
+        df['DueMonthOld'] = df.DueMonth.str[0]
+        df['DueMonthNew'] = df.DueMonth.str[-1]
         df = self.add_period(df)
 
-        df = df.drop(['成交日期', '成交時間', 'date', 'DueMonth'], axis=1)
+        df = df.drop(['成交日期', '成交時間', 'DueMonth'], axis=1)
         df = df.sort_values('Time').reset_index(drop=True)
         return df
 
