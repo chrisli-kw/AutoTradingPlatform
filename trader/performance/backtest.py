@@ -10,7 +10,8 @@ from .base import (
     compute_profits,
     computeReturn,
     computeWinLoss,
-    convert_statement
+    convert_statement,
+    getMDD
 )
 from .. import file_handler
 from ..config import PATH, TODAY_STR
@@ -54,32 +55,6 @@ class BacktestPerformance(FileHandler):
             for c in ['TSEopen', 'TSEclose', 'OTCopen', 'OTCclose']:
                 daily_info[c] = 1
         return daily_info
-
-    def getMDD(self, df: pd.DataFrame):
-        tb = df[['CloseTime', 'balance']].copy()
-        tb.set_index(pd.to_datetime(tb['CloseTime']), inplace=True)
-        tb.drop('CloseTime', axis=1, inplace=True)
-
-        # Reference:
-        # https://github.com/pyinvest/quant_basic_toturial/blob/master/quant/16_Max_drawdown.ipynb
-        dr = tb.pct_change(1)
-        r = dr.add(1).cumprod()
-        dd = r.div(r.cummax()).sub(1)
-
-        if dd.shape[0] > 1:
-            mdd = dd.min()
-            end = dd.idxmin()
-            start = r.loc[:end[0]].idxmax()
-            days = end - start
-            result = {
-                'MDD': mdd[0],
-                'Start': start[0],
-                'End': end[0],
-                'Days': days[0],
-                'TotalLoss': df[(df.CloseTime >= start[0]) & (df.CloseTime <= end[0])].profit.sum()
-            }
-            return result
-        return {}
 
     def get_max_profit_loss_days(self, statement: pd.DataFrame):
         '''
@@ -213,7 +188,7 @@ class BacktestPerformance(FileHandler):
             else:
                 std = 0
 
-            mdd_data = self.getMDD(df)
+            mdd_data = getMDD(df)
             if mdd_data:
                 mdd = f"{AccountingNumber(mdd_data['TotalLoss'])}({100*round(mdd_data['MDD'], 6)}%)"
                 mddTimes = f"{mdd_data['Start']} ~ {mdd_data['End']}，共{mdd_data['Days']}天"

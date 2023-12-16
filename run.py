@@ -39,7 +39,8 @@ logging.basicConfig(
     format='%(asctime)s.%(msecs)03d|%(levelname)s: %(message)s',
     datefmt='%Y-%m-%d %a %H:%M:%S',
     handlers=[
-            logging.FileHandler(f'./logs/{filename}.log', 'a', encoding='utf-8'),
+            logging.FileHandler(
+                f'./logs/{filename}.log', 'a', encoding='utf-8'),
             logging.StreamHandler()
     ]
 )
@@ -48,7 +49,11 @@ logging.info(f'Current trader version is {ver}')
 
 if __name__ == "__main__":
     date = pd.to_datetime(TODAY_STR)
-    if task != 'create_env' and date in holidays:
+    if task in [
+        'account_info', 'update_and_select_stock',
+        'select_stock', 'crawl_html',
+        'auto_trader', 'subscribe'
+    ] and date in holidays:
         logging.warning(f'{holidays[date]}不開盤')
     elif task in Tasks:
         functions = Tasks[task]

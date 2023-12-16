@@ -175,3 +175,30 @@ def computeWinLoss(df: pd.DataFrame):
         win_loss[False] = 0
 
     return win_loss
+
+
+def getMDD(df: pd.DataFrame):
+    tb = df[['CloseTime', 'balance']].copy()
+    tb.set_index(pd.to_datetime(tb['CloseTime']), inplace=True)
+    tb.drop('CloseTime', axis=1, inplace=True)
+
+    # Reference:
+    # https://github.com/pyinvest/quant_basic_toturial/blob/master/quant/16_Max_drawdown.ipynb
+    dr = tb.pct_change(1)
+    r = dr.add(1).cumprod()
+    dd = r.div(r.cummax()).sub(1)
+
+    if dd.shape[0] > 1:
+        mdd = dd.min()
+        end = dd.idxmin()
+        start = r.loc[:end[0]].idxmax()
+        days = end - start
+        result = {
+            'MDD': mdd[0],
+            'Start': start[0],
+            'End': end[0],
+            'Days': days[0],
+            'TotalLoss': df[(df.CloseTime >= start[0]) & (df.CloseTime <= end[0])].profit.sum()
+        }
+        return result
+    return {}
