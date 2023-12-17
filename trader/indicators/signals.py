@@ -154,7 +154,7 @@ class TechnicalSignals:
         return (100*(tb.Close - d_min)/(d_max - d_min)).fillna(-1)
 
     @staticmethod
-    def KD(tb):
+    def KD(tb, d=9):
         '''
         Range: [0, 100]
         Reference: https://medium.com/%E5%8F%B0%E8%82%A1etf%E8%B3%87%E6%96%99%E7%A7%91%E5%AD%B8-%E7%A8%8B%E5%BC%8F%E9%A1%9E/%E7%A8%8B%E5%BC%8F%E8%AA%9E%E8%A8%80-%E8%87%AA%E5%BB%BAkd%E5%80%BC-819d6fd707c8
@@ -171,7 +171,7 @@ class TechnicalSignals:
                 if r == -1:
                     K.append(50)
                 else:
-                    K.append(K[-1]*2/3 + r/3)
+                    K.append(K[-1]*(d-1)/d + r/d)
             return K
 
         def _getD(k):
@@ -180,7 +180,7 @@ class TechnicalSignals:
                 if i == 0:
                     D.append(50)
                 else:
-                    D.append(D[-1] * 2/3 + k/3)
+                    D.append(D[-1]*(d-1)/d + k/d)
             return D
 
         tb['K'] = tb.groupby('name').RSV.transform(_getK)
@@ -195,8 +195,6 @@ class TechnicalSignals:
         Range: [-100, 0]
         R = (max(high) - close)/(max(high) - min(low))*(-100)
         '''
-
-        group = df.groupby('name')
 
         # 計算n日內最高價
         highest_high = cls.MAX(df, 'High', window_size, shift=0)
