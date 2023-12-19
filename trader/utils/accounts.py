@@ -46,10 +46,9 @@ class AccountInfo(TimeTool, FileHandler):
         )
         self.df_futuresInfo = pd.DataFrame(
             columns=[
-                'Account', 'Market', 'Date', 'Code', 'CodeName', 'OrderNum',
-                'OrderBS', 'OrderType', 'Currency', 'paddingByte', 'Volume',
-                'ContractAverPrice', 'SettlePrice', 'RealPrice', 'FlowProfitLoss', 'SettleProfitLoss',
-                'StartSecurity', 'UpKeepSecurity', 'OTAMT', 'MTAMT'
+                'account', 'market',
+                'id', 'code', 'action', 'quantity', 'cost_price',
+                'last_price', 'pnl'
             ]
         )
 
@@ -105,7 +104,7 @@ class AccountInfo(TimeTool, FileHandler):
         try:
             return pd.DataFrame([o.__dict__ for o in objects])
         except:
-            return pd.DataFrame([{o[0]:o[1] for o in objects}])
+            return pd.DataFrame([{o[0]: o[1] for o in objects}])
 
     def create_info_table(self):
         if self.is_in_dir(self.filename, f'{PATH}/daily_info/'):
@@ -157,13 +156,11 @@ class AccountInfo(TimeTool, FileHandler):
             except:
                 logging.warning('無法取得庫存，重試中')
                 time.sleep(1)
-        stocks = stocks.rename(
-            columns={
-                'cond': 'order_cond',
-                'direction': 'action',
-                'price': 'cost_price',
-            }
-        )
+        stocks = stocks.rename(columns={
+            'cond': 'order_cond',
+            'direction': 'action',
+            'price': 'cost_price',
+        })
         if stocks.shape[0]:
             stocks.pnl = stocks.pnl.astype(int)  # 未實現損益
             stocks.order_cond = stocks.order_cond.astype(str)  # 交易別
@@ -373,7 +370,11 @@ class AccountInfo(TimeTool, FileHandler):
 
         df = self._obj_2_df(positions)
         if df.shape[0]:
-            df[['Account', 'Market']] = [self.account_name, 'Futures']
+            df = df.rename(columns={
+                'direction': 'action',
+                'price': 'cost_price',
+            })
+            df[['account', 'market']] = [self.account_name, 'Futures']
             return df
         return self.df_futuresInfo
 

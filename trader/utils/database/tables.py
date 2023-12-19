@@ -39,6 +39,29 @@ class SecurityInfoFutures(Base):
     pk_id = Column(
         Integer, primary_key=True, autoincrement=True, nullable=False)
 
+    account = Column(String(50, collation), nullable=False, comment='帳戶代號')
+    market = Column(String(10, collation), nullable=False, comment='市場別')
+    code = Column(String(20, collation), nullable=False, comment='證券代號')
+    action = Column(String(10, collation), nullable=False, comment='買賣別')
+    quantity = Column(Integer, nullable=False, comment='今日庫存量')
+    cost_price = Column(FLOAT(2), nullable=False, comment='成本價')
+    last_price = Column(FLOAT(2), nullable=False, comment='前一日收盤價')
+    pnl = Column(Integer, comment='未實現損益')
+
+    create_time = Column(
+        TIMESTAMP(fsp=6), nullable=False, server_default=time_default)
+
+    def __init__(self, **kwargs):
+        for property, value in kwargs.items():
+            setattr(self, property, value)
+
+
+class SecurityInfoFuturesOld(Base):
+    __tablename__ = 'security_info_futures_old'
+
+    pk_id = Column(
+        Integer, primary_key=True, autoincrement=True, nullable=False)
+
     Account = Column(String(50, collation), nullable=False, comment='帳戶代號')
     Market = Column(String(10, collation), nullable=False, comment='市場別')
     Date = Column(

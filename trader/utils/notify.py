@@ -91,7 +91,8 @@ class Notification:
 
         code = msg['contract']['code']
         delivery_month = msg['contract']['delivery_month']
-        name = API.Contracts['Futures'][code][code+delivery_month].name
+        name = API.Contracts.Futures[code]
+        name = name[code+delivery_month].name if name else msg['contract']['option_right']
         order = msg['order']
         account = order['account']['account_id']
         oc_type = self.oc_type[order['oc_type']]
@@ -112,7 +113,8 @@ class Notification:
 
         code = msg['code']
         delivery_month = msg['delivery_month']
-        name = API.Contracts['Futures'][code][code+delivery_month].name
+        name = API.Contracts.Futures[code]
+        name = name[code+delivery_month].name if name else msg['contract']['option_right']
         account = msg['account_id']
         price = msg['price']
         quantity = msg['quantity']

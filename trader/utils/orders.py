@@ -48,13 +48,17 @@ class OrderTool(FileHandler):
             return max(round(quantity/1000), 1)
         return q_before
 
-    def check_order_status(self, order_result):
+    def check_order_status(self, order_result, market: str = 'Stocks'):
         '''確認委託狀態'''
         time.sleep(0.1)
-        API.update_status(API.stock_account)
+        if market == 'Stocks':
+            API.update_status(API.stock_account)
+        else:
+            API.update_status(API.futopt_account)
         status = order_result.status.status
         if status not in ['PreSubmitted', 'Filled']:
-            logging.warning('order not submitted/filled')
+            msg = order_result.status.msg
+            logging.warning(f'Order not submitted/filled: {msg}')
 
     def appendOrder(self, order_data: dict):
         '''Add new order data to OrderTable'''

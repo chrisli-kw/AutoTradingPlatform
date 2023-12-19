@@ -18,7 +18,7 @@ class Subscriber:
         self.BidAsk = {}
         self.Quotes = Quotes()
 
-    def _set_target_quote_default(self, targets: str):
+    def _set_target_quote_default(self, targets: list):
         '''初始化股票/期權盤中資訊'''
         keys = [
             'price', 'amount', 'total_amount',

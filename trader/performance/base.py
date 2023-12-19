@@ -191,14 +191,18 @@ def getMDD(df: pd.DataFrame):
     if dd.shape[0] > 1:
         mdd = dd.min()
         end = dd.idxmin()
-        start = r.loc[:end[0]].idxmax()
+        start = r.loc[:end.iloc[0]].idxmax()
         days = end - start
+        loss = df[
+            (df.CloseTime >= start.iloc[0]) &
+            (df.CloseTime <= end.iloc[0])
+        ].profit.sum()
         result = {
-            'MDD': mdd[0],
-            'Start': start[0],
-            'End': end[0],
-            'Days': days[0],
-            'TotalLoss': df[(df.CloseTime >= start[0]) & (df.CloseTime <= end[0])].profit.sum()
+            'MDD': mdd.iloc[0],
+            'Start': start.iloc[0],
+            'End': end.iloc[0],
+            'Days': days.iloc[0],
+            'TotalLoss': loss
         }
         return result
     return {}

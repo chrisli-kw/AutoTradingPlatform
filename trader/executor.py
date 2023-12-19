@@ -192,7 +192,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         df = pd.DataFrame([crawler2.get_leverage(s) for s in stockids])
         if df.shape[0]:
-            df.columns = df.columns.str.replace(' ', '') 
+            df.columns = df.columns.str.replace(' ', '')
             df.loc[df.個股融券信用資格 == 'N', '融券成數'] = 100
             df.代號 = df.代號.astype(str)
             df.融資成數 /= 100
@@ -218,7 +218,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             self.Futures_Code_List = {
                 f.code: f.symbol for m in API.Contracts.Futures for f in m}
 
-    def __order_callback(self, stat, msg):
+    def _order_callback(self, stat, msg):
         '''處理委託/成交回報'''
 
         if stat == constant.OrderState.StockOrder:
@@ -335,8 +335,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 self.update_monitor_lists(msg['action'], msg)
 
         elif stat == constant.OrderState.FuturesOrder:
+            notifier.post_fOrder(stat, msg)
+
             code = msg['contract']['code']
             symbol = code + msg['contract']['delivery_month']
+            if symbol not in self.Quotes.AllTargets:
+                for k in self.Quotes.AllTargets:
+                    if symbol in k:
+                        symbol = k
             bsh = self.Quotes.AllTargets[symbol]['price']
             msg.update({
                 'symbol': symbol,
@@ -349,18 +355,18 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             operation = msg['operation']
 
             if order['account']['account_id'] == self.account_id_futopt:
-                notifier.post_fOrder(stat, msg)
                 if operation['op_code'] == '00' or operation['op_msg'] == '':
                     self._update_futures_deal_list(symbol, order['oc_type'])
 
                     # 紀錄成交的賣單
-                    price = -order['price'] if c4 else order['price']
-                    sign = -1 if order['action'] == 'Sell' else 1
+                    price = order['price']
+                    sign = -1 if order['oc_type'] == 'Cover' else 1
                     quantity = order['quantity']
                     order_data = {
                         'Time': datetime.now(),
                         'market': 'Futures',
                         'code': symbol,
+                        'action': order['action'],
                         'price': price*sign,
                         'quantity': quantity,
                         'amount': self.get_open_margin(symbol, quantity)*sign,
@@ -377,6 +383,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
                 # 更新監控庫存
                 if not self.simulation:
+                    msg['code'] = symbol
                     self.update_monitor_lists(operation['op_type'], msg)
 
         elif stat == constant.OrderState.FuturesDeal:
@@ -459,7 +466,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                                 self.__SECRET_KEY__, self.ACCOUNT_NAME)
 
         # 訂閱下單回報
-        API.set_order_callback(self.__order_callback)
+        API.set_order_callback(self._order_callback)
 
         # 訂閱五檔回報
         @API.on_bidask_stk_v1()
@@ -526,27 +533,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         def preprocess_(df):
             if df.shape[0]:
-                for c in ['Volume', 'ContractAverPrice', 'SettlePrice', 'RealPrice']:
-                    df[c] = df[c].astype(float)
-                    if c in ['ContractAverPrice', 'SettlePrice', 'RealPrice']:
-                        df[c] = df.groupby('Code')[c].transform('mean')
-                    else:
-                        df[c] = df.groupby('Code')[c].transform(sum)
-
-                df = df.drop_duplicates('Code')
-                df = df.rename(columns={'ContractAverPrice': 'cost_price'})
-                df.Code = df.Code.astype(str).map(self.Futures_Code_List)
-                df.OrderBS = df.OrderBS.apply(
-                    lambda x: 'Buy' if x == 'B' else ('Sell' if x == 'S' else x))
-
-                orders = df[['Volume', 'OrderBS']]
-                orders = orders.rename(
-                    columns={'Volume': 'quantity', 'OrderBS': 'action'})
-                df['order'] = orders.to_dict('records')
-
-                day = TODAY_STR.replace('-', '/')
-                df['isDue'] = df.CodeName.apply(
-                    lambda x: day == get_contract(x).delivery_date)
+                df['contract'] = df.code.apply(lambda x: get_contract(x))
+                df['isDue'] = df.contract.apply(
+                    lambda x: TODAY_STR.replace('-', '/') == x.delivery_date)
+                df.code = df.contract.apply(lambda x: x.symbol)
             return df
 
         if not self.can_futures:
@@ -563,19 +553,16 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.futures = self.futures.merge(
             self.watchlist,
             how='left',
-            left_on=['Account', 'Market', 'Code'],
-            right_on=['account', 'market', 'code']
+            on=['account', 'market', 'code']
         )
         self.futures.position.fillna(100, inplace=True)
+        self.futures.index = self.futures.code
+        strategies.update(self.futures.strategy.to_dict())
 
         self.n_futures = self.futures.shape[0]
 
-        # 取得策略清單
-        self.futures.index = self.futures.Code
-        strategies.update(self.futures.strategy.to_dict())
-
         # 剔除不堅控的股票
-        self.futures = self.futures[~self.futures.Code.isin(self.FILTER_OUT)]
+        self.futures = self.futures[~self.futures.code.isin(self.FILTER_OUT)]
 
         # update_futures_to_monitor
         self.futures_to_monitor.update(self.futures.to_dict('index'))
@@ -688,7 +675,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         if market == 'Stocks' and self.stocks.shape[0]:
             sells = self.stocks.code.values
         elif market == 'Futures' and self.futures.shape[0]:
-            sells = self.futures.Code.values
+            sells = self.futures.code.values
         else:
             sells = []
 
@@ -699,7 +686,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         return np.unique(all)
 
     def monitor_stocks(self, target: str, strategies: Dict[str, str]):
-        if target in self.Quotes.NowTargets: # and self.Quotes.NowIndex:
+        if target in self.Quotes.NowTargets:  # and self.Quotes.NowIndex:
             inputs = self.Quotes.NowTargets[target].copy()
             data = self.stocks_to_monitor[target]
             strategy = strategies[target]
@@ -779,34 +766,37 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             data = self.futures_to_monitor[target]
             strategy = strategies[target]
             isLongStrategy = self.StrategySet.isLong(strategy)
+            isSell = (
+                # long selling
+                (data and 'action' in data and data['action'] == 'Buy') or
+                # short selling
+                (not data and self.can_sell and not isLongStrategy)
+            )
 
-            # 建倉
+            # new position
             if data is None:
-                octype = 'New'
                 actionType = 'Open'
+                pos_balance = 100
+                octype = 'New'
                 quantity = self.get_open_slot(target, strategy)
                 enoughOpen = self._check_enough_open(target, quantity)
-                pos_balance = 100
-                action = 'Buy' if isLongStrategy else 'Sell'
 
-            # 庫存
+            # in-stock position
             else:
-                octype = 'Cover'
                 actionType = 'Close'
-                enoughOpen = False
                 pos_balance = data['position']
+                octype = 'Cover'
                 if target in self.futures_opened:
                     quantity = data['order']['quantity']
-                    action = data['order']['action']
                 else:
-                    quantity = data['Volume']
-                    action = data['OrderBS']
+                    quantity = data['quantity']
+                enoughOpen = False
 
             if target in self.futures_transferred:
                 msg = f'{target} 轉倉-New'
                 infos = dict(
                     action_type=actionType,
-                    action=action,
+                    action=data['action'],
                     target=target,
                     quantity=self.futures_transferred[target],
                     octype=octype,
@@ -848,7 +838,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
                     infos = dict(
                         action_type=actionType,
-                        action=action,
+                        action='Sell' if isSell else 'Buy',
                         target=target,
                         quantity=quantity,
                         octype=octype,
@@ -864,15 +854,16 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
     def _place_order(self, content: namedtuple, market='Stocks'):
         logging.debug(f'【content: {content}】')
 
+        is_stock = market == 'Stocks'
         target = content.target
         contract = get_contract(target)
         if target in self.BidAsk:
             quantity = self.get_sell_quantity(content, market)
             price_type = 'MKT'
             price = 0
-            order_lot = 'IntradayOdd' if content.quantity < 1000 and market == 'Stocks' else 'Common'
+            order_lot = 'IntradayOdd' if content.quantity < 1000 and is_stock else 'Common'
 
-            if market == 'Stocks':
+            if is_stock:
                 bid_ask = self.BidAsk[target]
                 bid_ask = bid_ask.bid_price if content.action == 'Sell' else bid_ask.ask_price
 
@@ -899,7 +890,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
             # 下單
             logging.debug(log_msg)
-            if self.simulation and market == 'Stocks':
+            if self.simulation and is_stock:
                 price = self.Quotes.NowTargets[target]['price']
                 quantity *= 1000
                 leverage = self.check_leverage(target, content.order_cond)
@@ -923,7 +914,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     'price': price*sign,
                     'quantity': quantity,
                     'amount': amount,
-                    'order_cond': content.order_cond if market == 'Stocks' else 'Cash',
+                    'order_cond': content.order_cond if is_stock else 'Cash',
                     'order_lot': order_lot,
                     'leverage': leverage,
                     'account_id': f'simulate-{self.ACCOUNT_NAME}',
@@ -983,7 +974,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             else:
                 # #ff0000 批次下單的張數 (股票>1000股的單位為【張】) #ff0000
                 q = 5 if order_lot == 'Common' else quantity
-                if market == 'Stocks':
+                if is_stock:
                     target_ = self.desposal_money
                 else:
                     target_ = self.desposal_margin
@@ -1000,19 +991,19 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                         # 市價單/限價單
                         price_type=price_type,
                         # ROD:當天都可成交
-                        order_type=constant.OrderType.ROD,
+                        order_type=constant.OrderType.ROD if is_stock else constant.OrderType.IOC,
                         # 委託類型: 現股/融資
-                        order_cond=content.order_cond if market == 'Stocks' else 'Cash',
+                        order_cond=content.order_cond if is_stock else 'Cash',
                         # 整張或零股
                         order_lot=order_lot,
                         # {Auto, New, Cover, DayTrade}(自動、新倉、平倉、當沖)
-                        octype='Auto' if market == 'Stocks' else content.octype,
-                        account=API.stock_account if market == 'Stocks' else API.futopt_account,
+                        octype='Auto' if is_stock else content.octype,
+                        account=API.stock_account if is_stock else API.futopt_account,
                         # 先賣後買: True, False
                         daytrade_short=content.daytrade_short,
                     )
                     result = API.place_order(contract, order)
-                    self.check_order_status(result)
+                    self.check_order_status(result, market)
                     quantity -= q
 
     def get_securityInfo(self, market='Stocks'):
@@ -1024,16 +1015,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 'Futures': self.df_futuresInfo
             }
             try:
-                if db.HAS_DB and market == 'Stocks':
-                    df = db.query(
-                        SecurityInfoStocks,
-                        SecurityInfoStocks.account == self.ACCOUNT_NAME
-                    )
-                elif db.HAS_DB and market == 'Futures':
-                    df = db.query(
-                        SecurityInfoFutures,
-                        SecurityInfoFutures.Account == self.ACCOUNT_NAME
-                    )
+                if db.HAS_DB:
+                    table = SecurityInfoStocks if market == 'Stocks' else SecurityInfoFutures
+                    df = db.query(table, table.account == self.ACCOUNT_NAME)
                 else:
                     df = file_handler.read_table(
                         f'{PATH}/stock_pool/simulation_{market.lower()}_{self.ACCOUNT_NAME}.pkl',
@@ -1069,12 +1053,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         return df.dropna().set_index('code')
 
     def get_stock_pool(self):
-        '''
-        取得股票選股池
-        pools = {
-            'stockid':'strategy',
-        }
-        '''
+        '''取得股票選股池。pools = {stockid: strategy}'''
 
         pools = {}
 
@@ -1116,7 +1095,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         return pools
 
     def get_futures_pool(self):
-        '''取得期權目標商品清單'''
+        '''取得期權目標商品清單。pools = {symbol: stragety}'''
 
         pools = {}
 
@@ -1351,14 +1330,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         logging.debug(f'Remove【{target}】from futures_to_monitor.')
         self.futures_to_monitor.pop(target, None)
 
-        if target in self.futures.CodeName.values:
+        if target in self.futures.code.values:
             logging.debug(f'Remove【{target}】from self.futures.')
-            self.futures = self.futures[self.futures.CodeName != target]
+            self.futures = self.futures[self.futures.code != target]
             if self.simulation and db.HAS_DB:
                 db.delete(
                     SecurityInfoFutures,
-                    SecurityInfoFutures.CodeName == target,
-                    SecurityInfoFutures.Account == self.ACCOUNT_NAME
+                    SecurityInfoFutures.code == target,
+                    SecurityInfoFutures.account == self.ACCOUNT_NAME
                 )
 
     def run(self):
@@ -1460,16 +1439,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
     def simulator_update_securityInfo(self, df: pd.DataFrame, table):
         market = 'stocks' if 'stocks' in table.__tablename__ else 'futures'
         if db.HAS_DB:
-            if market == 'stocks':
-                match_account = table.account == self.ACCOUNT_NAME
-                codes = db.query(table.code, match_account).code.values
-                tb = df[~df.code.isin(codes)]
-                update_values = df[df.code.isin(codes)].set_index('code')
-            else:
-                match_account = table.Account == self.ACCOUNT_NAME
-                codes = db.query(table.Code, match_account).Code.values
-                tb = df[~df.Code.isin(codes)]
-                update_values = df[df.Code.isin(codes)].set_index('Code')
+            match_account = table.account == self.ACCOUNT_NAME
+            codes = db.query(table.code, match_account).code.values
+            tb = df[~df.code.isin(codes)]
+            update_values = df[df.code.isin(codes)].set_index('code')
 
             # add new stocks
             db.dataframe_to_DB(tb, table)
@@ -1477,10 +1450,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             # update in-stocks
             update_values = update_values.to_dict('index')
             for target, values in update_values.items():
-                if market == 'stocks':
-                    condition = table.code == target, match_account
-                else:
-                    condition = table.Code == target, match_account
+                condition = table.code == target, match_account
                 db.update(table, values, *condition)
         else:
             self.save_table(
@@ -1525,29 +1495,29 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             if df.shape[0]:
                 df = df[df.account_id == f'simulate-{self.ACCOUNT_NAME}']
                 df = df.reset_index(drop=True)
-                df = df.rename(columns={
-                    'account_id': 'Account',
-                    'market': 'Market',
-                    'bst': 'Date',
-                    'symbol': 'CodeName',
-                    'action': 'OrderBS',
-                    'quantity': 'Volume',
-                    'cost_price': 'ContractAverPrice',
-                    'price': 'RealPrice',
-                })
-                df['Code'] = df.CodeName.apply(lambda x: get_contract(x).code)
-                df.Account = self.ACCOUNT_NAME
+                # df = df.rename(columns={
+                #     'account_id': 'Account',
+                #     'market': 'Market',
+                #     'bst': 'Date',
+                #     'symbol': 'CodeName',
+                #     'action': 'OrderBS',
+                #     'quantity': 'Volume',
+                #     'cost_price': 'ContractAverPrice',
+                #     'price': 'RealPrice',
+                # })
+                # df['Code'] = df.CodeName.apply(lambda x: get_contract(x).code)
+                df['account'] = self.ACCOUNT_NAME
 
-                for c in self.df_futuresInfo.columns:
-                    if c not in df.columns:
-                        if c in [
-                            'ContractAverPrice', 'SettlePrice',
-                            'RealPrice', 'FlowProfitLoss',
-                            'SettleProfitLoss', 'OTAMT', 'MTAMT'
-                        ]:
-                            df[c] = 0
-                        else:
-                            df[c] = ''
+                # for c in self.df_futuresInfo.columns:
+                #     if c not in df.columns:
+                #         if c in [
+                #             'ContractAverPrice', 'SettlePrice',
+                #             'RealPrice', 'FlowProfitLoss',
+                #             'SettleProfitLoss', 'OTAMT', 'MTAMT'
+                #         ]:
+                #             df[c] = 0
+                #         else:
+                #             df[c] = ''
                 df = df[self.df_futuresInfo.columns]
             else:
                 df = self.df_futuresInfo
