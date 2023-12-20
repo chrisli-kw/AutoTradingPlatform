@@ -1534,6 +1534,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.save_watchlist(self.watchlist)
         self.output_statement(
             f'{PATH}/stock_pool/statement_{self.ACCOUNT_NAME}.csv')
+        self.StrategySet.export_strategy_data()
 
         if (datetime.now().weekday() not in [5, 6]):
             for freq, df in self.KBars.items():

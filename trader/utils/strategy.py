@@ -159,3 +159,7 @@ class StrategyTool:
     def isDayTrade(self, strategy: str):
         '''Check if a strategy is a day-trade strategy.'''
         return strategy in StrategyList.DayTrade
+
+    def export_strategy_data(self):
+
+        pass
