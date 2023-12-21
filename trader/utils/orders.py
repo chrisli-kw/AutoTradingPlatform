@@ -4,6 +4,7 @@ import pandas as pd
 from collections import namedtuple
 
 from ..config import API, PATH
+from . import concat_df
 from .file import FileHandler
 from .database import db
 from .database.tables import TradingStatement
@@ -62,10 +63,10 @@ class OrderTool(FileHandler):
 
     def appendOrder(self, order_data: dict):
         '''Add new order data to OrderTable'''
-        self.OrderTable = pd.concat([
+        self.OrderTable = concat_df(
             self.OrderTable,
             pd.DataFrame([order_data])
-        ])
+        )
 
     def deleteOrder(self, code: str):
         '''Delete order data from OrderTable'''

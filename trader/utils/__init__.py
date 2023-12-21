@@ -1,6 +1,7 @@
 import queue
 import logging
 import numpy as np
+import pandas as pd
 
 from ..config import API
 
@@ -67,3 +68,18 @@ def get_contract(target: str):
         return API.Contracts.Options[target[:3]][target]
     return API.Contracts.Stocks[target]
 
+
+def concat_df(df1: pd.DataFrame, df2: pd.DataFrame, sort_by=[], reset_index=False):
+    if df1.empty:
+        return df2
+    elif df2.empty:
+        return df1
+
+    df = pd.concat([df1, df2])
+
+    if sort_by:
+        df = df.sort_values(sort_by)
+
+    if reset_index:
+        df = df.reset_index(drop=True)
+    return df

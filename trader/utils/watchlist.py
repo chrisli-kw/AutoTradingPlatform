@@ -3,7 +3,7 @@ from datetime import datetime
 from collections import namedtuple
 
 from ..config import PATH
-from . import get_contract
+from . import get_contract, concat_df
 from .time import TimeTool
 from .file import FileHandler
 from .database import db
@@ -62,7 +62,7 @@ class WatchListTool(TimeTool, FileHandler):
                 'position': position,
                 'strategy': strategy_pool[target] if strategy_pool and target in strategy_pool else 'unknown'
             }
-            self.watchlist = pd.concat([self.watchlist, pd.DataFrame([data])])
+            self.watchlist = concat_df(self.watchlist, pd.DataFrame([data]))
 
             if db.HAS_DB:
                 db.add_data(Watchlist, **data)

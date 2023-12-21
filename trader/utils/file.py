@@ -5,7 +5,7 @@ from io import BytesIO
 from zipfile import ZipFile
 from datetime import datetime
 
-from . import progress_bar
+from . import progress_bar, concat_df
 from ..config import PATH, TODAY
 
 
@@ -112,7 +112,7 @@ class FileHandler:
 
     def read_and_concat(self, filename: str, df: pd.DataFrame):
         tb = self.read_table(filename)
-        tb = pd.concat([tb, df]).reset_index(drop=True)
+        tb = concat_df(tb, df, reset_index=True)
         return tb
 
     def read_tables_in_folder(self, dir_path: str, pattern: str = None, **kwargs):

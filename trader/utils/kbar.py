@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from ..config import API, PATH, TODAY, TODAY_STR, TimeStartStock, TimeEndStock
 from ..config import KbarFeatures
 from ..indicators.signals import TechnicalSignals
-from . import get_contract
+from . import get_contract, concat_df
 from .time import TimeTool
 from .file import FileHandler
 try:
@@ -246,7 +246,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
 
     def concatKBars(self, df1: pd.DataFrame, df2: pd.DataFrame):
         '''合併K棒資料表'''
-        return pd.concat([df1, df2]).sort_values(['name', 'Time']).reset_index(drop=True)
+        return concat_df(df1, df2, sort_by=['name', 'Time'], reset_index=True)
 
     def updateKBars(self, scale: str):
         '''檢查並更新K棒資料表'''
@@ -269,19 +269,14 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
     def _update_K1(self, dividends: dict, quotes):
         '''每隔1分鐘更新1分K'''
 
-        def concat_df(df):
-            if df.shape[0]:
-                self.KBars['1T'] = pd.concat(
-                    [self.KBars['1T'], df]).sort_values(['name', 'Time']).reset_index(drop=True)
-
         if TimeStartStock <= datetime.now() <= TimeEndStock:
             for i in quotes.AllIndex:
                 tb = self.tick_to_df_index(quotes.AllIndex[i])
-                concat_df(tb)
+                self.concatKBars(self.KBars['1T'], tb)
 
         df = self.tick_to_df_targets(quotes.AllTargets, quotes.NowTargets)
         df = self.revert_dividend_price(df, dividends)
-        concat_df(df)
+        self.concatKBars(self.KBars['1T'], df)
 
 
 class TickDataProcesser(TimeTool, FileHandler):

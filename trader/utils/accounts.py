@@ -7,6 +7,7 @@ from shioaji.account import StockAccount
 
 from .. import crawler2
 from ..config import API, PATH, TODAY, TODAY_STR
+from . import concat_df
 from .time import TimeTool
 from .file import FileHandler
 
@@ -336,11 +337,7 @@ class AccountInfo(TimeTool, FileHandler):
 
     def update_info(self, df, row):
         tb = pd.read_excel(df, sheet_name='dentist_1')
-        tb = pd.concat([
-            tb,
-            pd.DataFrame([row])
-        ]).reset_index(drop=True)
-        return tb
+        return concat_df(tb, pd.DataFrame([row]), reset_index=True)
 
     def get_account_margin(self):
         '''期權保證金資訊'''

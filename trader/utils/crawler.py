@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
 from ..config import API, PATH, TODAY_STR, TODAY
-from . import progress_bar, create_queue
+from . import progress_bar, create_queue, concat_df
 from .kbar import KBarTool
 from .time import TimeTool
 from .file import FileHandler
@@ -166,10 +166,10 @@ class CrawlStockData(FileHandler):
                     self.StockData[i] = df
 
                     # back-up queue
-                    self.crawled_list = pd.concat([
+                    self.crawled_list = concat_df(
                         self.crawled_list,
                         pd.DataFrame([{'stockid': stockid}])
-                    ])
+                    )
                     self.save_table(self.crawled_list, filename=self.tempFile)
             except:
                 logging.exception(f"Put back into queue: {stockid}")
@@ -401,7 +401,7 @@ class CrawlFromHTML(TimeTool, FileHandler):
         df2 = df2[['證券代號', '證券名稱', 'period']]
 
         # 合併
-        df = pd.concat([df1, df2])
+        df = concat_df(df1, df2)
         df.period = df.period.apply(lambda x: re.findall('[\d+/]+', x))
         df.證券代號 = df.證券代號.astype(str)
         df['startDate'] = df.period.apply(
@@ -433,7 +433,7 @@ class CrawlFromHTML(TimeTool, FileHandler):
 
             url = f'{self.url_pc_ratio}?queryStartDate={s}&queryEndDate={e}'
             tb = pd.read_html(url)[3]
-            df = pd.concat([df, tb])
+            df = concat_df(df, tb)
 
             if pd.to_datetime(e) >= pd.to_datetime(end):
                 break
