@@ -8,6 +8,7 @@ import zipfile
 import requests
 import numpy as np
 import pandas as pd
+from io import StringIO
 from typing import Union
 from sqlalchemy import text
 from bs4 import BeautifulSoup
@@ -377,7 +378,7 @@ class CrawlFromHTML(TimeTool, FileHandler):
             while n < 10:
                 try:
                     df = requests.get(url, headers=self.headers).text
-                    df = pd.read_html(df)[0]
+                    df = pd.read_html(StringIO(df))[0]
                     df = df.dropna().rename(
                         columns={period: 'period'}).iloc[:-1, :]
                     return df
