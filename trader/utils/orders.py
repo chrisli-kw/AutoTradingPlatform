@@ -85,10 +85,14 @@ class OrderTool(FileHandler):
         '''Export trading statement'''
 
         if db.HAS_DB:
-            self.OrderTable.order_cond.fillna('', inplace=True)
-            self.OrderTable.order_lot.fillna('', inplace=True)
-            self.OrderTable.leverage.fillna(-1, inplace=True)
-            self.OrderTable.op_type.fillna('', inplace=True)
+            if 'order_cond' in self.OrderTable.columns:
+                self.OrderTable.order_cond.fillna('', inplace=True)
+            if 'order_lot' in self.OrderTable.columns:
+                self.OrderTable.order_lot.fillna('', inplace=True)
+            if 'leverage' in self.OrderTable.columns:
+                self.OrderTable.leverage.fillna(-1, inplace=True)
+            if 'op_type' in self.OrderTable.columns:
+                self.OrderTable.op_type.fillna('', inplace=True)
             db.dataframe_to_DB(self.OrderTable, TradingStatement)
         else:
             statement = self.read_and_concat(filename, self.OrderTable)
