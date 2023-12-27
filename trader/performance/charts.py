@@ -44,7 +44,7 @@ class SuplotHandler:
         )
         return fig
 
-    def add_candlestick(self, fig, df, row, col):
+    def add_candlestick(self, fig, df, row, col, plot_ma=True, plot_marker=False, plot_volume=False, **kwargs):
         if not df.shape[0]:
             return fig
 
@@ -66,81 +66,89 @@ class SuplotHandler:
             ),
             row=row,
             col=col,
-            secondary_y=True
+            # secondary_y=True
         )
 
         # plot MA
-        for c, d in [('#447a9c', 5), ('#E377C2', 10)]:
-            ma = df.Close.rolling(d).mean().values
-            fig.add_trace(
-                go.Scatter(
-                    x=df.Time,
-                    y=ma,
+        if plot_ma:
+            for c, d in [('#447a9c', 5), ('#E377C2', 10)]:
+                ma = df.Close.rolling(d).mean().values
+                fig = self.add_line(
+                    fig, df, row, col,
+                    settings={'y': ma, 'name': f'{d}MA', 'marker_color': c},
                     mode='lines+text',
-                    marker_color=c,
-                    name=f'{d}MA',
                     text=[
                         f'{d}MA' if i == d else '' for i, _ in enumerate(ma)],
                     textfont=dict(color=c),
                     textposition='bottom right',
-                ),
+                    secondary_y=True
+                )
+
+        if plot_marker:
+            # Mark Buy/Sell points
+            fig = self.add_marker(
+                fig, df,
                 row=row,
                 col=col,
-                secondary_y=True
+                settings=dict(color='#ff9f1a', symbol='triangle-up'),
+                name=kwargs.get('marker_name1', 'Buy')
+            )
+            fig = self.add_marker(
+                fig, df,
+                row=row,
+                col=col,
+                settings=dict(color='#24799e', symbol='triangle-down'),
+                name=kwargs.get('marker_name2', 'Sell')
             )
 
         # plot volume
-        colors = [
-            '#d3efd2' if o >= c else '#efd2d8' for o, c in zip(df.Open, df.Close)
-        ]
-        fig.add_trace(
-            go.Bar(
-                x=df.Time,
-                y=df.Volume,
-                marker_color=colors,
-                name='Volume',
-            ),
-            row=row,
-            col=col,
-            secondary_y=False
-        )
+        if plot_volume:
+            colors = [
+                '#d3efd2' if o >= c else '#efd2d8' for o, c in zip(df.Open, df.Close)
+            ]
+            fig.add_trace(
+                go.Bar(x=df.Time, y=df.Volume,
+                       marker_color=colors, name='Volume'),
+                row=row,
+                col=col,
+                secondary_y=False
+            )
+            fig.update_yaxes(
+                title="Volume",
+                secondary_y=False,
+                showgrid=False,
+                row=row,
+                col=col
+            )
+        return fig
 
-        # update axes settings
-        fig.update_xaxes(
-            rangeslider=dict(visible=False),
-            rangebreaks=[
-                dict(bounds=["sat", "mon"]),
-                # dict(bounds=[14, 8], pattern="hour"),
-            ],
-            row=row,
-            col=col,
-        )
-        fig.update_yaxes(
-            title=name,
-            secondary_y=True,
-            showgrid=True,
-            tickformat=".0f",
-            row=row,
-            col=col
-        )
-        fig.update_yaxes(
-            title="Volume",
-            secondary_y=False,
-            showgrid=False,
+    @staticmethod
+    def add_line(fig: make_subplots, df: pd.DataFrame, row: int, col: int, settings: dict, **kwargs):
+        mode = kwargs.get('mode', 'lines')
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df[settings['y']],
+                mode=mode,
+                name=settings['name'],
+                marker_color=settings['marker_color'],
+                **kwargs
+            ),
             row=row,
             col=col
         )
         return fig
 
-    def add_line(self, fig: make_subplots, df: pd.DataFrame, row: int, col: int, settings: dict, **kwargs):
+    @staticmethod
+    def add_marker(fig: make_subplots, df: pd.DataFrame, row: int, col: int, settings: dict, **kwargs):
+        name = kwargs.get('name')
         fig.add_trace(
             go.Scatter(
-                x=df.index,
-                y=df[settings['y']],
-                mode='lines',
-                name=settings['name'],
-                marker_color=settings['marker_color'],
-                **kwargs
+                x=df.Time,
+                y=df[name],
+                mode='markers',
+                name=name,
+                marker=settings
             ),
             row=row,
             col=col

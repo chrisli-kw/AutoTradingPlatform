@@ -83,8 +83,8 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
             return None
 
         df = convert_statement(
-            df, 
-            init_position=init_position, 
+            df,
+            init_position=init_position,
             market=self.market,
             multipler={k: v.multipler for k, v in self.Scripts.items()}
         )
@@ -240,7 +240,21 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
         # Candlesticks
         for name, col in [['1', 1], ['101', 2]]:
             temp = table[table.name == name]
-            fig = self.add_candlestick(fig, temp, 1, col)
+            fig = self.add_candlestick(fig, temp, 1, col, plot_volume=True)
+            fig.update_xaxes(
+                rangeslider=dict(visible=False),
+                rangebreaks=[dict(bounds=["sat", "mon"])],
+                row=1,
+                col=col+1,
+            )
+            fig.update_yaxes(
+                title=name,
+                secondary_y=True,
+                showgrid=True,
+                tickformat=".0f",
+                row=1,
+                col=col+1
+            )
 
         for stra, color in zip(self.strategies, colors):
             name = StrategyNameList.Code[stra]
@@ -441,9 +455,25 @@ class BacktestReport(SuplotHandler, FileHandler):
                 temp = Kbars['1D'].copy()
                 temp = temp[temp.name == a].sort_values('Time')
                 temp['name'] = b
-                fig = self.add_candlestick(fig, temp, row=4, col=col+1)
+                fig = self.add_candlestick(
+                    fig, temp, row=4, col=col+1, plot_volume=True)
+                fig.update_xaxes(
+                    rangeslider=dict(visible=False),
+                    rangebreaks=[dict(bounds=["sat", "mon"])],
+                    row=4,
+                    col=col+1,
+                )
+                fig.update_yaxes(
+                    title=b,
+                    secondary_y=True,
+                    showgrid=True,
+                    tickformat=".0f",
+                    row=4,
+                    col=col+1
+                )
         else:
-            fig = self.add_candlestick(fig, Kbars['1D'], row=4, col=1)
+            fig = self.add_candlestick(
+                fig, Kbars['1D'], row=4, col=1, plot_volume=True)
 
         # Put/Call Ratio
         if 'put_call_ratio' in Kbars:
