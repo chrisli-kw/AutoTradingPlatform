@@ -72,13 +72,13 @@ class SuplotHandler:
         # plot MA
         if plot_ma:
             for c, d in [('#447a9c', 5), ('#E377C2', 10)]:
-                ma = df.Close.rolling(d).mean().values
+                ma = f'{d}MA'
+                df[ma] = df.Close.rolling(d).mean()
                 fig = self.add_line(
                     fig, df, row, col,
-                    settings={'y': ma, 'name': f'{d}MA', 'marker_color': c},
+                    settings={'y': ma, 'name': ma, 'marker_color': c},
                     mode='lines+text',
-                    text=[
-                        f'{d}MA' if i == d else '' for i, _ in enumerate(ma)],
+                    text=[ma if i == d else '' for i in range(df.shape[0])],
                     textfont=dict(color=c),
                     textposition='bottom right',
                     secondary_y=True
@@ -107,8 +107,8 @@ class SuplotHandler:
                 '#d3efd2' if o >= c else '#efd2d8' for o, c in zip(df.Open, df.Close)
             ]
             fig.add_trace(
-                go.Bar(x=df.Time, y=df.Volume,
-                       marker_color=colors, name='Volume'),
+                go.Bar(
+                    x=df.Time, y=df.Volume, marker_color=colors, name='Volume'),
                 row=row,
                 col=col,
                 secondary_y=False

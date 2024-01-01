@@ -43,7 +43,8 @@ def get_settings(section, option, dataType='str'):
 
 def get_holidays():
     try:
-        df = pd.read_csv('./lib/政府行政機關辦公日曆表.csv')
+        filename = './lib/政府行政機關辦公日曆表.csv'
+        df = pd.read_csv(filename, low_memory=False, encoding='big5')
         df.date = pd.to_datetime(df.date)
         df.name = df.name.fillna(df.holidayCategory)
         holidays = df.set_index('date').name.to_dict()
