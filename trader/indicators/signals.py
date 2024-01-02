@@ -226,8 +226,8 @@ class TechnicalSignals:
         weights = np.arange(window_size)
         weights = weights/weights.sum()
 
-        def WMA_(x):
-            return x.shift(shift).rolling(window_size).apply(lambda x: np.sum(weights*x))
+        def WMA_(x: pd.Series):
+            return x.shift(shift).rolling(window_size).apply(lambda x: np.sum(weights*x.values))
 
         if isinstance(data, pd.Series):
             return WMA_(data)
