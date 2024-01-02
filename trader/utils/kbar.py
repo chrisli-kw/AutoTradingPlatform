@@ -272,11 +272,11 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         if TimeStartStock <= datetime.now() <= TimeEndStock:
             for i in quotes.AllIndex:
                 tb = self.tick_to_df_index(quotes.AllIndex[i])
-                self.concatKBars(self.KBars['1T'], tb)
+                self.KBars['1T'] = self.concatKBars(self.KBars['1T'], tb)
 
         df = self.tick_to_df_targets(quotes.AllTargets, quotes.NowTargets)
         df = self.revert_dividend_price(df, dividends)
-        self.concatKBars(self.KBars['1T'], df)
+        self.KBars['1T'] = self.concatKBars(self.KBars['1T'], df)
 
 
 class TickDataProcesser(TimeTool, FileHandler):

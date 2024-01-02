@@ -75,13 +75,12 @@ class SuplotHandler:
                 ma = f'{d}MA'
                 df[ma] = df.Close.rolling(d).mean()
                 fig = self.add_line(
-                    fig, df, row, col,
+                    fig, df.set_index('Time'), row, col,
                     settings={'y': ma, 'name': ma, 'marker_color': c},
                     mode='lines+text',
                     text=[ma if i == d else '' for i in range(df.shape[0])],
                     textfont=dict(color=c),
                     textposition='bottom right',
-                    secondary_y=True
                 )
 
         if plot_marker:
@@ -111,12 +110,10 @@ class SuplotHandler:
                     x=df.Time, y=df.Volume, marker_color=colors, name='Volume'),
                 row=row,
                 col=col,
-                secondary_y=False
+                secondary_y=True
             )
             fig.update_yaxes(
                 title="Volume",
-                secondary_y=False,
-                showgrid=False,
                 row=row,
                 col=col
             )
@@ -124,12 +121,10 @@ class SuplotHandler:
 
     @staticmethod
     def add_line(fig: make_subplots, df: pd.DataFrame, row: int, col: int, settings: dict, **kwargs):
-        mode = kwargs.get('mode', 'lines')
         fig.add_trace(
             go.Scatter(
                 x=df.index,
                 y=df[settings['y']],
-                mode=mode,
                 name=settings['name'],
                 marker_color=settings['marker_color'],
                 **kwargs
