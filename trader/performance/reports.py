@@ -245,15 +245,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
                 rangeslider=dict(visible=False),
                 rangebreaks=[dict(bounds=["sat", "mon"])],
                 row=1,
-                col=col+1,
-            )
-            fig.update_yaxes(
-                title=name,
-                secondary_y=True,
-                showgrid=True,
-                tickformat=".0f",
-                row=1,
-                col=col+1
+                col=col,
             )
 
         for stra, color in zip(self.strategies, colors):

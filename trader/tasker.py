@@ -35,7 +35,7 @@ def runPerformanceReport(start=None, end=None):
             logging.debug(f'Load 【{env}】 config')
             config = dotenv_values(f'./lib/envs/{env}.env')
             init_position = int(config['INIT_POSITION'])
-            
+
             markets = config['MARKET']
             markets = markets.replace('stock', 'stocks').replace('and', '')
             markets = [m.capitalize() for m in markets.split('  ')]

@@ -66,7 +66,6 @@ class SuplotHandler:
             ),
             row=row,
             col=col,
-            # secondary_y=True
         )
 
         # plot MA
@@ -107,13 +106,22 @@ class SuplotHandler:
             ]
             fig.add_trace(
                 go.Bar(
-                    x=df.Time, y=df.Volume, marker_color=colors, name='Volume'),
+                    x=df.Time, y=df.Volume, opacity=0.3, marker_color=colors, name='Volume'),
                 row=row,
                 col=col,
-                secondary_y=True
+                secondary_y=True,
+            )
+            fig.update_yaxes(
+                title=name,
+                showgrid=False,
+                tickformat=".0f",
+                row=row,
+                col=col
             )
             fig.update_yaxes(
                 title="Volume",
+                showgrid=False,
+                secondary_y=True,
                 row=row,
                 col=col
             )
