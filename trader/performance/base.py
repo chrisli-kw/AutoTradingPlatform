@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from sys import float_info
 
 from ..config import StrategyList
 
@@ -197,6 +198,7 @@ def getMDD(df: pd.DataFrame):
     tb = df[['CloseTime', 'balance']].copy()
     tb.set_index(pd.to_datetime(tb['CloseTime']), inplace=True)
     tb.drop('CloseTime', axis=1, inplace=True)
+    tb.balance = tb.balance.replace(0, float_info.epsilon)
 
     dr = tb.pct_change(1)
     r = dr.add(1).cumprod()
