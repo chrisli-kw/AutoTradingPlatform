@@ -1495,29 +1495,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             if df.shape[0]:
                 df = df[df.account_id == f'simulate-{self.ACCOUNT_NAME}']
                 df = df.reset_index(drop=True)
-                # df = df.rename(columns={
-                #     'account_id': 'Account',
-                #     'market': 'Market',
-                #     'bst': 'Date',
-                #     'symbol': 'CodeName',
-                #     'action': 'OrderBS',
-                #     'quantity': 'Volume',
-                #     'cost_price': 'ContractAverPrice',
-                #     'price': 'RealPrice',
-                # })
-                # df['Code'] = df.CodeName.apply(lambda x: get_contract(x).code)
+                df['id'] = np.arange(df.shape[0])
+                df['direction'] = df.order.apply(lambda x: x['action'])
+                df['last_price'] = df.code.map(
+                    {s: self.Quotes.NowTargets[s]['price'] for s in df.code})
+                df['pnl'] = df.direction.apply(
+                    lambda x: 1 if x == 'Buy' else -1)
+                df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
                 df['account'] = self.ACCOUNT_NAME
-
-                # for c in self.df_futuresInfo.columns:
-                #     if c not in df.columns:
-                #         if c in [
-                #             'ContractAverPrice', 'SettlePrice',
-                #             'RealPrice', 'FlowProfitLoss',
-                #             'SettleProfitLoss', 'OTAMT', 'MTAMT'
-                #         ]:
-                #             df[c] = 0
-                #         else:
-                #             df[c] = ''
                 df = df[self.df_futuresInfo.columns]
             else:
                 df = self.df_futuresInfo
