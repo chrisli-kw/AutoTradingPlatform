@@ -1468,7 +1468,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             df = {k: v for k, v in self.stocks_to_monitor.items() if v}
             df = pd.DataFrame(df).T
             if df.shape[0]:
-                df = df[df.account_id == f'simulate-{self.ACCOUNT_NAME}']
+                # df = df[df.account_id == f'simulate-{self.ACCOUNT_NAME}']
+                df = df[df.account_id.str.contains('simulate')]
                 df = df.sort_values('code').reset_index()
                 df['last_price'] = df.code.map(
                     {s: self.Quotes.NowTargets[s]['price'] for s in df.code})
@@ -1493,10 +1494,13 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             df = {k: v for k, v in self.futures_to_monitor.items() if v}
             df = pd.DataFrame(df).T
             if df.shape[0]:
-                df = df[df.account_id == f'simulate-{self.ACCOUNT_NAME}']
+                df = df[df.account_id.str.contains('simulate')]
                 df = df.reset_index(drop=True)
                 df['id'] = np.arange(df.shape[0])
-                df['direction'] = df.order.apply(lambda x: x['action'])
+                if 'order' in df.columns:
+                    df['direction'] = df.order.apply(lambda x: x['action'])
+                else:
+                    df['direction'] = df.action
                 df['last_price'] = df.code.map(
                     {s: self.Quotes.NowTargets[s]['price'] for s in df.code})
                 df['pnl'] = df.direction.apply(
