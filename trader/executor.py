@@ -537,6 +537,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 df['isDue'] = df.contract.apply(
                     lambda x: TODAY_STR.replace('-', '/') == x.delivery_date)
                 df.code = df.contract.apply(lambda x: x.symbol)
+                df['order'] = df[['quantity', 'action']].to_dict('records')
             return df
 
         if not self.can_futures:
@@ -1496,7 +1497,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             if df.shape[0]:
                 df = df[df.account_id.str.contains('simulate')]
                 df = df.reset_index(drop=True)
-                df['id'] = np.arange(df.shape[0])
+                # df['id'] = np.arange(df.shape[0])
                 if 'order' in df.columns:
                     df['direction'] = df.order.apply(lambda x: x['action'])
                 else:
