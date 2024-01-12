@@ -6,6 +6,7 @@ from collections import namedtuple
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from .. import tdp
 from ..config import PATH, TODAY, TODAY_STR, SelectMethods, StrategyNameList
 from ..utils import progress_bar
 from ..utils.time import TimeTool
@@ -100,6 +101,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
                 end = TODAY_STR
 
             df = df[(df.CloseTime >= str(start)) & (df.CloseTime <= str(end))]
+        df = df.reset_index(drop=True)
 
         self.strategies = self.getStrategyList(df)
         results = {}
@@ -192,19 +194,8 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
         df.OpenTime = df.OpenTime.dt.date
         df.CloseTime = df.CloseTime.dt.date
 
-        df_select = self.getSelections(df)
-        table = self.getKbarTable(df_select)
-        tb = df_select.drop_duplicates(['code', 'Time', 'isLong'])
-        profits = np.array([0.0]*tb.shape[0])
-        for i, (code, day, is_long) in enumerate(zip(tb.code, tb.Time, tb.isLong)):
-            temp = table[(table.name == code) & (table.Time >= day)].head(5)
-            v1 = temp.Open.values[0]
-            v2 = temp.Close.values[-1]
-            m = 1 if is_long else -1
-            profits[i] = 100*m*(v2-v1)/v1
-
-        tb['profit'] = profits.round(4)
-        tb['profit'].sum()
+        start = df.OpenTime.min()
+        end = df.CloseTime.max()
 
         # Make Plots
         subplot_titles = (
@@ -238,18 +229,89 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
         ][:len(self.strategies)]
 
         # Candlesticks
-        for name, col in [['1', 1], ['101', 2]]:
-            temp = table[table.name == name]
-            fig = self.add_candlestick(fig, temp, 1, col, plot_volume=True)
-            fig.update_xaxes(
-                rangeslider=dict(visible=False),
-                rangebreaks=[dict(bounds=["sat", "mon"])],
-                row=1,
-                col=col,
-            )
+        if self.market == 'Stocks':
+            df_select = self.getSelections(df)
+            table = self.getKbarTable(df_select)
+            tb = df_select.drop_duplicates(['code', 'Time', 'isLong'])
+            profits = np.array([0.0]*tb.shape[0])
+            for i, (code, day, is_long) in enumerate(zip(tb.code, tb.Time, tb.isLong)):
+                temp = table[(table.name == code) & (
+                    table.Time >= day)].head(5)
+                v1 = temp.Open.values[0]
+                v2 = temp.Close.values[-1]
+                m = 1 if is_long else -1
+                profits[i] = 100*m*(v2-v1)/v1
+
+            tb['profit'] = profits.round(4)
+            tb['profit'].sum()
+
+            for name, col in [['1', 1], ['101', 2]]:
+                temp = table[table.name == name]
+                fig = self.add_candlestick(fig, temp, 1, col, plot_volume=True)
+                fig.update_xaxes(
+                    rangeslider=dict(visible=False),
+                    rangebreaks=[dict(bounds=["sat", "mon"])],
+                    row=1,
+                    col=col,
+                )
+        else:
+            # TODO: 期貨多策略的K線圖
+            if len(self.strategies) == 1:
+                temp = tdp.convert_period_tick(start, end, scale='1D')
+                fig = self.add_candlestick(fig, temp, 1, 1, plot_volume=True)
+                fig.update_xaxes(
+                    rangeslider=dict(visible=False),
+                    rangebreaks=[dict(bounds=["sat", "mon"])],
+                    row=1,
+                    col=1,
+                )
+            else:
+                logging.warning(
+                    f'Cannot plot candlesticks chart if {len(self.strategies)} strategies')
 
         for stra, color in zip(self.strategies, colors):
             name = StrategyNameList.Code[stra]
+
+            # 累積獲利
+            init_position = int(df_config.loc[0, stra].replace(',', ''))
+            tb2 = df[df.Strategy == stra].copy()
+            tb2 = tb2.groupby('CloseTime').profit.sum().reset_index()
+            tb2['cumsum_profit'] = 100*(tb2.profit.cumsum()/init_position)
+            max_point = tb2.cumsum_profit.max()
+            fig.add_trace(
+                go.Scatter(
+                    x=tb2.CloseTime,
+                    y=tb2.cumsum_profit,
+                    name=name,
+                    showlegend=False,
+                    marker_color=color,
+                    mode='lines+text',
+                    fill='tozeroy',
+                    text=[name if x == max_point else '' for x in tb2.cumsum_profit],
+                    textfont=dict(color='rgb(157, 42, 44)'),
+                    textposition='top left',
+                ),
+                row=2,
+                col=1
+            )
+
+            # 實際交易獲利(%)
+            tb2 = df[df.Strategy == stra].copy()
+            fig.add_trace(
+                go.Scatter(
+                    x=tb2.returns,
+                    y=tb2.profit,
+                    name=name,
+                    showlegend=False,
+                    marker_color=color,
+                    mode='markers',
+                ),
+                row=2,
+                col=2
+            )
+
+            if self.market == 'Futures':
+                continue
 
             # 每日選股數
             tb1 = df_select[df_select.Strategy == stra]
@@ -270,7 +332,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
                     textfont=dict(color='rgb(157, 42, 44)'),
                     textposition='top center',
                 ),
-                row=2,
+                row=3,
                 col=1
             )
 
@@ -284,43 +346,6 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
                     nbinsx=50,
                 ),
                 row=3,
-                col=1
-            )
-
-            # 實際交易獲利(%)
-            tb2 = df[df.Strategy == stra].copy()
-            fig.add_trace(
-                go.Scatter(
-                    x=tb2.returns,
-                    y=tb2.profit,
-                    name=name,
-                    showlegend=False,
-                    marker_color=color,
-                    mode='markers',
-                ),
-                row=3,
-                col=2
-            )
-
-            # 累積獲利
-            init_position = int(df_config.loc[0, stra].replace(',', ''))
-            tb2 = tb2.groupby('CloseTime').profit.sum().reset_index()
-            tb2['cumsum_profit'] = 100*(tb2.profit.cumsum()/init_position)
-            max_point = tb2.cumsum_profit.max()
-            fig.add_trace(
-                go.Scatter(
-                    x=tb2.CloseTime,
-                    y=tb2.cumsum_profit,
-                    name=name,
-                    showlegend=False,
-                    marker_color=color,
-                    mode='lines+text',
-                    fill='tozeroy',
-                    text=[name if x == max_point else '' for x in tb2.cumsum_profit],
-                    textfont=dict(color='rgb(157, 42, 44)'),
-                    textposition='top left',
-                ),
-                row=2,
                 col=2
             )
 
@@ -345,8 +370,6 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
                 col=1 if i < 22 else 2
             )
 
-        start = df.OpenTime.min()
-        end = df.CloseTime.max()
         title = f'{start} ~ {end} {self.market} Trading Performance'
         fig.update_layout(
             title=title,

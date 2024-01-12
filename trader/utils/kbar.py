@@ -1,6 +1,8 @@
 import re
 import logging
+import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from typing import List, Dict
 from datetime import datetime, timedelta
 
@@ -289,7 +291,21 @@ class TickDataProcesser(TimeTool, FileHandler):
         df = self.read_table(f'{folder}/{m}_{ymd[2]}.csv')
         if df.shape[0]:
             df = self.preprocess_futures_tick(df)
-            df = self.convert_tick_2_kbar(df, scale, period='all')
+            df = self.tick_2_kbar(df, scale, period='all')
+        return df
+
+    def convert_period_tick(self, start: str, end: str, scale='1T'):
+        dates = self.filter_file_dates('Futures', start=start, end=end)
+        dates = sorted(dates)
+
+        df = np.array([None]*len(dates))
+        iterator = tqdm(dates)
+        for i, date in enumerate(iterator):
+            temp = self.convert_daily_tick(date, scale=scale)
+            df[i] = temp
+            iterator.set_description(f'[{date}]')
+        df = pd.concat(df)
+        df = df.sort_values('Time').drop_duplicates('Time')
         return df
 
     def add_period(self, df: pd.DataFrame):
@@ -348,7 +364,7 @@ class TickDataProcesser(TimeTool, FileHandler):
         df['Amount'] = df.Close*df.Volume
         return df
 
-    def convert_tick_2_kbar(self, df, scale, period='day_only'):
+    def tick_2_kbar(self, df, scale, period='day_only'):
         '''
         將逐筆資料轉為K線資料(近月)。
         period = day_only(日盤), night_only(夜盤), all(日盤+夜盤)

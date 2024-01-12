@@ -148,7 +148,7 @@ class BacktestPerformance(FileHandler):
 
                 # OTC 漲跌幅
                 otc_return = computeReturn(Kbars['1D'], 'OTCopen', 'OTCclose')
-            else:
+            elif self.Market == 'Stocks':
                 result['daily_info'] = None
                 if db.HAS_DB:
                     table = KBarTables[self.scale]
@@ -170,6 +170,9 @@ class BacktestPerformance(FileHandler):
 
                 tse_return = computeReturn(df_TSE, 'Open', 'Close')
                 otc_return = computeReturn(df_OTC, 'Open', 'Close')
+            else:
+                result['daily_info'] = None
+                tse_return = otc_return = 0
 
             # 總報酬率
             profits = compute_profits(df)
