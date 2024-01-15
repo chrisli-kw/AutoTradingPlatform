@@ -36,6 +36,7 @@ class StrategyTool:
             }
         }
         self.QuantityFunc = {}
+        self.revert_action = {}
 
     def set_config(self, **kwargs):
         self.account_name = kwargs.get('account_name', 'unknown')
