@@ -48,7 +48,7 @@ class AccountInfo(TimeTool, FileHandler):
         self.df_futuresInfo = pd.DataFrame(
             columns=[
                 'account', 'market',
-                'id', 'code', 'action', 'quantity', 'cost_price',
+                'code', 'action', 'quantity', 'cost_price',
                 'last_price', 'pnl'
             ]
         )
