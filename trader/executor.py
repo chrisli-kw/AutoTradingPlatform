@@ -771,8 +771,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 # long selling
                 (data and 'action' in data and data['action'] == 'Buy') or
                 # short selling
-                (not data and self.can_sell and not isLongStrategy)  # or
-                # (target in self.StrategySet.revert_action)
+                (not data and self.can_sell and not isLongStrategy) or
+                (target in self.StrategySet.revert_action)
             )
 
             # new position
