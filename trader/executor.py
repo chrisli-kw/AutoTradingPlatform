@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from . import __version__
 from . import notifier, picker, crawler2, file_handler
 from .config import API, PATH, TODAY, TODAY_STR, holidays
-from .config import FEE_RATE, TEnd, TTry, TimeStartStock, TimeStartFuturesDay
+from .config import FEE_RATE, TEnd, TTry, TimeStartStock, TimeStartFuturesDay, TimeEndStock
 from .config import TimeEndFuturesDay, TimeStartFuturesNight, TimeEndFuturesNight
 from .utils import get_contract
 from .utils.kbar import KBarTool
@@ -486,7 +486,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
     def init_stocks(self):
         '''初始化股票資訊'''
 
-        if not self.can_stock:
+        if not self.can_stock or datetime.now() > TimeEndStock:
             return None, []
 
         # 讀取選股清單
