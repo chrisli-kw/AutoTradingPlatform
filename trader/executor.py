@@ -1290,18 +1290,29 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
     def is_not_trade_day(self, now: datetime):
         '''檢查是否為非交易時段'''
-        is_holiday = TODAY in holidays
-        if self.can_futures:
-            close1 = (
-                (now > TimeEndFuturesNight) and
-                (now < TimeStartFuturesDay + timedelta(days=1))
-            )
-            close2 = now > TimeEndFuturesDay and now < TimeStartFuturesNight
-            if self.TRADING_PERIOD != 'Day':
-                # trader only closes during 05:00 ~ 08:45
-                close2 = False
+        is_holiday = pd.to_datetime(TODAY_STR) in holidays
 
-            return is_holiday or close1 or close2
+        if self.can_futures:
+            period = self.TRADING_PERIOD
+
+            if not is_holiday:
+                if period == 'Day' and TimeStartFuturesDay <= now <= TimeEndFuturesDay:
+                    return False
+
+                if period == 'Night' and TimeStartFuturesNight <= now <= TimeEndFuturesNight:
+                    return False
+
+                if period == 'Both':
+                    both_trade_periods = [
+                        (TimeStartFuturesDay, TimeEndFuturesDay),
+                        (TimeStartFuturesNight, TimeEndFuturesNight)
+                    ]
+
+                    for start, end in both_trade_periods:
+                        if start <= now <= end:
+                            return False
+
+            return True
 
         return is_holiday or not (now <= TEnd)
 
