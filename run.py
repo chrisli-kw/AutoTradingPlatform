@@ -2,6 +2,7 @@ import os
 import logging
 import pandas as pd
 from argparse import ArgumentParser
+from logging.handlers import RotatingFileHandler
 
 from trader import __version__ as ver
 from trader.config import TODAY_STR, holidays
@@ -39,8 +40,8 @@ logging.basicConfig(
     format='%(asctime)s.%(msecs)03d|%(levelname)s: %(message)s',
     datefmt='%Y-%m-%d %a %H:%M:%S',
     handlers=[
-            logging.FileHandler(
-                f'./logs/{filename}.log', 'a', encoding='utf-8'),
+            RotatingFileHandler(
+                f'./logs/{filename}.log', 'a', maxBytes=1*1024*1024, backupCount=5, encoding='utf-8'),
             logging.StreamHandler()
     ]
 )

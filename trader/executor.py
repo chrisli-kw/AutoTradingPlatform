@@ -1295,11 +1295,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         if self.can_futures:
             period = self.TRADING_PERIOD
 
+            td = timedelta(minutes=6)
             if not is_holiday:
-                if period == 'Day' and TimeStartFuturesDay <= now <= TimeEndFuturesDay:
+                if period == 'Day' and TimeStartFuturesDay - td <= now <= TimeEndFuturesDay:
                     return False
 
-                if period == 'Night' and TimeStartFuturesNight <= now <= TimeEndFuturesNight:
+                if period == 'Night' and TimeStartFuturesNight - td <= now <= TimeEndFuturesNight:
                     return False
 
                 if period == 'Both':
@@ -1309,7 +1310,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     ]
 
                     for start, end in both_trade_periods:
-                        if start <= now <= end:
+                        if start - td <= now <= end:
                             return False
 
             return True
@@ -1476,8 +1477,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 # df = df[df.account_id == f'simulate-{self.ACCOUNT_NAME}']
                 df = df[df.account_id.str.contains('simulate')]
                 df = df.sort_values('code').reset_index()
-                df['last_price'] = df.code.map(
-                    {s: self.Quotes.NowTargets[s]['price'] for s in df.code})
+                if self.is_not_trade_day(datetime.now()):
+                    df['last_price'] = 0
+                else:
+                    df['last_price'] = df.code.map(
+                        {s: self.Quotes.NowTargets[s]['price'] for s in df.code})
                 df['pnl'] = df.action.apply(lambda x: 1 if x == 'Buy' else -1)
                 df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
                 df.yd_quantity = df.quantity
@@ -1506,8 +1510,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     df['direction'] = df.order.apply(lambda x: x['action'])
                 else:
                     df['direction'] = df.action
-                df['last_price'] = df.code.map(
-                    {s: self.Quotes.NowTargets[s]['price'] for s in df.code})
+                if self.is_not_trade_day(datetime.now()):
+                    df['last_price'] = 0
+                else:
+                    df['last_price'] = df.code.map(
+                        {s: self.Quotes.NowTargets[s]['price'] for s in df.code})
                 df['pnl'] = df.direction.apply(
                     lambda x: 1 if x == 'Buy' else -1)
                 df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
