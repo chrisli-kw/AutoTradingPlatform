@@ -615,6 +615,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 self.remove_futures_monitor_list(target)
                 if is_day_trade:
                     self.futures_to_monitor[target] = None
+                    self.n_futures = self.futures.shape[0]
 
         # append watchlist or udpate watchlist position
         self.update_watchlist_position(order, self.Quotes, strategies)
@@ -1374,7 +1375,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         logging.info(f'[Futures portfolio Limit] {self.N_FUTURES_LIMIT}')
 
         text = f"\n【開始監控】{self.ACCOUNT_NAME} 啟動完成({__version__})"
-        text += f"\n【操盤模式】{self.MODE}\n【操盤策略】{self.STRATEGY_STOCK}"
+        text += f"\n【操盤模式】{self.MODE}"
+        text += f"\n【股票策略】{self.STRATEGY_STOCK}"
+        text += f"\n【期貨策略】{self.STRATEGY_FUTURES}"
         text += f"\n【前日行情】Put/Call: {self.StrategySet.pc_ratio}"
         text += f"\n【美股行情】道瓊({self.pct_chg_DowJones}%)"
         text += f"\n【數據用量】{usage}MB"
