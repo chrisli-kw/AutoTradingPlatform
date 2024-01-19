@@ -766,14 +766,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             inputs = self.Quotes.NowTargets[target].copy()
             data = self.futures_to_monitor[target]
             strategy = strategies[target]
-            isLongStrategy = self.StrategySet.isLong(strategy)
-            isSell = (
-                # long selling
-                (data and 'action' in data and data['action'] == 'Buy') or
-                # short selling
-                (not data and self.can_sell and not isLongStrategy) or
-                (target in self.StrategySet.revert_action and self.StrategySet.revert_action[target][1] == 'Sell')
-            )
 
             # new position
             if data is None:
@@ -840,7 +832,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
                     infos = dict(
                         action_type=actionType,
-                        action='Sell' if isSell else 'Buy',
+                        action=actionInfo.action,
                         target=target,
                         quantity=quantity,
                         octype=octype,

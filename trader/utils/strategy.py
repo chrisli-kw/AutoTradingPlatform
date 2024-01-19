@@ -14,8 +14,8 @@ class StrategyTool:
         self.set_config(**kwargs)
         self.Action = namedtuple(
             typename="Action",
-            field_names=['position', 'reason', 'msg', 'price'],
-            defaults=[0, '', '', 0]
+            field_names=['position', 'reason', 'msg', 'price', 'action'],
+            defaults=[0, '', '', 0, 'Buy']
         )
         self.pc_ratio = self.get_put_call_ratio()
         self.dividends = self.get_ex_dividends_list()
@@ -162,5 +162,4 @@ class StrategyTool:
         return strategy in StrategyList.DayTrade
 
     def export_strategy_data(self):
-
         pass

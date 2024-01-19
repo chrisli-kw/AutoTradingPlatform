@@ -328,8 +328,8 @@ class BackTester(BacktestPerformance, TimeTool):
         self.buyOrder = 'Close'
         self.Action = namedtuple(
             typename="Action",
-            field_names=['position', 'reason', 'msg', 'price'],
-            defaults=[0, '', '', 0]
+            field_names=['position', 'reason', 'msg', 'price', 'action'],
+            defaults=[0, '', '', 0, 'Buy']
         )
 
     def load_datasets(self, start='', end='', dataPath=''):
