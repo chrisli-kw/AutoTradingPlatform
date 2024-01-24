@@ -175,11 +175,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
     def _set_margin_limit(self):
         '''計算可交割的保證金額，不可超過帳戶可下單的保證金額上限'''
         if self.simulation:
+            account_balance = 0
             self.desposal_margin = self.simulate_amount
             self.ProfitAccCount = self.simulate_amount
         else:
+            account_balance = self.balance()
             self.get_account_margin()
-        self.desposal_margin = min(self.desposal_margin, self.MARGIN_LIMIT)
+        self.desposal_margin = min(
+            account_balance+self.desposal_margin, self.MARGIN_LIMIT)
         logging.info(f'權益總值: {self.ProfitAccCount}')
         logging.info(
             f'Margin available = {self.desposal_margin} (limit: {self.MARGIN_LIMIT})')

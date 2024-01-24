@@ -9,69 +9,88 @@ from .utils.time import TimeTool
 class APITester(TimeTool):
     '''API串接測試，正式下單前，必須先經過測試，才可開通下單功能'''
 
-    def simulation_test(self, API_KEY, SECRET_KEY, acct):
-        api = sj.Shioaji(simulation=True)
-        api.login(API_KEY, SECRET_KEY)
+    def __init__(self):
+        self.api = sj.Shioaji(simulation=True)
 
-        is_simulate = api.simulation
+    def simulation_test(self, API_KEY, SECRET_KEY, acct):
+
+        self.api.login(API_KEY, SECRET_KEY)
+
+        is_simulate = self.api.simulation
         if is_simulate:
             print(f"Log in to {acct} with simulation mode: {is_simulate}")
             time.sleep(30)
         else:
             print(f"Log in to {acct} with real mode, log out")
-            api.logout()
+            self.api.logout()
             return
 
         # 股票下單測試
         stockid = '2603'
-        contract = api.Contracts.Stocks[stockid]
-        order = api.Order(
+        contract = self.api.Contracts.Stocks[stockid]
+        order = self.api.Order(
             action=sj.constant.Action.Buy,
-            price=18,
+            price=contract.limit_up,
             quantity=1,
             price_type=sj.constant.StockPriceType.LMT,
             order_type=sj.constant.OrderType.ROD,
             order_lot=sj.constant.StockOrderLot.Common,
 
-            account=api.stock_account
+            account=self.api.stock_account
         )
-        print(f'Stock order content:\n{order}')
+        print(f'\n[stock order] content: {order}')
 
-        print('Place stock order')
-        trade = api.place_order(contract, order, timeout=0)
-        print(f'Done:\n{trade}')
+        print('[stock order] Place order')
+        trade = self.api.place_order(contract, order, timeout=0)
+        print(f'[stock order] Done: {trade}')
         time.sleep(2)
 
         # 期貨下單測試
         futuresid = f'MXF{self.GetDueMonth(TODAY)}'
-        contract = api.Contracts.Futures.MXF[futuresid]
-        order = api.Order(
+        contract = self.api.Contracts.Futures.MXF[futuresid]
+        order = self.api.Order(
             action=sj.constant.Action.Buy,
-            price=15000,
+            price=contract.limit_up,
             quantity=1,
             price_type=sj.constant.FuturesPriceType.LMT,
             order_type=sj.constant.OrderType.ROD,
             octype=sj.constant.FuturesOCType.Auto,
-            account=api.futopt_account,
+            account=self.api.futopt_account,
         )
-        print(f'Futures order content:\n{order}')
-        print('Place futures order')
-        trade = api.place_order(contract, order, timeout=0)
-        print(f'Done:\n{trade}')
+        print(f'\n[futures order] content: {order}')
+        print('[futures order] Place order')
+        trade = self.api.place_order(contract, order, timeout=0)
+        print(f'[futures order] Done: {trade}')
 
-        print(f'Log out {acct}: {api.logout()}\n')
+        print(f'\nLog out {acct}: {self.api.logout()}\n')
 
     def verify_test(self, API_KEY, SECRET_KEY, acct):
-        api = sj.Shioaji(simulation=False)
-        api.login(API_KEY, SECRET_KEY)
+        self.api = sj.Shioaji(simulation=False)
+        self.api.login(API_KEY, SECRET_KEY)
         print(f"Log in to {acct} with real mode")
         time.sleep(10)
 
-        accounts = api.list_accounts()
+        accounts = self.api.list_accounts()
         for acct in accounts:
-            print(f'Account {acct.account_id}: {acct.signed}')
+            print(f'Account {acct.account_id} signed: {acct.signed}')
 
-        print(f'Log out {acct}: {api.logout()}\n')
+        try:
+            self.api.list_positions(self.api.stock_account)
+        except:
+            print('|--------------------------------------|')
+            print('|               warning                |')
+            print('|  Failed to list stocks positions     |')
+            print('|--------------------------------------|')
+
+        try:
+            self.api.list_positions(self.api.futopt_account)
+        except:
+            print('|--------------------------------------|')
+            print('|               warning                |')
+            print('|  Failed to list futures positions    |')
+            print('|--------------------------------------|')
+
+        print(f'Log out {acct}: {self.api.logout()}\n')
 
     def run(self, account):
         '''Shioaji 帳號測試'''
