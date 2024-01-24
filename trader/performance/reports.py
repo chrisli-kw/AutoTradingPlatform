@@ -101,6 +101,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
                 end = TODAY_STR
 
             df = df[(df.CloseTime >= str(start)) & (df.CloseTime <= str(end))]
+        df['balance'] = init_position + df.profit.cumsum()
         df = df.reset_index(drop=True)
 
         self.strategies = self.getStrategyList(df)

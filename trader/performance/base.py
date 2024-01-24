@@ -34,11 +34,21 @@ def convert_statement(df, mode='trading', **kwargs):
         df['isLong'] = df.Strategy.apply(lambda x: x in StrategyList.Long)
         df['isShort'] = df.isLong == False
         if market == 'Stocks':
+            df['isLong'] = df.Strategy.apply(lambda x: x in StrategyList.Long)
+            df['isShort'] = df.isLong == False
             df['isOpen'] = (
                 ((df.isLong == True) & (df.action == 'Buy')) |
                 ((df.isShort == True) & (df.action == 'Sell'))
             )
         else:
+            df['isLong'] = (
+                ((df.action == 'Buy') & (df.op_type == 'New')) |
+                ((df.action == 'Sell') & (df.op_type == 'Cover'))
+            )
+            df['isShort'] = (
+                ((df.action == 'Sell') & (df.op_type == 'New')) |
+                ((df.action == 'Buy') & (df.op_type == 'Cover'))
+            )
             df['isOpen'] = (df.op_type == 'New')
 
         target_columns1 = ['Strategy', 'Code', 'isLong', 'isShort']
