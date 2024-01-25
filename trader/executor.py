@@ -387,7 +387,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 # 更新監控庫存
                 if not self.simulation:
                     msg['code'] = symbol
-                    self.update_monitor_lists(operation['op_type'], msg)
+                    self.update_monitor_lists(order['oc_type'], msg)
 
         elif stat == constant.OrderState.FuturesDeal:
             notifier.post_fDeal(stat, msg)
@@ -594,31 +594,34 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         # update monitor list position
         if order.action_type == 'Close':
+            c1 = position == 100 or position >= order.pos_balance
+
             if action in ['Buy', 'Sell']:
                 self.stocks_to_monitor[target]['position'] -= position
+
+                c2 = self.stocks_to_monitor[target]['quantity'] <= 0
+                c3 = self.stocks_to_monitor[target]['position'] <= 0
+                c4 = c5 = False
             else:
                 self.futures_to_monitor[target]['position'] -= position
 
-        # remove from monitor list
-        is_stock = target in self.stocks_to_monitor
-        is_futures = target in self.futures_to_monitor
-        c1 = position == 100 or position >= order.pos_balance
-        c2 = is_stock and self.stocks_to_monitor[target]['quantity'] <= 0
-        c3 = is_stock and self.stocks_to_monitor[target]['position'] <= 0
-        c4 = is_futures and self.futures_to_monitor[target]['order']['quantity'] <= 0
-        c5 = is_futures and self.futures_to_monitor[target]['position'] <= 0
-        if c1 or c2 or c3 or c4 or c5:
-            order = order._replace(pos_target=100)
+                c2 = c3 = False
+                c4 = self.futures_to_monitor[target]['order']['quantity'] <= 0
+                c5 = self.futures_to_monitor[target]['position'] <= 0
 
-            if c2 or c3:
-                # TODO:if is_day_trade: self.stocks_to_monitor[target] = None
-                self.remove_stock_monitor_list(target)
+            # remove from monitor list
+            if any(x is True for x in [c1, c2, c3, c4, c5]):
+                order = order._replace(pos_target=100)
 
-            if c4 or c5:
-                self.remove_futures_monitor_list(target)
-                if is_day_trade:
-                    self.futures_to_monitor[target] = None
-                    self.n_futures = self.futures.shape[0]
+                if c2 or c3:
+                    # TODO:if is_day_trade: self.stocks_to_monitor[target] = None
+                    self.remove_stock_monitor_list(target)
+
+                if c4 or c5:
+                    self.remove_futures_monitor_list(target)
+                    if is_day_trade:
+                        self.futures_to_monitor[target] = None
+                        self.n_futures = self.futures.shape[0]
 
         # append watchlist or udpate watchlist position
         self.update_watchlist_position(order, self.Quotes, strategies)
@@ -643,7 +646,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         '''更新監控庫存(成交回報)'''
         target = data['code']
         if action in ['Buy', 'Sell']:
-            if target in self.stocks_to_monitor and self.stocks_to_monitor[target]:
+            if self.stocks_to_monitor[target] is not None:
                 logging.debug(
                     f'更新 stocks_to_monitor 【QUANTITY】: {action} {target}')
                 quantity = data['quantity']
@@ -656,12 +659,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         # New, Cover
         else:
-            if target in self.futures_to_monitor and self.futures_to_monitor[target]:
+            if self.futures_to_monitor[target] is not None:
                 logging.debug(
                     f'更新 futures_to_monitor 【QUANTITY】: {action} {target}')
                 quantity = data['order']['quantity']
                 self.futures_to_monitor[target]['order']['quantity'] -= quantity
-            else:
+            elif action == 'New':
                 logging.debug(
                     f'更新 futures_to_monitor 【DATA】: {action} {target}')
                 self.futures_to_monitor[target] = data
