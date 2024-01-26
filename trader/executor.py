@@ -243,7 +243,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 leverage = self.check_leverage(stock, order['order_cond'])
                 if c2 and c3:
                     # 記錄委託成功的買單
-                    price = self.Quotes.NowTargets[stock]['price'] if stock in self.Quotes.NowTargets else order['price']
+                    price = order['price']
                     quantity = order['quantity']
                     if order['order_lot'] == 'Common':
                         quantity *= 1000
@@ -347,22 +347,22 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     if symbol in k:
                         symbol = k
             bsh = self.Quotes.AllTargets[symbol]['price']
+            order = msg['order']
+            operation = msg['operation']
+            price = order['price']
             msg.update({
                 'symbol': symbol,
-                'cost_price': self.Quotes.NowTargets[symbol]['price'] if symbol in self.Quotes.NowTargets else 0,
-                'bsh': max(bsh) if bsh else 0,
+                'cost_price': price,
+                'bsh': max(bsh) if bsh else price,
                 'bst': datetime.now(),
                 'position': 100
             })
-            order = msg['order']
-            operation = msg['operation']
 
             if order['account']['account_id'] == self.account_id_futopt:
                 if operation['op_code'] == '00' or operation['op_msg'] == '':
                     self._update_futures_deal_list(symbol, order['oc_type'])
 
                     # 紀錄成交的賣單
-                    price = order['price']
                     sign = -1 if order['oc_type'] == 'Cover' else 1
                     quantity = order['quantity']
                     order_data = {
