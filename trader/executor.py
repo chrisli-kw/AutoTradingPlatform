@@ -385,7 +385,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                         self.futures_opened.remove(symbol)
 
                 # 更新監控庫存
-                if not self.simulation:
+                elif not self.simulation:
                     msg['code'] = symbol
                     self.update_monitor_lists(order['oc_type'], msg)
 
