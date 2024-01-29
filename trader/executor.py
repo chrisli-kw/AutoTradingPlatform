@@ -392,6 +392,13 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         elif stat == constant.OrderState.FuturesDeal:
             notifier.post_fDeal(stat, msg)
 
+            code = msg['code']
+            delivery_month = msg['delivery_month']
+            symbol = code + delivery_month
+            if symbol in self.futures_to_monitor and self.futures_to_monitor[symbol] is not None:
+                price = msg['price']
+                self.futures_to_monitor[symbol]['cost_price'] = price
+
     def login_and_activate(self):
         # 登入
         self._login(self.__API_KEY__, self.__SECRET_KEY__, self.ACCOUNT_NAME)
