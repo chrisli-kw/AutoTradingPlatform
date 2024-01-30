@@ -42,11 +42,16 @@ class StrategyTool:
         self.account_name = kwargs.get('account_name', 'unknown')
         self.hold_day = kwargs.get('hold_day', 20)
         self.is_simulation = kwargs.get('is_simulation', True)
+
         self.stock_limit_type = kwargs.get('stock_limit_type', 'Constant')
-        self.futures_limit_type = kwargs.get('futures_limit_type', 'Constant')
         self.stock_limit_long = kwargs.get('stock_limit_long', 0)
         self.stock_limit_short = kwargs.get('stock_limit_short', 0)
+        self.stock_model_version = kwargs.get('stock_model_version', '1.0.0')
+
+        self.futures_limit_type = kwargs.get('futures_limit_type', 'Constant')
         self.futures_limit = kwargs.get('futures_limit', 0)
+        self.futures_model_version = kwargs.get(
+            'futures_model_version', '1.0.0')
 
     def mapFunction(self, action: str, tradeType: str, strategy: str):
         has_action = action in self.Funcs

@@ -68,6 +68,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             'ShortSelling': 'MarginTrading',
             'Cash': 'Cash'
         }
+        self.STOCK_MODEL_VERSION = self.getENV('STOCK_MODEL_VERSION')
         self.simulation = self.MODE == 'Simulation'
 
         # 期貨使用者設定
@@ -78,6 +79,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.N_FUTURES_LIMIT = self.getENV('N_FUTURES_LIMIT', 'int')
         self.N_SLOT = self.getENV('N_SLOT', 'int')
         self.N_SLOT_TYPE = self.getENV('N_SLOT_TYPE')
+        self.FUTURES_MODEL_VERSION = self.getENV('FUTURES_MODEL_VERSION')
 
         super().__init__()
         KBarTool.__init__(self, self.KBAR_START_DAYay)
@@ -124,10 +126,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             hold_day=self.getENV('HOLD_DAY', 'int'),
             is_simulation=self.simulation,
             stock_limit_type=self.N_STOCK_LIMIT_TYPE,
-            futures_limit_type=self.N_FUTURES_LIMIT_TYPE,
             stock_limit_long=self.N_LIMIT_LS,
             stock_limit_short=self.N_LIMIT_SS,
+            stock_model_version=self.STOCK_MODEL_VERSION,
+            futures_limit_type=self.N_FUTURES_LIMIT_TYPE,
             futures_limit=self.N_FUTURES_LIMIT,
+            futures_model_version=self.FUTURES_MODEL_VERSION
         )
 
     def getENV(self, key: str, type_: str = 'text'):
@@ -1383,14 +1387,17 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             f'[Stock Position Limit] Long: {self.POSITION_LIMIT_LONG}')
         logging.info(
             f'[Stock Position Limit] Short: {self.POSITION_LIMIT_SHORT}')
+        logging.info(f'[Stock Model Version] {self.STOCK_MODEL_VERSION}')
         logging.info(f'[Futures Strategy] {strategy_f}')
         logging.info(f'[Futures position] {self.n_futures}')
         logging.info(f'[Futures portfolio Limit] {self.N_FUTURES_LIMIT}')
+        logging.info(f'[Futures Model Version] {self.FUTURES_MODEL_VERSION}')
 
         text = f"\n【開始監控】{self.ACCOUNT_NAME} 啟動完成({__version__})"
         text += f"\n【操盤模式】{self.MODE}"
         text += f"\n【股票策略】{self.STRATEGY_STOCK}"
         text += f"\n【期貨策略】{self.STRATEGY_FUTURES}"
+        text += f"\n【AI版本】Stock-{self.STOCK_MODEL_VERSION}; Futures:{self.FUTURES_MODEL_VERSION}"
         text += f"\n【前日行情】Put/Call: {self.StrategySet.pc_ratio}"
         text += f"\n【美股行情】道瓊({self.pct_chg_DowJones}%)"
         text += f"\n【數據用量】{usage}MB"
