@@ -1324,7 +1324,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 if period == 'Both':
                     both_trade_periods = [
                         (TimeStartFuturesDay, TimeEndFuturesDay),
-                        (TimeStartFuturesNight, TimeEndFuturesNight)
+                        (TimeStartFuturesNight, TimeEndFuturesNight),
+                        (TimeStartFuturesNight-timedelta(days=1),
+                            TimeEndFuturesNight-timedelta(days=1))
                     ]
 
                     for start, end in both_trade_periods:
