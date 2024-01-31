@@ -93,6 +93,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.desposal_money = 0
         self.stock_bought = []
         self.stock_sold = []
+        self.stock_strategies = {}
         self.n_stocks_long = 0
         self.n_stocks_short = 0
         self.total_market_value = 0
@@ -103,6 +104,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         # 期貨可進場籌碼 (進場時判斷用)
         self.futures_opened = []
         self.futures_closed = []
+        self.futures_strategies = {}
         self.futures_transferred = {}
         self.n_futures = 0
         self.futures = pd.DataFrame()
@@ -504,13 +506,13 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             return None, []
 
         # 讀取選股清單
-        strategies = self.get_stock_pool()
+        self.stock_strategies = self.get_stock_pool()
 
         # 取得遠端庫存
         self.stocks = self.get_securityInfo('Stocks')
 
         # 取得策略清單
-        self.init_watchlist(self.stocks, strategies)
+        self.init_watchlist(self.stocks, self.stock_strategies)
 
         # 庫存的處理
         self.stocks = self.stocks.merge(
@@ -519,13 +521,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             on=['account', 'market', 'code']
         )
         self.stocks.position.fillna(100, inplace=True)
-        strategies.update(self.stocks.set_index('code').strategy.to_dict())
+        self.stock_strategies.update(
+            self.stocks.set_index('code').strategy.to_dict())
 
         # 剔除不堅控的股票
         self.stocks = self.stocks[~self.stocks.code.isin(self.FILTER_OUT)]
 
         # 新增歷史K棒資料
-        self.update_stocks_to_monitor(strategies)
+        self.update_stocks_to_monitor(self.stock_strategies)
         all_targets = list(self.stocks_to_monitor)
         self.history_kbars(['TSE001', 'OTC101'] + all_targets)
 
@@ -540,7 +543,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self._set_leverage(all_targets)
         self._set_trade_risks()
         logging.debug(f'stocks_to_monitor: {self.stocks_to_monitor}')
-        return strategies, all_targets
+        return all_targets
 
     def init_futures(self):
         '''初始化期貨資訊'''
@@ -558,7 +561,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             return None, []
 
         # 讀取選股清單
-        strategies = self.get_futures_pool()
+        self.futures_strategies = self.get_futures_pool()
 
         # 取得遠端庫存
         self.futures = self.get_securityInfo('Futures')
@@ -572,7 +575,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         )
         self.futures.position.fillna(100, inplace=True)
         self.futures.index = self.futures.code
-        strategies.update(self.futures.strategy.to_dict())
+        self.futures_strategies.update(self.futures.strategy.to_dict())
 
         self.n_futures = self.futures.shape[0]
 
@@ -582,7 +585,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         # update_futures_to_monitor
         self.futures_to_monitor.update(self.futures.to_dict('index'))
         self.futures_to_monitor.update({
-            f: None for f in strategies if f not in self.futures_to_monitor})
+            f: None for f in self.futures_strategies if f not in self.futures_to_monitor})
 
         # 新增歷史K棒資料
         all_futures = list(self.futures_to_monitor)
@@ -593,10 +596,16 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             KBars=self.KBars)
         self._set_margin_limit()
         self.margin_table = self.get_margin_table().原始保證金.to_dict()
-        return strategies, all_futures
+        return all_futures
 
     def _update_position(self, order: namedtuple, strategies: Dict[str, str]):
-        '''更新庫存部位比例'''
+        '''
+        更新庫存資料：
+        1. Quantity
+        2. Position
+        3. Watchlist
+        4. monitor_list
+        '''
 
         action = order.action if not order.octype else order.octype
         target = order.target
@@ -704,11 +713,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         return np.unique(all)
 
-    def monitor_stocks(self, target: str, strategies: Dict[str, str]):
+    def monitor_stocks(self, target: str):
         if target in self.Quotes.NowTargets:  # and self.Quotes.NowIndex:
             inputs = self.Quotes.NowTargets[target].copy()
             data = self.stocks_to_monitor[target]
-            strategy = strategies[target]
+            strategy = self.stock_strategies[target]
             isLongStrategy = self.StrategySet.isLong(strategy)
             isDTStrategy = self.StrategySet.isDayTrade(strategy)
             isSell = (
@@ -777,13 +786,13 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         return self.OrderInfo(target=target)
 
-    def monitor_futures(self, target: str, strategies: Dict[str, str]):
+    def monitor_futures(self, target: str):
         '''檢查期貨是否符合賣出條件，回傳賣出部位(%)'''
 
         if target in self.Quotes.NowTargets and self.N_FUTURES_LIMIT != 0:
             inputs = self.Quotes.NowTargets[target].copy()
             data = self.futures_to_monitor[target]
-            strategy = strategies[target]
+            strategy = self.futures_strategies[target]
 
             # new position
             if data is None:
@@ -1369,8 +1378,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
     def run(self):
         '''執行自動交易'''
 
-        strategy_s, all_stocks = self.init_stocks()
-        strategy_f, all_futures = self.init_futures()
+        all_stocks = self.init_stocks()
+        all_futures = self.init_futures()
         usage = round(API.usage().bytes/2**20, 2)
         self.subscribe_all(all_stocks+all_futures)
 
@@ -1380,7 +1389,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         logging.info(f"Previous Put/Call ratio: {self.StrategySet.pc_ratio}")
         logging.info(f'Start to monitor, basic settings:')
         logging.info(f'Mode:{self.MODE}, Strategy: {self.STRATEGY_STOCK}')
-        logging.info(f'[Stock Strategy] {strategy_s}')
+        logging.info(f'[Stock Strategy] {self.stock_strategies}')
         logging.info(f'[Stock Position] Long: {self.n_stocks_long}')
         logging.info(f'[Stock Position] Short: {self.n_stocks_short}')
         logging.info(f'[Stock Portfolio Limit] Long: {self.N_LIMIT_LS}')
@@ -1390,7 +1399,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         logging.info(
             f'[Stock Position Limit] Short: {self.POSITION_LIMIT_SHORT}')
         logging.info(f'[Stock Model Version] {self.STOCK_MODEL_VERSION}')
-        logging.info(f'[Futures Strategy] {strategy_f}')
+        logging.info(f'[Futures Strategy] {self.futures_strategies}')
         logging.info(f'[Futures position] {self.n_futures}')
         logging.info(f'[Futures portfolio Limit] {self.N_FUTURES_LIMIT}')
         logging.info(f'[Futures Model Version] {self.FUTURES_MODEL_VERSION}')
@@ -1451,16 +1460,16 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
             # TODO: merge stocks_to_monitor & futures_to_monitor
             for target in list(self.stocks_to_monitor):
-                order = self.monitor_stocks(target, strategy_s)
+                order = self.monitor_stocks(target)
                 if order.pos_target:
                     self._place_order(order, market='Stocks')
-                    self._update_position(order, strategy_s)
+                    # self._update_position(order, self.stock_strategies)
 
             for target in list(self.futures_to_monitor):
-                order = self.monitor_futures(target, strategy_f)
+                order = self.monitor_futures(target)
                 if order.pos_target:
                     self._place_order(order, market='Futures')
-                    self._update_position(order, strategy_f)
+                    # self._update_position(order, self.futures_strategies)
 
             time.sleep(max(5 - (datetime.now() - now).total_seconds(), 0))
 
