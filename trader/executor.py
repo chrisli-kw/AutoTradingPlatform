@@ -339,6 +339,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             order = msg['order']
             operation = msg['operation']
             price = order['price']
+            if price == 0:
+                price = self.getQuotesNow(symbol)['price']
             msg.update({
                 'symbol': symbol,
                 'cost_price': price,
@@ -680,7 +682,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
     def monitor_stocks(self, target: str):
         if target in self.Quotes.NowTargets:  # and self.Quotes.NowIndex:
-            inputs = self.Quotes.NowTargets[target].copy()
+            inputs = self.getQuotesNow(target).copy()
             data = self.stocks_to_monitor[target]
             strategy = self.stock_strategies[target]
             isLongStrategy = self.StrategySet.isLong(strategy)
@@ -757,7 +759,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         '''檢查期貨是否符合賣出條件，回傳賣出部位(%)'''
 
         if target in self.Quotes.NowTargets and self.N_FUTURES_LIMIT != 0:
-            inputs = self.Quotes.NowTargets[target].copy()
+            inputs = self.getQuotesNow(target).copy()
             data = self.futures_to_monitor[target]
             strategy = self.futures_strategies[target]
 
@@ -872,7 +874,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                         price = bid_ask[3]
                     elif contract.exchange == 'OES':
                         price_type = 'LMT'
-                        price = self.Quotes.NowTargets[target]['price']
+                        price = self.getQuotesNow(target)['price']
 
                 log_msg = f"【{target}下單內容: price={price}, quantity={quantity}, action={content.action}, price_type={price_type}, order_cond={content.order_cond}, order_lot={order_lot}】"
             else:
@@ -881,7 +883,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             # 下單
             logging.debug(log_msg)
             if self.simulation and is_stock:
-                price = self.Quotes.NowTargets[target]['price']
+                price = self.getQuotesNow(target)['price']
                 quantity *= 1000
                 leverage = self.check_leverage(target, content.order_cond)
                 if content.action == 'Sell':
@@ -915,7 +917,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 return order_data
 
             elif self.simulation and market == 'Futures':
-                price = self.Quotes.NowTargets[target]['price']
+                price = self.getQuotesNow(target)['price']
                 sign = -1 if content.octype == 'Cover' else 1
                 order_data = {
                     'Time': datetime.now(),
@@ -1102,7 +1104,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         quantityFunc = self.StrategySet.mapQuantities(strategy)
 
-        inputs = self.Quotes.NowTargets[target]
+        inputs = self.getQuotesNow(target)
         quantity, quantity_limit = quantityFunc(
             inputs=inputs, kbars=self.KBars)
         leverage = self.check_leverage(target, order_cond)
@@ -1133,7 +1135,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         quantityFunc = self.StrategySet.mapQuantities(strategy)
 
-        inputs = self.Quotes.NowTargets[target]
+        inputs = self.getQuotesNow(target)
         slot, quantity_limit = quantityFunc(inputs=inputs, kbars=self.KBars)
         slot = int(min(slot, quantity_limit))
         slot = min(slot, 499)
@@ -1210,7 +1212,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         amount2 = df[df.price > 0].amount.abs().sum()
         amount3 = df[df.price < 0].amount.abs().sum()
 
-        cost_price = self.Quotes.NowTargets[target]['price']
+        cost_price = self.getQuotesNow(target)['price']
         target_amount = self.get_stock_amount(
             target, cost_price, quantity, mode)
 
@@ -1463,7 +1465,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     df['last_price'] = 0
                 else:
                     df['last_price'] = df.code.map(
-                        {s: self.Quotes.NowTargets[s]['price'] for s in df.code})
+                        {s: self.getQuotesNow(s)['price'] for s in df.code})
                 df['pnl'] = df.action.apply(lambda x: 1 if x == 'Buy' else -1)
                 df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
                 df.yd_quantity = df.quantity
@@ -1496,7 +1498,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     df['last_price'] = 0
                 else:
                     df['last_price'] = df.code.map(
-                        {s: self.Quotes.NowTargets[s]['price'] for s in df.code})
+                        {s: self.getQuotesNow(s)['price'] for s in df.code})
                 df['pnl'] = df.direction.apply(
                     lambda x: 1 if x == 'Buy' else -1)
                 df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity

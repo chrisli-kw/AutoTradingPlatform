@@ -115,3 +115,8 @@ class Subscriber:
         self.unsubscribe_index()
         self.unsubscribe_targets(targetLists, 'tick')
         self.unsubscribe_targets(targetLists, 'bidask')
+
+    def getQuotesNow(self, target: str):
+        if target in self.Quotes.NowIndex:
+            return self.Quotes.NowIndex[target]
+        return self.Quotes.NowTargets[target]
