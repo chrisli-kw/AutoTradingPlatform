@@ -20,7 +20,8 @@ from .utils.orders import OrderTool
 from .utils.cipher import CipherTool
 from .utils.accounts import AccountInfo
 from .utils.subscribe import Subscriber
-from .utils.watchlist import WatchListTool
+from .utils.positions import WatchListTool
+from .utils.callback import CallbackHandler
 from .utils.database import db
 from .utils.database.tables import SecurityInfoStocks, SecurityInfoFutures
 try:
@@ -91,8 +92,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.simulate_amount = np.iinfo(np.int64).max
         self.stocks = pd.DataFrame()
         self.desposal_money = 0
-        self.stock_bought = []
-        self.stock_sold = []
         self.stock_strategies = {}
         self.n_stocks_long = 0
         self.n_stocks_short = 0
@@ -102,8 +101,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.n_categories = None
 
         # 期貨可進場籌碼 (進場時判斷用)
-        self.futures_opened = []
-        self.futures_closed = []
         self.futures_strategies = {}
         self.futures_transferred = {}
         self.n_futures = 0
@@ -116,8 +113,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.can_sell = self.MODE not in ['LongBuy', 'ShortBuy']
         self.can_buy = self.MODE not in ['LongSell', 'ShortSell']
         self.can_futures = 'futures' in self.MARKET
-        self.stocks_to_monitor = {}
-        self.futures_to_monitor = {}
 
         # 載入指標模組
         self.set_scripts(StrategySets)
@@ -238,13 +233,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             c2 = operation['op_code'] == '00' or operation['op_msg'] == ''
             c3 = order['action'] == 'Buy'
             c4 = operation['op_code'] == '88' and '此證券配額張數不足' in operation['op_msg']
-            c5 = len(stock) == 4
 
             if order['account']['account_id'] == self.account_id_stock:
                 notifier.post_tftOrder(stat, msg)
-
-                if c3 and c5 and stock not in self.stock_bought:
-                    self.stock_bought.append(stock)
+                self.update_deal_list(stock, order['action'], 'Stocks')
 
                 leverage = self.check_leverage(stock, order['order_cond'])
                 if c2 and c3:
@@ -296,27 +288,19 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 # 若刪單成功就自清單移除
                 if operation['op_type'] == 'Cancel':
                     self.deleteOrder(stock)
-                    if c3 and stock in self.stock_bought:
-                        self.stock_bought.remove(stock)
+                    if c3:
+                        self.update_deal_list(stock, 'Cancel', 'Stocks')
 
         elif stat == constant.OrderState.StockDeal and msg['account_id'] == self.account_id_stock:
-            stock = msg['code']
-            msg.update({
-                'position': 100,
-                'yd_quantity': 0,
-                'bst': datetime.now(),
-                'cost_price': msg['price']
-            })
             notifier.post_tftDeal(stat, msg)
 
-            if msg['order_lot'] == 'Common':
-                msg['quantity'] *= 1000
+            stock = msg['code']
+            msg = CallbackHandler.update_stock_msg(msg)
 
             quantity = msg['quantity']
             if msg['action'] == 'Sell':
 
-                if stock not in self.stock_sold and len(stock) == 4:
-                    self.stock_sold.append(stock)
+                self.update_deal_list(stock, msg['action'], 'Stocks')
 
                 price = msg['price']
                 leverage = self.check_leverage(stock, msg['order_cond'])
@@ -341,7 +325,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
             # 更新監控庫存
             if not self.simulation:
-                self.update_monitor_lists(msg['action'], msg)
+                self.update_position_quantity(msg['action'], msg)
 
         elif stat == constant.OrderState.FuturesOrder:
             notifier.post_fOrder(stat, msg)
@@ -352,21 +336,19 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 for k in self.Quotes.AllTargets:
                     if symbol in k:
                         symbol = k
-            bsh = self.Quotes.AllTargets[symbol]['price']
             order = msg['order']
             operation = msg['operation']
             price = order['price']
             msg.update({
                 'symbol': symbol,
                 'cost_price': price,
-                'bsh': max(bsh) if bsh else price,
                 'bst': datetime.now(),
                 'position': 100
             })
 
             if order['account']['account_id'] == self.account_id_futopt:
                 if operation['op_code'] == '00' or operation['op_msg'] == '':
-                    self._update_futures_deal_list(symbol, order['oc_type'])
+                    self.update_deal_list(symbol, order['oc_type'], 'Futures')
 
                     # 紀錄成交的賣單
                     sign = -1 if order['oc_type'] == 'Cover' else 1
@@ -387,13 +369,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 # 若刪單成功就自清單移除
                 if operation['op_type'] == 'Cancel':
                     self.deleteOrder(symbol)
-                    if symbol in self.futures_opened:
-                        self.futures_opened.remove(symbol)
+                    self.update_deal_list(symbol, 'Cancel', 'Futures')
 
                 # 更新監控庫存
                 elif not self.simulation:
                     msg['code'] = symbol
-                    self.update_monitor_lists(order['oc_type'], msg)
+                    self.update_position_quantity(order['oc_type'], msg)
 
         elif stat == constant.OrderState.FuturesDeal:
             notifier.post_fDeal(stat, msg)
@@ -528,7 +509,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.stocks = self.stocks[~self.stocks.code.isin(self.FILTER_OUT)]
 
         # 新增歷史K棒資料
-        self.update_stocks_to_monitor(self.stock_strategies)
+        self.update_stocks_to_monitor()
         all_targets = list(self.stocks_to_monitor)
         self.history_kbars(['TSE001', 'OTC101'] + all_targets)
 
@@ -598,104 +579,88 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.margin_table = self.get_margin_table().原始保證金.to_dict()
         return all_futures
 
-    def _update_position(self, order: namedtuple, strategies: Dict[str, str]):
+    def _update_position(self, order: namedtuple, market: str, order_data: dict):
         '''
-        更新庫存資料：
-        1. Quantity
-        2. Position
-        3. Watchlist
-        4. monitor_list
+        Updating steps:
+        1. update_position_quantity
+        2. update_deal_list
+        3. check_remove_monitor
+        4. update_pos_target
+        5. update_watchlist_position
         '''
-
-        action = order.action if not order.octype else order.octype
         target = order.target
-        position = order.pos_target
-        is_day_trade = self.StrategySet.isDayTrade(strategies[target])
 
         # update monitor list position
-        if order.action_type == 'Close':
-            c1 = position == 100 or position >= order.pos_balance
-
-            if action in ['Buy', 'Sell']:
-                self.stocks_to_monitor[target]['position'] -= position
-
-                c2 = self.stocks_to_monitor[target]['quantity'] <= 0
-                c3 = self.stocks_to_monitor[target]['position'] <= 0
-                c4 = c5 = False
+        if self.simulation:
+            if market == 'Stocks':
+                action = order.action
+                order_data.update({
+                    'position': order.pos_target,
+                    'bst': datetime.now(),
+                    'cost_price': abs(order_data['price']),
+                    'yd_quantity': 0,
+                })
             else:
-                self.futures_to_monitor[target]['position'] -= position
+                action = order.octype
+                order_data.update({
+                    'position': order.pos_target,
+                    'bst': datetime.now(),
+                    'symbol': target,
+                    'cost_price': order.price,
+                    'order': {
+                        'quantity': self.get_sell_quantity(order, market),
+                        'action': order.action
+                    }
+                })
 
-                c2 = c3 = False
-                c4 = self.futures_to_monitor[target]['order']['quantity'] <= 0
-                c5 = self.futures_to_monitor[target]['position'] <= 0
+            self.update_position_quantity(action, order_data, order.pos_target)
+            self.update_deal_list(target, action, market)
 
-            # remove from monitor list
-            if any(x is True for x in [c1, c2, c3, c4, c5]):
-                order = order._replace(pos_target=100)
-
-                if c2 or c3:
-                    # TODO:if is_day_trade: self.stocks_to_monitor[target] = None
-                    self.remove_stock_monitor_list(target)
-
-                if c4 or c5:
-                    self.remove_futures_monitor_list(target)
-                    if is_day_trade:
-                        self.futures_to_monitor[target] = None
-                        self.n_futures = self.futures.shape[0]
+        # check monitor list
+        is_empty = self.check_remove_monitor(target, order.action_type, market)
+        order = self.update_pos_target(order, is_empty)
 
         # append watchlist or udpate watchlist position
+        if market == 'Stocks':
+            strategies = self.stock_strategies
+        else:
+            strategies = self.futures_strategies
         self.update_watchlist_position(order, self.Quotes, strategies)
 
-    def update_stocks_to_monitor(self, stocks_pool: Dict[str, list]):
+    def update_stocks_to_monitor(self):
         '''更新買進/賣出股票監控清單'''
 
         df = self.stocks.copy()
         df.index = df.code
         if not self.simulation:
             df.order_cond = df.order_cond.apply(lambda x: x._value_)
-        self.stocks_to_monitor = df.to_dict('index')
+        self.stocks_to_monitor.update(df.to_dict('index'))
 
-        for stock, stra in stocks_pool.items():
+        for stock, stra in self.stock_strategies.items():
             if (
                 (self.can_buy and self.StrategySet.isLong(stra)) or
                 (self.can_sell and self.StrategySet.isShort(stra))
             ) and (stock not in self.stocks_to_monitor):
                 self.stocks_to_monitor.update({stock: None})
 
-    def update_monitor_lists(self, action, data):
-        '''更新監控庫存(成交回報)'''
-        target = data['code']
-        if action in ['Buy', 'Sell']:
-            if self.stocks_to_monitor[target] is not None:
-                logging.debug(
-                    f'更新 stocks_to_monitor 【QUANTITY】: {action} {target}')
-                quantity = data['quantity']
-                # TODO: 部分進場
-                self.stocks_to_monitor[target]['quantity'] -= quantity
-            else:
-                logging.debug(
-                    f'更新 stocks_to_monitor 【DATA】: {action} {target}')
-                self.stocks_to_monitor[target] = data
+    def update_after_interfere(self, target: str, action_type: str, market):
+        msg = f'[{self.ACCOUNT_NAME}] Update {target} after interferring.'
+        logging.info(msg)
+        notifier.post(msg, msgType='Monitor')
 
-        # New, Cover
+        infos = dict(
+            action_type=action_type,
+            target=target,
+            pos_target=100
+        )
+        order = self.OrderInfo(**infos)
+        self.check_remove_monitor(target, action_type, market)
+
+        if market == 'Stocks':
+            strategies = self.stock_strategies
         else:
-            if self.futures_to_monitor[target] is not None:
-                logging.debug(
-                    f'更新 futures_to_monitor 【QUANTITY】: {action} {target}')
-                quantity = data['order']['quantity']
-                self.futures_to_monitor[target]['order']['quantity'] -= quantity
-            elif action == 'New':
-                logging.debug(
-                    f'更新 futures_to_monitor 【DATA】: {action} {target}')
-                self.futures_to_monitor[target] = data
-
-    def _update_futures_deal_list(self, target, octype):
-        '''更新期貨下單暫存清單'''
-        if octype == 'New' and target not in self.futures_opened:
-            self.futures_opened.append(target)
-
-        if octype == 'Cover' and target not in self.futures_closed:
-            self.futures_closed.append(target)
+            strategies = self.futures_strategies
+        self.update_watchlist_position(order, self.Quotes, strategies)
 
     def merge_buy_sell_lists(self, stocks_pool: Dict[str, str], market='Stocks'):
         '''合併進出場清單: 將庫存與選股清單，合併'''
@@ -756,7 +721,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             )
             isDTClose = (is_day_trade and (actionType == 'Close'))
 
-            if quantity and (isOpen or isClose or isDTClose):
+            if quantity > 0 and (isOpen or isClose or isDTClose):
                 tradeType = '當沖' if is_day_trade else '非當沖'
                 func = self.StrategySet.mapFunction(
                     actionType, tradeType, strategy)
@@ -783,6 +748,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     )
                     self._log_and_notify(actionInfo.msg)
                     return self.OrderInfo(**infos)
+            elif quantity <= 0 and actionType == 'Close':
+                self.update_after_interfere(target, actionType, 'Stocks')
 
         return self.OrderInfo(target=target)
 
@@ -832,7 +799,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             c1 = octype == 'New' and enoughOpen and not self.is_not_trade_day(
                 inputs['datetime'])
             c2 = octype == 'Cover'
-            if quantity and (c1 or c2):
+            if quantity > 0 and (c1 or c2):
                 is_day_trade = self.StrategySet.isDayTrade(strategy)
                 tradeType = '當沖' if is_day_trade else '非當沖'
                 isTransfer = (
@@ -869,6 +836,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     )
                     self._log_and_notify(actionInfo.msg)
                     return self.OrderInfo(**infos)
+            elif quantity <= 0 and actionType == 'Close':
+                self.update_after_interfere(target, actionType, 'Futures')
 
         return self.OrderInfo(target=target)
 
@@ -912,17 +881,15 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             # 下單
             logging.debug(log_msg)
             if self.simulation and is_stock:
-                price = self.Quotes.NowTargets[target]['price']
+                price = content.price
                 quantity *= 1000
                 leverage = self.check_leverage(target, content.order_cond)
                 if content.action == 'Sell':
-                    self.stock_sold.append(target)
                     cost_price = self.get_cost_price(
                         target, price, content.order_cond)
                     amount = -(price - cost_price*leverage) * \
                         quantity*(1 - FEE_RATE)
                 else:
-                    self.stock_bought.append(target)
                     amount = self.get_stock_amount(
                         target, price, quantity, content.order_cond)
 
@@ -943,28 +910,18 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 }
                 self.appendOrder(order_data)
 
-                # 更新監控庫存
-                order_data.update({
-                    'position': content.pos_target,
-                    'yd_quantity': 0,
-                    'bst': datetime.now(),
-                    'cost_price': abs(order_data['price'])
-                })
-                self.update_monitor_lists(content.action, order_data)
-
                 logging.debug('Place simulate order complete.')
                 notifier.post(log_msg, msgType='Order')
+                return order_data
 
             elif self.simulation and market == 'Futures':
-                # TODO: check the amount of New/Cover
-                price = self.Quotes.NowTargets[target]['price']
                 sign = -1 if content.octype == 'Cover' else 1
                 order_data = {
                     'Time': datetime.now(),
                     'market': market,
                     'code': target,
                     'action': content.action,
-                    'price': price*sign,
+                    'price': content.price*sign,
                     'quantity': quantity,
                     'amount': self.get_open_margin(target, quantity)*sign,
                     'op_type': content.octype,
@@ -972,26 +929,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     'msg': content.reason
                 }
                 self.appendOrder(order_data)
-                self._update_futures_deal_list(target, content.octype)
-
-                # 更新監控庫存
-                bsh = self.Quotes.AllTargets[target]['price']
-                bsh = max(bsh) if bsh else price
-                order_data.update({
-                    'symbol': target,
-                    'cost_price': price,
-                    'bsh': bsh,
-                    'bst': datetime.now(),
-                    'position': content.pos_target,
-                    'order': {
-                        'quantity': quantity,
-                        'action': content.action
-                    }
-                })
-                self.update_monitor_lists(content.octype, order_data)
 
                 logging.debug('Place simulate order complete.')
                 notifier.post(log_msg, msgType='Order')
+                return order_data
+
             else:
                 # #ff0000 批次下單的張數 (股票>1000股的單位為【張】) #ff0000
                 q = 5 if order_lot == 'Common' else quantity
@@ -1346,34 +1288,39 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         return is_holiday or not (now <= TEnd)
 
-    def remove_stock_monitor_list(self, target: str):
-        logging.debug(f'Remove【{target}】from stocks_to_monitor.')
-        self.stocks_to_monitor.pop(target, None)
+    def check_remove_monitor(self, target: str, action_type: str, market='Stocks'):
+        if action_type == 'Open':
+            return False
 
-        if target in self.stocks.code.values:
-            logging.debug(f'Remove【{target}】from self.stocks.')
-            self.stocks = self.stocks[self.stocks.code != target]
-            if self.simulation and db.HAS_DB:
-                db.delete(
-                    SecurityInfoStocks,
-                    SecurityInfoStocks.code == target,
-                    SecurityInfoStocks.account == self.ACCOUNT_NAME
-                )
+        logging.debug(f'Remove【{target}】from {market} monitor list.')
+        is_empty = self.check_is_empty(target, market)
+        if is_empty:
+            logging.debug(f'Remove【{target}】from {market}.')
+            if market == 'Stocks':
+                day_trade = self.StrategySet.isDayTrade(
+                    self.stock_strategies[target])
+                self.reset_monitor_list(target, 'Stocks', day_trade=False)
+                if target in self.stocks.code.values:
+                    self.stocks = self.stocks[self.stocks.code != target]
 
-    def remove_futures_monitor_list(self, target: str):
-        '''Remove futures from futures_to_monitor'''
-        logging.debug(f'Remove【{target}】from futures_to_monitor.')
-        self.futures_to_monitor.pop(target, None)
+            else:
+                day_trade = self.StrategySet.isDayTrade(
+                    self.futures_strategies[target])
+                self.reset_monitor_list(target, 'Futures', day_trade=day_trade)
 
-        if target in self.futures.code.values:
-            logging.debug(f'Remove【{target}】from self.futures.')
-            self.futures = self.futures[self.futures.code != target]
-            if self.simulation and db.HAS_DB:
-                db.delete(
-                    SecurityInfoFutures,
-                    SecurityInfoFutures.code == target,
-                    SecurityInfoFutures.account == self.ACCOUNT_NAME
-                )
+                if target in self.futures.code.values:
+                    self.futures = self.futures[self.futures.code != target]
+                    self.n_futures = self.futures.shape[0]
+
+        if self.simulation and db.HAS_DB:
+            table = SecurityInfoStocks if market == 'Stocks' else SecurityInfoFutures
+            db.delete(
+                table,
+                table.code == target,
+                table.account == self.ACCOUNT_NAME
+            )
+
+        return is_empty
 
     def run(self):
         '''執行自動交易'''
@@ -1462,14 +1409,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             for target in list(self.stocks_to_monitor):
                 order = self.monitor_stocks(target)
                 if order.pos_target:
-                    self._place_order(order, market='Stocks')
-                    # self._update_position(order, self.stock_strategies)
+                    order_data = self._place_order(order, market='Stocks')
+                    self._update_position(order, 'Stocks', order_data)
 
             for target in list(self.futures_to_monitor):
                 order = self.monitor_futures(target)
                 if order.pos_target:
-                    self._place_order(order, market='Futures')
-                    # self._update_position(order, self.futures_strategies)
+                    order_data = self._place_order(order, market='Futures')
+                    self._update_position(order, 'Futures', order_data)
 
             time.sleep(max(5 - (datetime.now() - now).total_seconds(), 0))
 
