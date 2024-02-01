@@ -484,7 +484,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         '''初始化股票資訊'''
 
         if not self.can_stock or datetime.now() > TimeEndStock:
-            return None, []
+            return []
 
         # 讀取選股清單
         self.stock_strategies = self.get_stock_pool()
@@ -539,7 +539,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             return df
 
         if not self.can_futures:
-            return None, []
+            return []
 
         # 讀取選股清單
         self.futures_strategies = self.get_futures_pool()
@@ -606,7 +606,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     'position': order.pos_target,
                     'bst': datetime.now(),
                     'symbol': target,
-                    'cost_price': order.price,
+                    'cost_price': abs(order_data['price']),
                     'order': {
                         'quantity': self.get_sell_quantity(order, market),
                         'action': order.action
@@ -881,7 +881,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             # 下單
             logging.debug(log_msg)
             if self.simulation and is_stock:
-                price = content.price
+                price = self.Quotes.NowTargets[target]['price']
                 quantity *= 1000
                 leverage = self.check_leverage(target, content.order_cond)
                 if content.action == 'Sell':
@@ -915,13 +915,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 return order_data
 
             elif self.simulation and market == 'Futures':
+                price = self.Quotes.NowTargets[target]['price']
                 sign = -1 if content.octype == 'Cover' else 1
                 order_data = {
                     'Time': datetime.now(),
                     'market': market,
                     'code': target,
                     'action': content.action,
-                    'price': content.price*sign,
+                    'price': price*sign,
                     'quantity': quantity,
                     'amount': self.get_open_margin(target, quantity)*sign,
                     'op_type': content.octype,
