@@ -161,14 +161,14 @@ class WatchListTool(TimeTool, FileHandler):
             data = self.futures_to_monitor[target]
             return (data['order']['quantity'] <= 0 or data['position'] <= 0)
 
-    def reset_monitor_list(self, target: str, market='Stocks', is_day_trade=False):
+    def reset_monitor_list(self, target: str, market='Stocks', day_trade=False):
         if market == 'Stocks':
             self.stocks_to_monitor.pop(target, None)
-            if is_day_trade:
+            if day_trade:
                 self.stocks_to_monitor[target] = None
         else:
             self.futures_to_monitor.pop(target, None)
-            if is_day_trade:
+            if day_trade:
                 self.futures_to_monitor[target] = None
 
     def update_deal_list(self, target: str, action_type: str, market='Stocks'):
