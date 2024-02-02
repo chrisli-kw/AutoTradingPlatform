@@ -7,8 +7,6 @@ from datetime import datetime, timedelta
 
 API = sj.Shioaji()
 TODAY = datetime.today()
-TODAY_STR = TODAY.strftime("%Y-%m-%d")
-
 SystemConfig = configparser.ConfigParser()
 SystemConfig.read('./lib/config.ini', encoding='utf8')
 
@@ -114,11 +112,23 @@ TBuy2 = pd.to_datetime('13:15:00')
 TTry = pd.to_datetime('13:25:00')
 TimeStartStock = pd.to_datetime('09:00:00')
 TimeEndStock = pd.to_datetime('13:30:00')
-TimeStartFuturesDay = pd.to_datetime('08:45:00')
-TimeEndFuturesDay = pd.to_datetime('13:45:00')
-TimeStartFuturesNight = pd.to_datetime('15:00:00')
-TimeEndFuturesNight = pd.to_datetime('05:00:00') + timedelta(days=1)
-TimeTransferFutures = pd.to_datetime('13:00:00')
+
+now = datetime.now()
+if pd.to_datetime('00:00:00') < now < pd.to_datetime('05:00:00'):
+    TODAY = TODAY - timedelta(days=1)
+    TimeStartFuturesDay = pd.to_datetime('08:45:00') - timedelta(days=1)
+    TimeEndFuturesDay = pd.to_datetime('13:45:00') - timedelta(days=1)
+    TimeStartFuturesNight = pd.to_datetime('15:00:00') - timedelta(days=1)
+    TimeEndFuturesNight = pd.to_datetime('05:00:00')
+    TimeTransferFutures = pd.to_datetime('13:00:00') - timedelta(days=1)
+else:
+    TimeStartFuturesDay = pd.to_datetime('08:45:00')
+    TimeEndFuturesDay = pd.to_datetime('13:45:00')
+    TimeStartFuturesNight = pd.to_datetime('15:00:00')
+    TimeEndFuturesNight = pd.to_datetime('05:00:00') + timedelta(days=1)
+    TimeTransferFutures = pd.to_datetime('13:00:00')
+
+TODAY_STR = TODAY.strftime("%Y-%m-%d")
 holidays = get_holidays()
 
 # 選股相關
