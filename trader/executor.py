@@ -649,7 +649,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
     def update_after_interfere(self, target: str, action_type: str, market):
         msg = f'[{self.ACCOUNT_NAME}] Update {target} after interferring.'
         logging.info(msg)
-        notifier.post(msg, msgType='Monitor')
+        # notifier.post(msg, msgType='Monitor')
 
         infos = dict(
             action_type=action_type,
