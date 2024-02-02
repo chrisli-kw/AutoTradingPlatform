@@ -579,6 +579,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             KBars=self.KBars)
         self._set_margin_limit()
         self.margin_table = self.get_margin_table().原始保證金.to_dict()
+        logging.debug(f'futures_to_monitor: {self.futures_to_monitor}')
         return all_futures
 
     def _update_position(self, order: namedtuple, market: str, order_data: dict):
@@ -1054,9 +1055,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
             for s in strategies:
                 if s in df.Strategy.values and s in self.STRATEGY_STOCK:
-                    stockids = df[df.Strategy == s].code
-                    pools.update({stock: s for stock in stockids})
-                    df = df[~df.code.isin(stockids)]
+                    code = df[df.Strategy == s].code
+                    pools.update({stock: s for stock in code})
+                    df = df[~df.code.isin(code)]
 
         return pools
 
