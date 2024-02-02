@@ -165,10 +165,12 @@ class WatchListTool(TimeTool, FileHandler):
         if market == 'Stocks':
             self.stocks_to_monitor.pop(target, None)
             if day_trade:
+                logging.info(f'[Monitor List]Reset|Stocks|{target}|')
                 self.stocks_to_monitor[target] = None
         else:
             self.futures_to_monitor.pop(target, None)
             if day_trade:
+                logging.info(f'[Monitor List]Reset|Futures|{target}|')
                 self.futures_to_monitor[target] = None
 
     def update_deal_list(self, target: str, action_type: str, market='Stocks'):
@@ -199,26 +201,26 @@ class WatchListTool(TimeTool, FileHandler):
         if action in ['Buy', 'Sell']:
             if self.stocks_to_monitor[target] is not None:
                 # TODO: 部分進場
-                stage = 'update stocks_to_monitor'
+                stage = 'Update|Stocks'
                 quantity = data['quantity']
                 self.stocks_to_monitor[target]['position'] -= position
                 self.stocks_to_monitor[target]['quantity'] -= quantity
             else:
-                stage = 'add stocks_to_monitor'
+                stage = 'Add|Stocks'
                 self.stocks_to_monitor[target] = data
 
         # New, Cover
         else:
             if self.futures_to_monitor[target] is not None:
-                stage = 'update futures_to_monitor'
+                stage = 'Update|Futures'
                 quantity = data['order']['quantity']
 
                 self.futures_to_monitor[target]['position'] -= position
                 self.futures_to_monitor[target]['order']['quantity'] -= quantity
             elif action == 'New':
-                stage = 'add futures_to_monitor'
+                stage = 'Add|Futures'
                 self.futures_to_monitor[target] = data
             else:
-                stage = 'None'
+                stage = 'None|Futures'
 
-        logging.debug(f'【更新】{stage}|{action} {target}|')
+        logging.info(f'[Monitor List]{stage}|{target}|{action}|')

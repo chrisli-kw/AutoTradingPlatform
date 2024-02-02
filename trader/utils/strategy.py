@@ -77,6 +77,9 @@ class StrategyTool:
     def update_indicators(self, now: datetime, kbars: dict):
         pass
 
+    def update_StrategySet_data(self, target: str):
+        pass
+
     def setNStockLimitLong(self, KBars: dict = None):
         '''
         Set the number limit of securities of a portfolio can hold 

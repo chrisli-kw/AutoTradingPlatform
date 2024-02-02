@@ -647,9 +647,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 self.stocks_to_monitor.update({stock: None})
 
     def update_after_interfere(self, target: str, action_type: str, market):
-        msg = f'[{self.ACCOUNT_NAME}] Update {target} after interferring.'
-        logging.info(msg)
-        # notifier.post(msg, msgType='Monitor')
+        logging.info(f'[Monitor List]Interfere|{market}|{target}|')
 
         infos = dict(
             action_type=action_type,
@@ -753,6 +751,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     return self.OrderInfo(**infos)
             elif quantity <= 0 and actionType == 'Close':
                 self.update_after_interfere(target, actionType, 'Stocks')
+                self.update_StrategySet_data(target)
 
         return self.OrderInfo(target=target)
 
@@ -841,6 +840,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     return self.OrderInfo(**infos)
             elif quantity <= 0 and actionType == 'Close':
                 self.update_after_interfere(target, actionType, 'Futures')
+                self.update_StrategySet_data(target)
 
         return self.OrderInfo(target=target)
 
@@ -1296,10 +1296,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         if action_type == 'Open':
             return False
 
-        logging.debug(f'Remove【{target}】from {market} monitor list.')
         is_empty = self.check_is_empty(target, market)
         if is_empty:
-            logging.debug(f'Remove【{target}】from {market}.')
+            logging.info(f'[Monitor List]Remove|{market}|{target}|')
             if market == 'Stocks':
                 day_trade = self.StrategySet.isDayTrade(
                     self.stock_strategies[target])
