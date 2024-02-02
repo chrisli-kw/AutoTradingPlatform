@@ -120,3 +120,11 @@ class OrderTool(FileHandler):
 
         df = df.drop_duplicates()
         return df
+
+    def update_pos_target(self, order: namedtuple, is_empty: False):
+        if is_empty and order.action_type == 'Close':
+            position = order.pos_target
+            if position == 100 or position >= order.pos_balance:
+                order = order._replace(pos_target=100)
+
+        return order

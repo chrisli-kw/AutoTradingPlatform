@@ -1,3 +1,4 @@
+import logging
 import pandas as pd
 from datetime import datetime
 from collections import namedtuple
@@ -17,6 +18,16 @@ class WatchListTool(TimeTool, FileHandler):
         self.MatchAccount = Watchlist.account == self.account_name
         self.watchlist_file = f'watchlist_{account_name}'
         self.watchlist = self.get_watchlist()
+
+        # stock
+        self.stocks_to_monitor = {}
+        self.stock_bought = []
+        self.stock_sold = []
+
+        # futures
+        self.futures_to_monitor = {}
+        self.futures_opened = []
+        self.futures_closed = []
 
     def get_watchlist(self):
         """Load watchlist data"""
@@ -106,6 +117,10 @@ class WatchListTool(TimeTool, FileHandler):
             db.delete(Watchlist, Watchlist.position <= 0, self.MatchAccount)
 
     def update_watchlist_position(self, order: namedtuple, quotes: dict, strategy_pool: dict = None):
+        # if order.action_type == 'Close':
+        #     if order.pos_target == 100 or order.pos_target >= order.pos_balance:
+        #         order = order._replace(pos_target=100)
+
         target = order.target
         position = order.pos_target
 
@@ -122,7 +137,7 @@ class WatchListTool(TimeTool, FileHandler):
                 db.update(Watchlist, {'position': position}, *condition)
 
             self.remove_from_watchlist()
-        else:
+        elif order.action_type == 'Open':
             market = 'Stocks' if not order.octype else 'Futures'
             self._append_watchlist(market, order, quotes, strategy_pool)
 
@@ -137,3 +152,73 @@ class WatchListTool(TimeTool, FileHandler):
                 filename=f'{PATH}/stock_pool/{self.watchlist_file}.csv',
                 saveEmpty=True
             )
+
+    def check_is_empty(self, target, market='Stocks'):
+        if market == 'Stocks':
+            data = self.stocks_to_monitor[target]
+            return (data['quantity'] <= 0 or data['position'] <= 0)
+        else:
+            data = self.futures_to_monitor[target]
+            return (data['order']['quantity'] <= 0 or data['position'] <= 0)
+
+    def reset_monitor_list(self, target: str, market='Stocks', day_trade=False):
+        if market == 'Stocks':
+            self.stocks_to_monitor.pop(target, None)
+            if day_trade:
+                self.stocks_to_monitor[target] = None
+        else:
+            self.futures_to_monitor.pop(target, None)
+            if day_trade:
+                self.futures_to_monitor[target] = None
+
+    def update_deal_list(self, target: str, action_type: str, market='Stocks'):
+        '''更新下單暫存清單'''
+
+        if market == 'Stocks':
+            if action_type == 'Sell' and len(target) == 4 and target not in self.stock_sold:
+                self.stock_sold.append(target)
+
+            if action_type == 'Buy' and len(target) == 4 and target not in self.stock_bought:
+                self.stock_bought.append(target)
+
+            if action_type == 'Cancel' and target in self.stock_bought:
+                self.stock_bought.remove(target)
+        else:
+            if action_type == 'New' and target not in self.futures_opened:
+                self.futures_opened.append(target)
+
+            if action_type == 'Cover' and target not in self.futures_closed:
+                self.futures_closed.append(target)
+
+            if action_type == 'Cancel' and target in self.futures_opened:
+                self.futures_opened.remove(target)
+
+    def update_position_quantity(self, action: str, data: dict, position: float = 100):
+        '''更新監控庫存(成交回報)'''
+        target = data['code']
+        if action in ['Buy', 'Sell']:
+            if self.stocks_to_monitor[target] is not None:
+                # TODO: 部分進場
+                stage = 'update stocks_to_monitor'
+                quantity = data['quantity']
+                self.stocks_to_monitor[target]['position'] -= position
+                self.stocks_to_monitor[target]['quantity'] -= quantity
+            else:
+                stage = 'add stocks_to_monitor'
+                self.stocks_to_monitor[target] = data
+
+        # New, Cover
+        else:
+            if self.futures_to_monitor[target] is not None:
+                stage = 'update futures_to_monitor'
+                quantity = data['order']['quantity']
+
+                self.futures_to_monitor[target]['position'] -= position
+                self.futures_to_monitor[target]['order']['quantity'] -= quantity
+            elif action == 'New':
+                stage = 'add futures_to_monitor'
+                self.futures_to_monitor[target] = data
+            else:
+                stage = 'None'
+
+        logging.debug(f'【更新】{stage}|{action} {target}|')
