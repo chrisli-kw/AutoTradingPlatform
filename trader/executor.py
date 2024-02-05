@@ -372,6 +372,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 if operation['op_type'] == 'Cancel':
                     self.deleteOrder(symbol)
                     self.update_deal_list(symbol, 'Cancel', 'Futures')
+                    if order['oc_type'] == 'New':
+                        self.futures_to_monitor[symbol] = None
 
                 # 更新監控庫存
                 elif not self.simulation:

@@ -181,6 +181,7 @@ class WatchListTool(TimeTool, FileHandler):
     def update_deal_list(self, target: str, action_type: str, market='Stocks'):
         '''更新下單暫存清單'''
 
+        logging.info(f'[Monitor List]{action_type}|{market}|{target}|')
         if market == 'Stocks':
             if action_type == 'Sell' and len(target) == 4 and target not in self.stock_sold:
                 self.stock_sold.append(target)

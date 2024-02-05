@@ -60,16 +60,17 @@ class Notification:
         lot = self.order_lot[order['order_lot']]
 
         operation = msg['operation']
-        if operation['op_code'] == '00' or operation['op_msg'] == '':
-            text = f"\n【委託成功】{name}-{stock}\n【帳號】{account}\n【{cond}】{order['action']} {order['quantity']}{lot}"
-            self.post(text, msgType='Order')
+        if operation['op_code'] == '00':
+            if operation['op_type'] == 'Cancel':
+                text = f"\n【刪單成功】{name}-{stock}\n【帳號】{account}\n【{cond}】{order['action']} {order['quantity']}{lot}"
+                self.post(text, msgType='Order')
+
+            elif operation['op_msg'] == '':
+                text = f"\n【委託成功】{name}-{stock}\n【帳號】{account}\n【{cond}】{order['action']} {order['quantity']}{lot}"
+                self.post(text, msgType='Order')
 
         if operation['op_code'] == '88':
             text = f"\n【委託失敗】{name}-{stock}\n【帳號】{account}\n【{operation['op_msg']}】"
-            self.post(text, msgType='Order')
-
-        if operation['op_type'] == 'Cancel':
-            text = f"\n【刪單成功】{name}-{stock}\n【帳號】{account}\n【{cond}】{order['action']} {order['quantity']}{lot}"
             self.post(text, msgType='Order')
 
     def post_tftDeal(self, stat, msg: dict):
@@ -99,11 +100,15 @@ class Notification:
         quantity = order['quantity']
 
         operation = msg['operation']
-        if operation['op_code'] == '00' or operation['op_msg'] == '':
-            text = f"\n【委託成功】{name}({code+delivery_month})\n【帳號】{account}\n【{oc_type}】{order['action']} {quantity}口"
-            self.post(text, msgType='Order')
+        if operation['op_code'] == '00':
+            if operation['op_type'] == 'Cancel':
+                text = f"\n【刪單成功】{name}({code+delivery_month})\n【帳號】{account}\n【{oc_type}】{order['action']} {quantity}口"
+                self.post(text, msgType='Order')
 
-        if operation['op_code'] != '00':
+            elif operation['op_msg'] == '':
+                text = f"\n【委託成功】{name}({code+delivery_month})\n【帳號】{account}\n【{oc_type}】{order['action']} {quantity}口"
+                self.post(text, msgType='Order')
+        else:
             text = f"\n【委託失敗】{name}({code+delivery_month})\n【帳號】{account}\n【{operation['op_msg']}】"
             self.post(text, msgType='Order')
 
