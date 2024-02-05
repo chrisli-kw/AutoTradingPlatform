@@ -155,11 +155,16 @@ class WatchListTool(TimeTool, FileHandler):
 
     def check_is_empty(self, target, market='Stocks'):
         if market == 'Stocks':
-            data = self.stocks_to_monitor[target]
-            return (data['quantity'] <= 0 or data['position'] <= 0)
+            quantity = self.stocks_to_monitor[target]['quantity']
+            position = self.stocks_to_monitor[target]['position']
         else:
-            data = self.futures_to_monitor[target]
-            return (data['order']['quantity'] <= 0 or data['position'] <= 0)
+            quantity = self.futures_to_monitor[target]['order']['quantity']
+            position = self.futures_to_monitor[target]['position']
+
+        is_empty = (quantity <= 0 or position <= 0)
+        logging.info(
+            f'[Monitor List]Check|{market}|{target}|{is_empty}|quantity: {quantity}; position: {position}|')
+        return is_empty
 
     def reset_monitor_list(self, target: str, market='Stocks', day_trade=False):
         if market == 'Stocks':
@@ -209,6 +214,10 @@ class WatchListTool(TimeTool, FileHandler):
                 stage = 'Add|Stocks'
                 self.stocks_to_monitor[target] = data
 
+            if 'None' not in stage:
+                position_ = self.stocks_to_monitor[target]['position']
+                quantity_ = self.stocks_to_monitor[target]['quantity']
+
         # New, Cover
         else:
             if self.futures_to_monitor[target] is not None:
@@ -223,4 +232,9 @@ class WatchListTool(TimeTool, FileHandler):
             else:
                 stage = 'None|Futures'
 
-        logging.info(f'[Monitor List]{stage}|{target}|{action}|')
+            if 'None' not in stage:
+                position_ = self.futures_to_monitor[target]['position']
+                quantity_ = self.futures_to_monitor[target]['order']['quantity']
+
+        logging.info(
+            f'[Monitor List]{stage}|{target}|{action}|quantity: {quantity_}; position: {position_}|')

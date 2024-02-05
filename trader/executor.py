@@ -423,7 +423,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             if tick.intraday_odd == 0 and tick.simtrade == 0:
 
                 if tick.code not in self.Quotes.NowTargets:
-                    logging.debug(f'First quote of {tick.code}')
+                    logging.debug(f'[Quotes]First|{tick.code}|')
 
                 tick_data = self.stk_quote_v1(tick)
                 # self.to_redis({tick.code: tick_data})
@@ -435,7 +435,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     symbol = self.Futures_Code_List[tick.code]
 
                     if symbol not in self.Quotes.NowTargets:
-                        logging.debug(f'First quote of {symbol}')
+                        logging.debug(f'[Quotes]First|{symbol}|')
 
                     tick_data = self.fop_quote_v1(symbol, tick)
                     # self.to_redis({symbol: tick_data})
@@ -647,7 +647,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 self.stocks_to_monitor.update({stock: None})
 
     def update_after_interfere(self, target: str, action_type: str, market):
-        logging.info(f'[Monitor List]Interfere|{market}|{target}|')
+        logging.info(
+            f'[Monitor List]Interfere|{market}|{target}|{action_type}|')
 
         infos = dict(
             action_type=action_type,
@@ -749,9 +750,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     )
                     self._log_and_notify(actionInfo.msg)
                     return self.OrderInfo(**infos)
-            elif quantity <= 0 and actionType == 'Close':
+            elif (quantity <= 0 or pos_balance <= 0) and actionType == 'Close':
                 self.update_after_interfere(target, actionType, 'Stocks')
-                self.update_StrategySet_data(target)
+                self.StrategySet.update_StrategySet_data(target)
 
         return self.OrderInfo(target=target)
 
@@ -776,10 +777,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 actionType = 'Close'
                 pos_balance = data['position']
                 octype = 'Cover'
-                if target in self.futures_opened:
-                    quantity = data['order']['quantity']
-                else:
-                    quantity = data['quantity']
+                quantity = data['order']['quantity']
                 enoughOpen = False
 
             if target in self.futures_transferred:
@@ -801,7 +799,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             c1 = octype == 'New' and enoughOpen and not self.is_not_trade_day(
                 inputs['datetime'])
             c2 = octype == 'Cover'
-            if quantity > 0 and (c1 or c2):
+            if quantity > 0 and pos_balance > 0 and (c1 or c2):
                 is_day_trade = self.StrategySet.isDayTrade(strategy)
                 tradeType = '當沖' if is_day_trade else '非當沖'
                 isTransfer = (
@@ -838,14 +836,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     )
                     self._log_and_notify(actionInfo.msg)
                     return self.OrderInfo(**infos)
-            elif quantity <= 0 and actionType == 'Close':
+            elif (quantity <= 0 or pos_balance <= 0) and actionType == 'Close':
                 self.update_after_interfere(target, actionType, 'Futures')
-                self.update_StrategySet_data(target)
+                self.StrategySet.update_StrategySet_data(target)
 
         return self.OrderInfo(target=target)
 
     def _place_order(self, content: namedtuple, market='Stocks'):
-        logging.debug(f'【content: {content}】')
+        logging.debug(f'[OrderState.Content|{content}|')
 
         is_stock = market == 'Stocks'
         target = content.target
@@ -877,9 +875,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                         price_type = 'LMT'
                         price = self.getQuotesNow(target)['price']
 
-                log_msg = f"【{target}下單內容: price={price}, quantity={quantity}, action={content.action}, price_type={price_type}, order_cond={content.order_cond}, order_lot={order_lot}】"
+                log_msg = f'[OrderState.Info]|{target}|price:{price}, quantity:{quantity}, action:{content.action}, price_type:{price_type}, order_cond:{content.order_cond}, order_lot:{order_lot}|'
             else:
-                log_msg = f"【{target}下單內容: price={price}, quantity={quantity}, action={content.action}, price_type={price_type}, order_cond={content.octype}, order_lot={order_lot}】"
+                log_msg = f'[OrderState.Info]|{target}|price:{price}, quantity:{quantity}, action:{content.action}, price_type:{price_type}, order_cond:{content.octype}, order_lot:{order_lot}|'
 
             # 下單
             logging.debug(log_msg)

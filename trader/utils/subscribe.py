@@ -119,4 +119,6 @@ class Subscriber:
     def getQuotesNow(self, target: str):
         if target in self.Quotes.NowIndex:
             return self.Quotes.NowIndex[target]
-        return self.Quotes.NowTargets[target]
+        elif target in self.Quotes.NowTargets:
+            return self.Quotes.NowTargets[target]
+        return -1
