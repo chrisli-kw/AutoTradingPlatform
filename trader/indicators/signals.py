@@ -138,12 +138,12 @@ class TechnicalSignals:
         return rsi
 
     @classmethod
-    def RSV(cls, tb, d=9):
+    def RSV(cls, tb, d=9, target='Close'):
         '''
         Range: [0, 100]
         '''
-        d_min = cls.MIN(tb, 'Close', d, shift=0)
-        d_max = cls.MAX(tb, 'Close', d, shift=0)
+        d_min = cls.MIN(tb, target, d, shift=0)
+        d_max = cls.MAX(tb, target, d, shift=0)
 
         try:
             (100*(tb.Close - d_min)/(d_max - d_min)).fillna(-1)
