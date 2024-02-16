@@ -146,12 +146,12 @@ class TechnicalSignals:
         d_max = cls.MAX(tb, target, d, shift=0)
 
         try:
-            (100*(tb.Close - d_min)/(d_max - d_min)).fillna(-1)
+            (100*(tb[target] - d_min)/(d_max - d_min)).fillna(-1)
         except:
             tb['d_min'] = d_min
             tb['d_max'] = d_max
 
-        return (100*(tb.Close - d_min)/(d_max - d_min)).fillna(-1)
+        return (100*(tb[target] - d_min)/(d_max - d_min)).fillna(-1)
 
     @staticmethod
     def KD(tb, d=9):
