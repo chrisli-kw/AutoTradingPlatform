@@ -152,10 +152,7 @@ class StrategyTool:
 
     def transfer_position(self, inputs: dict, kbars: dict, **kwargs):
         target = inputs['symbol']
-        now = datetime.now()
-        if now > TimeTransferFutures:
-            return self.Action(100, '轉倉', f'{target} 轉倉-Cover')
-        return self.Action()
+        return self.Action(100, '轉倉', f'{target} 轉倉-Cover')
 
     def isLong(self, strategy: str):
         '''Check if a strategy is a long strategy.'''

@@ -13,7 +13,7 @@ from . import __version__
 from . import notifier, picker, crawler2, file_handler
 from .config import API, PATH, TODAY, TODAY_STR, holidays
 from .config import FEE_RATE, TEnd, TTry, TimeStartStock, TimeStartFuturesDay, TimeEndStock
-from .config import TimeEndFuturesDay, TimeStartFuturesNight, TimeEndFuturesNight
+from .config import TimeEndFuturesDay, TimeStartFuturesNight, TimeEndFuturesNight, TimeTransferFutures
 from .utils import get_contract
 from .utils.kbar import KBarTool
 from .utils.orders import OrderTool
@@ -786,9 +786,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 msg = f'{target} 轉倉-New'
                 infos = dict(
                     action_type=actionType,
-                    action=data['action'],
+                    action=self.futures_transferred[target]['action'],
                     target=target,
-                    quantity=self.futures_transferred[target],
+                    quantity=self.futures_transferred[target]['quantity'],
                     octype=octype,
                     pos_target=100,
                     pos_balance=0,
@@ -805,7 +805,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 is_day_trade = self.StrategySet.isDayTrade(strategy)
                 tradeType = '當沖' if is_day_trade else '非當沖'
                 isTransfer = (
-                    actionType == 'Close') and 'isDue' in data and data['isDue']
+                    (actionType == 'Close') and
+                    ('isDue' in data) and
+                    data['isDue'] and
+                    (datetime.now() > TimeTransferFutures)
+                )
                 if isTransfer:
                     func = self.StrategySet.transfer_position
                 else:
@@ -823,8 +827,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 )
                 if actionInfo.position:
                     if isTransfer:
-                        new_target = f'{target[:3]}{self.GetDueMonth(TODAY)}'
-                        self.futures_transferred.update({new_target: quantity})
+                        self.futures_transferred.update({
+                            f'{target[:3]}{self.GetDueMonth(TODAY)}': {
+                                'quantity': quantity,
+                                'action': data['action']
+                            }
+                        })
 
                     infos = dict(
                         action_type=actionType,
