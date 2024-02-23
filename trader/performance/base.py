@@ -134,6 +134,8 @@ def compute_profits(tb):
     # 平均獲利/虧損金額
     mean_profit = df_profit.profit.mean() if has_profits else 0
     mean_loss = df_loss.profit.mean() if has_loss else 0
+    median_profit = df_profit.profit.median() if has_profits else 0
+    median_loss = df_loss.profit.median() if has_loss else 0
     max_profit = df_profit.profit.max() if has_profits else 0
     max_loss = df_loss.profit.min() if has_loss else 0
 
@@ -146,6 +148,8 @@ def compute_profits(tb):
         'TotalProfit': round(total_profit),
         'GrossProfit': round(gross_profit),
         'GrossLoss': round(gross_loss),
+        'MedianProfit': round(median_profit if median_profit else 0),
+        'MedianLoss': round(median_loss if median_loss else 0),
         'MeanProfit': round(mean_profit if mean_profit else 0),
         'MeanLoss': round(mean_loss if mean_loss else 0),
         'MaxProfit': max_profit,
