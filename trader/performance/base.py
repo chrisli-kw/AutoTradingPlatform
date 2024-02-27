@@ -144,7 +144,7 @@ def compute_profits(tb):
     max_profit = df_profit.profit.max() if has_profits else 0
     max_loss = df_loss.profit.min() if has_loss else 0
 
-    ratio1 = round(abs(mean_profit/mean_loss), 4) if mean_loss else np.inf
+    ratio1 = round(abs(mean_profit/mean_loss), 2) if mean_loss else np.inf
     profits = {
         'TotalTrade': tb.shape[0],
         'Wins': win_loss[True],
@@ -159,8 +159,8 @@ def compute_profits(tb):
         'MeanLoss': round(mean_loss if mean_loss else 0),
         'MaxProfit': max_profit,
         'MaxLoss': max_loss,
-        'ProfitFactor': profit_factor,
-        'ProfitRatio': ratio1
+        'ProfitFactor': str(profit_factor),
+        'ProfitRatio': str(ratio1)
     }
 
     if 'KRun' in tb.columns:
