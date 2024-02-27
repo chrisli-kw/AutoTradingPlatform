@@ -71,7 +71,12 @@ def convert_statement(df, mode='trading', **kwargs):
         tb['profit'] = (tb.CloseAmount - tb.OpenAmount)*(tb.isShort*(-2)+1)
         totalExpense = 0
         tb.profit = tb.profit*tb.Strategy.map(multipler) - totalExpense
-        tb['returns'] = 100*(tb.profit/tb.OpenAmount).round(4)
+        if market == 'Stocks':
+            tb['returns'] = 100*(tb.profit/tb.OpenAmount).round(4)
+        else:
+            margins = {'MX': 46000, 'TX': 167000}
+            cost = tb.Code.apply(lambda x: x[:2]).map(margins)
+            tb['returns'] = 100*(tb.profit/cost).round(4)
         tb['balance'] = init_position + tb.profit.cumsum()
         tb = tb.dropna().reset_index(drop=True)
 
