@@ -56,42 +56,6 @@ class SecurityInfoFutures(Base):
             setattr(self, property, value)
 
 
-class SecurityInfoFuturesOld(Base):
-    __tablename__ = 'security_info_futures_old'
-
-    pk_id = Column(
-        Integer, primary_key=True, autoincrement=True, nullable=False)
-
-    Account = Column(String(50, collation), nullable=False, comment='帳戶代號')
-    Market = Column(String(10, collation), nullable=False, comment='市場別')
-    Date = Column(
-        TIMESTAMP(fsp=6), server_default=time_default, nullable=False, comment='日期')
-    Code = Column(String(10, collation), nullable=False, comment='證券代號')
-    CodeName = Column(String(50, collation), comment='標的名稱')
-    OrderNum = Column(String(50, collation), comment='委託編號')
-    OrderBS = Column(String(50, collation), comment='買賣別')
-    OrderType = Column(String(50, collation), comment='委託類型')
-    Currency = Column(String(50, collation), comment='幣別')
-    paddingByte = Column(String(50, collation), comment='unknown')
-    Volume = Column(FLOAT(2), comment='成交量')
-    ContractAverPrice = Column(FLOAT(2), comment='平均合約價')
-    SettlePrice = Column(FLOAT(2), comment='履約價')
-    RealPrice = Column(FLOAT(2), comment='unknown')
-    FlowProfitLoss = Column(FLOAT(2), comment='unknown')
-    SettleProfitLoss = Column(FLOAT(2), comment='unknown')
-    StartSecurity = Column(String(50, collation), comment='unknown')
-    UpKeepSecurity = Column(String(50, collation), comment='unknown')
-    OTAMT = Column(FLOAT(2), comment='unknown')
-    MTAMT = Column(FLOAT(2), comment='unknown')
-
-    create_time = Column(
-        TIMESTAMP(fsp=6), nullable=False, server_default=time_default)
-
-    def __init__(self, **kwargs):
-        for property, value in kwargs.items():
-            setattr(self, property, value)
-
-
 class Watchlist(Base):
     __tablename__ = 'watchlist'
 
