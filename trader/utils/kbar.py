@@ -341,10 +341,14 @@ class TickDataProcesser(TimeTool, FileHandler):
         if underlying != 'all':
             df = df[df.name == underlying].reset_index(drop=True)
 
+        df = df[df.成交時間.notnull()]
         df.PriceOld = df.PriceOld.replace('-', 0).astype(float)
         df.PriceNew = df.PriceNew.replace('-', 0).astype(float)
+
+        date_name = '成交日期' if '成交日期' in df.columns else '交易日期'
         df['Time'] = pd.to_datetime(
-            df.成交日期.astype(str) + df.成交時間.astype(str).str.zfill(6),
+            df[date_name].astype(
+                str) + df.成交時間.astype(int).astype(str).str.zfill(6),
             format="%Y%m%d%H%M%S"
         )
         df.Simtrade = df.Simtrade == '*'
@@ -354,7 +358,7 @@ class TickDataProcesser(TimeTool, FileHandler):
         df['DueMonthNew'] = df.DueMonth.str[-1]
         df = self.add_period(df)
 
-        df = df.drop(['成交日期', '成交時間', 'DueMonth'], axis=1)
+        df = df.drop([date_name, '成交時間', 'DueMonth'], axis=1)
         df = df.sort_values('Time').reset_index(drop=True)
         return df
 
