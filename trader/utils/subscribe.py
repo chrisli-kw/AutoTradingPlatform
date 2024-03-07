@@ -17,14 +17,18 @@ class Subscriber:
         # 即時成交資料, 所有成交資料, 下單資料
         self.BidAsk = {}
         self.Quotes = Quotes()
-
-    def _set_target_quote_default(self, targets: list):
-        '''初始化股票/期權盤中資訊'''
-        keys = [
+        self.tick_targets = [
+            'datetime',
             'price', 'amount', 'total_amount',
             'volume', 'total_volume', 'tick_type'
         ]
-        self.Quotes.AllTargets = {s: {k: [] for k in keys} for s in targets}
+
+    def _set_target_quote_default(self, targets: list):
+        '''初始化股票/期權盤中資訊'''
+
+        self.Quotes.AllTargets = {
+            s: {k: [] for k in self.tick_targets} for s in targets
+        }
 
     def _set_index_quote_default(self):
         '''初始化指數盤中資訊'''
@@ -48,7 +52,7 @@ class Subscriber:
             tick_data[k] = float(tick_data[k])
         tick_data['price'] = tick_data['close']
 
-        for k in ['price', 'amount', 'total_amount', 'volume', 'total_volume', 'tick_type']:
+        for k in self.tick_targets:
             self.Quotes.AllTargets[tick.code][k].append(tick_data[k])
 
         self.Quotes.NowTargets[tick.code] = tick_data
@@ -66,7 +70,7 @@ class Subscriber:
         tick_data['price'] = tick_data['close']
         tick_data['symbol'] = symbol
 
-        for k in ['price', 'amount', 'total_amount', 'volume', 'total_volume', 'tick_type']:
+        for k in self.tick_targets:
             self.Quotes.AllTargets[symbol][k].append(tick_data[k])
 
         self.Quotes.NowTargets[symbol] = tick_data

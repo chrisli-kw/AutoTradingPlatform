@@ -1331,6 +1331,15 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         return is_empty
 
+    def loop_pause(self):
+        loop_duration = 5
+
+        now = datetime.now()
+        second = now.second
+        microsecond = now.microsecond/10**len(str(now.microsecond))
+        seconds = second % loop_duration + microsecond
+        time.sleep(loop_duration-seconds)
+
     def run(self):
         '''執行自動交易'''
 
@@ -1372,6 +1381,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         # 開始監控
         while True:
+            self.loop_pause()
             now = datetime.now()
 
             if self.is_not_trade_day(now):
@@ -1392,7 +1402,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 (self.can_futures and now > TimeStartFuturesDay + timedelta(seconds=30)) or
                 (self.can_stock and now > TimeStartStock + timedelta(seconds=30))
             )
-            if is_trading_time and now.second < 5:
+            if is_trading_time and now.second == 0:
                 self._update_K1(self.StrategySet.dividends, quotes=self.Quotes)
                 self._set_target_quote_default(all_stocks+all_futures)
                 self._set_index_quote_default()
@@ -1427,9 +1437,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     order_data = self._place_order(order, market='Futures')
                     self._update_position(order, 'Futures', order_data)
 
-            time.sleep(max(5 - (datetime.now() - now).total_seconds(), 0))
-
-        time.sleep(10)
+        time.sleep(5)
         self.unsubscribe_all(all_stocks+all_futures)
 
     def simulator_update_securityInfo(self, df: pd.DataFrame, table):
