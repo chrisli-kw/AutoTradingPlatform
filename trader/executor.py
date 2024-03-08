@@ -1437,7 +1437,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     order_data = self._place_order(order, market='Futures')
                     self._update_position(order, 'Futures', order_data)
 
-        time.sleep(5)
+        time.sleep(3)
         self.unsubscribe_all(all_stocks+all_futures)
 
     def simulator_update_securityInfo(self, df: pd.DataFrame, table):
@@ -1547,4 +1547,4 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         if self.can_futures:
             self.__save_simulate_futuresInfo()
 
-        time.sleep(5)
+        time.sleep(1)
