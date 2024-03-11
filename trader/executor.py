@@ -376,9 +376,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                         self.futures_to_monitor[symbol] = None
 
                 # 更新監控庫存
-                elif not self.simulation:
-                    msg['code'] = symbol
-                    self.update_position_quantity(order['oc_type'], msg)
+                msg['code'] = symbol
+                self.update_position_quantity(order['oc_type'], msg)
 
         elif stat == constant.OrderState.FuturesDeal:
             notifier.post_fDeal(stat, msg)
