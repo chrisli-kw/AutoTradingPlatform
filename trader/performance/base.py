@@ -157,8 +157,8 @@ def compute_profits(tb):
         'MedianLoss': round(median_loss if median_loss else 0),
         'MeanProfit': round(mean_profit if mean_profit else 0),
         'MeanLoss': round(mean_loss if mean_loss else 0),
-        'MaxProfit': max_profit,
-        'MaxLoss': max_loss,
+        'MaxProfit': round(max_profit),
+        'MaxLoss': round(max_loss),
         'ProfitFactor': str(profit_factor),
         'ProfitRatio': str(ratio1)
     }
