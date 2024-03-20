@@ -829,6 +829,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                         new_contract = f'{target[:3]}{self.GetDueMonth(TODAY)}'
                         self.margin_table[new_contract] = self.margin_table[target]
                         self.futures_to_monitor.update({new_contract: None})
+                        self.subscribe_all([new_contract])
                         self.futures_transferred.pop(target)
                         self.futures_transferred.update({
                             new_contract: {

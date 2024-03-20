@@ -135,12 +135,16 @@ class TimeTool:
     def GetDueMonth(self, sourcedate: datetime, months: int = 1, refer_time=None):
         '''推算交割月份，在交割日之前的日期，交割月為當月，交割日之後為次月'''
 
-        if refer_time is None:
-            refer_time = datetime.now()
-
         sourcedate = pd.to_datetime(sourcedate)
         dueday = self.DueDays[(sourcedate.year, sourcedate.month)]
-        if sourcedate <= dueday and refer_time <= TimeTransferFutures:
+
+        if refer_time is None:
+            refer_time = datetime.now() <= TimeTransferFutures
+        else:
+            refer_time = sourcedate < dueday.replace(
+                hour=13, minute=30, second=0)
+
+        if sourcedate.date() <= dueday.date() and refer_time:
             return str(sourcedate.year) + str(sourcedate.month).zfill(2)
 
         month = sourcedate.month - 1 + months

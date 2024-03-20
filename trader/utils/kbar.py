@@ -375,7 +375,7 @@ class TickDataProcesser(TimeTool, FileHandler):
         '''
 
         # 留下近月交割 & 非時間價差交易
-        df['due'] = df.Time.apply(self.GetDueMonth)
+        df['due'] = df.Time.apply(lambda x: self.GetDueMonth(x, refer_time=x))
         df = df[
             (df.Simtrade == False) &
             (df.DueMonthOld == df.DueMonthNew) &
