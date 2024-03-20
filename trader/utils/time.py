@@ -4,7 +4,7 @@ import pandas as pd
 from typing import Union
 from datetime import datetime, timedelta
 
-from ..config import TODAY_STR, holidays
+from ..config import TODAY_STR, holidays, TimeTransferFutures
 
 
 class TimeTool:
@@ -132,11 +132,15 @@ class TimeTool:
 
             d += 1
 
-    def GetDueMonth(self, sourcedate: datetime, months: int = 1):
+    def GetDueMonth(self, sourcedate: datetime, months: int = 1, refer_time=None):
         '''推算交割月份，在交割日之前的日期，交割月為當月，交割日之後為次月'''
 
+        if refer_time is None:
+            refer_time = datetime.now()
+
+        sourcedate = pd.to_datetime(sourcedate)
         dueday = self.DueDays[(sourcedate.year, sourcedate.month)]
-        if pd.to_datetime(sourcedate) < dueday:
+        if sourcedate <= dueday and refer_time <= TimeTransferFutures:
             return str(sourcedate.year) + str(sourcedate.month).zfill(2)
 
         month = sourcedate.month - 1 + months
