@@ -794,6 +794,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     reason=msg
                 )
                 self._log_and_notify(msg)
+                self.futures_transferred.pop(target)
 
                 return self.OrderInfo(**infos)
 

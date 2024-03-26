@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
-from ..config import PATH
+from ..config import PATH, TODAY_STR
 from . import get_contract, concat_df
 from .time import TimeTool
 from .file import FileHandler
@@ -229,6 +229,10 @@ class WatchListTool(TimeTool, FileHandler):
                 self.futures_to_monitor[target]['order']['quantity'] -= quantity
             elif action == 'New':
                 stage = 'Add|Futures'
+
+                date = TODAY_STR.replace('-', '/')
+                data['contract'] = get_contract(target)
+                data['isDue'] = date == data['contract'].delivery_date
                 self.futures_to_monitor[target] = data
             else:
                 stage = 'None|Futures'
