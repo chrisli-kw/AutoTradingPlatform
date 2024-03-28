@@ -87,7 +87,7 @@ class FileHandler:
             if '.csv' in filename:
                 df.to_csv(filename, index=False, encoding='utf-8-sig')
             elif '.xlsx' in filename:
-                df.to_excel(filename, index=False, encoding='utf-8-sig')
+                df.to_excel(filename, index=False)  # , encoding='utf-8-sig')
             else:
                 df.to_pickle(filename)
 

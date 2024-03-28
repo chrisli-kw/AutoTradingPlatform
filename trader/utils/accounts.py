@@ -172,6 +172,7 @@ class AccountInfo(TimeTool, FileHandler):
 
     def get_profit_loss(self, start: str, end: str):
         '''查詢已實現損益'''
+        # TODO: delete in the future
         profitloss = API.list_profit_loss(API.stock_account, start, end)
         return self._obj_2_df(profitloss)
 
@@ -375,9 +376,8 @@ class AccountInfo(TimeTool, FileHandler):
             return df
         return self.df_futuresInfo
 
-    def get_settle_profitloss(self, start_date: str, end_date: str):
-        '''查看期權帳戶(已實現)損益'''
-        # TODO: 1.0.0 list_profit_loss_detail(*api.futopt_account*), list_profit_loss_summary(*api.futopt_account*)
+    def get_settle_profitloss(self, start_date: str, end_date: str, market='Stocks'):
+        '''查詢已實現損益'''
 
         if start_date:
             start_date = start_date.replace('-', '')
@@ -385,10 +385,22 @@ class AccountInfo(TimeTool, FileHandler):
         if end_date:
             end_date = end_date.replace('-', '')
 
-        settle_profitloss = API.get_account_settle_profitloss(
-            summary='Y', start_date=start_date, end_date=end_date)
-        df_profitloss = pd.DataFrame(settle_profitloss.data())
-        return df_profitloss
+        if market == 'Stocks':
+            account = API.stock_account
+        else:
+            account = API.futopt_account
+
+        profitloss_detail = []
+        profitloss = API.list_profit_loss(account, start_date, end_date)
+        for pls in profitloss:
+            pl_detail = API.list_profit_loss_detail(account, pls.id)
+            profitloss_detail += pl_detail
+
+        df = self._obj_2_df(profitloss_detail)
+        df = df.sort_values('date').drop_duplicates()
+        df.date = df.date.apply(lambda x: f'{x[:4]}-{x[4:6]}-{x[6:]}')
+        df['profit'] = df.pnl - df.tax - df.fee
+        return df
 
     def dataUsage(self):
         return round(API.usage().bytes/2**20, 2)
