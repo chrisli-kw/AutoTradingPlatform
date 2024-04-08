@@ -827,11 +827,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 )
                 if actionInfo.position:
                     if isTransfer:
-                        new_contract = f'{target[:3]}{self.GetDueMonth(TODAY)}'
+                        new_contract = f'{target[:3]}{self.GetDueMonth()}'
                         self.margin_table[new_contract] = self.margin_table[target]
                         self.futures_to_monitor.update({new_contract: None})
+                        self.history_kbars([new_contract])
                         self.subscribe_all([new_contract])
-                        self.futures_transferred.pop(target)
+                        self.futures_transferred.pop(target, None)
                         self.futures_transferred.update({
                             new_contract: {
                                 'quantity': quantity,
@@ -1028,7 +1029,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         codes = pd.DataFrame(codes, columns=['code', 'symbol', 'name'])
         codes = codes.set_index('name').symbol.to_dict()
 
-        month = self.GetDueMonth(TODAY_STR)[-2:]
+        month = self.GetDueMonth()[-2:]
         df['code'] = (df.商品別 + month).map(codes)
         return df.dropna().set_index('code')
 
@@ -1079,7 +1080,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         pools = {}
 
-        due_year_month = self.GetDueMonth(TODAY_STR)
+        due_year_month = self.GetDueMonth()
         for st in self.STRATEGY_FUTURES:
             if '小台' in st:
                 pools.update({f'MXF{due_year_month}': st})
