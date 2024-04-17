@@ -433,7 +433,11 @@ class CrawlFromHTML(TimeTool, FileHandler):
             logging.info(f'Period: {s} - {e}')
 
             url = f'{self.url_pc_ratio}?queryStartDate={s}&queryEndDate={e}'
-            tb = pd.read_html(url)[3]
+            try:
+                tb = pd.read_html(url)[3]
+            except:
+                tb = pd.read_html(url, encoding='utf-8')[0]
+
             df = concat_df(df, tb)
 
             if pd.to_datetime(e) >= pd.to_datetime(end):
