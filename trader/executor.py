@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 from . import __version__
 from . import notifier, picker, crawler2, file_handler
-from .config import API, PATH, TODAY, TODAY_STR, holidays
+from .config import API, PATH, TODAY, TODAY_STR, holidays, MonitorFreq
 from .config import FEE_RATE, TEnd, TTry, TimeStartStock, TimeStartFuturesDay, TimeEndStock
 from .config import TimeEndFuturesDay, TimeStartFuturesNight, TimeEndFuturesNight, TimeTransferFutures
 from .utils import get_contract
@@ -1338,13 +1338,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         return is_empty
 
     def loop_pause(self):
-        loop_duration = 5
-
         now = datetime.now()
         second = now.second
         microsecond = now.microsecond/10**len(str(now.microsecond))
-        seconds = second % loop_duration + microsecond
-        time.sleep(loop_duration-seconds)
+        seconds = second % MonitorFreq + microsecond
+        time.sleep(MonitorFreq-seconds)
 
     def run(self):
         '''執行自動交易'''

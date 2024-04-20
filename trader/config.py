@@ -97,6 +97,7 @@ class StrategyNameList:
 
 # 策略相關
 StrategyList = StrategyNameList()
+MonitorFreq = 3
 
 # 交易相關
 FEE_RATE = .01
