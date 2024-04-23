@@ -1417,7 +1417,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
                 if now.minute % 5 == 0:
                     self.updateKBars('5T')
-                    self.balance(mode='debug')  # 防止斷線用 TODO:待永豐更新後刪除
+                    balance = self.balance(mode='debug')  # 防止斷線用 TODO:待永豐更新後刪除
+                    if balance == -1:
+                        self._log_and_notify(
+                            f"【連線異常】{self.ACCOUNT_NAME} 無法查詢餘額")
 
                 if now.minute % 15 == 0:
                     self.updateKBars('15T')
