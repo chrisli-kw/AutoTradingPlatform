@@ -150,6 +150,7 @@ class CrawlStockData(FileHandler):
                 start = '2017-01-01'
 
         self.StockData = np.array([None]*N)
+        logging.info(f'Strat crawling, from {start} to {end}')
         while True:
             if q.empty():
                 os.remove(self.tempFile)
@@ -189,7 +190,7 @@ class CrawlStockData(FileHandler):
         此程式用來將全部的公司股票資料合併成一個
         '''
 
-        logging.info("Merge stockinfo")
+        logging.info(f"Merge {len(self.StockData)} stockinfo")
         if len(self.StockData):
             df = pd.concat(self.StockData)
             df.Time = pd.to_datetime(df.Time)
@@ -205,6 +206,7 @@ class CrawlStockData(FileHandler):
 
             self.remove_files(self.folder_path, pattern='.csv')
 
+        logging.info(f'Done, shape = {df.shape}')
         df = df.sort_values(['name', 'Time']).reset_index(drop=True)
         df = self.export_kbar_data(df, '1T')
         os.rmdir(self.folder_path)
