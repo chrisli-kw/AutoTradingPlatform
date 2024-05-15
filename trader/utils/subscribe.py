@@ -26,9 +26,9 @@ class Subscriber:
     def _set_target_quote_default(self, targets: list):
         '''初始化股票/期權盤中資訊'''
 
-        self.Quotes.AllTargets = {
+        self.Quotes.AllTargets.update({
             s: {k: [] for k in self.tick_targets} for s in targets
-        }
+        })
 
     def _set_index_quote_default(self):
         '''初始化指數盤中資訊'''

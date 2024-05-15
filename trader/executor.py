@@ -103,6 +103,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         # 期貨可進場籌碼 (進場時判斷用)
         self.futures_strategies = {}
         self.futures_transferred = {}
+        self.transfer_list = []
         self.n_futures = 0
         self.futures = pd.DataFrame()
         self.Futures_Code_List = {}
@@ -836,9 +837,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                         self.futures_transferred.update({
                             new_contract: {
                                 'quantity': quantity,
-                                'action': data['action']
+                                'action': data['order']['action']
                             }
                         })
+                        self.transfer_list.append(new_contract)
 
                     infos = dict(
                         action_type=actionType,
@@ -1408,7 +1410,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             )
             if is_trading_time and now.second == 0:
                 self._update_K1(self.StrategySet.dividends, quotes=self.Quotes)
-                self._set_target_quote_default(all_stocks+all_futures)
+                self._set_target_quote_default(
+                    all_stocks+all_futures+self.transfer_list)
                 self._set_index_quote_default()
                 self.StrategySet.update_indicators(now, self.KBars)
 
