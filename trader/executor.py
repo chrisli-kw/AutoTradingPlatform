@@ -560,12 +560,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         )
         self.futures.position.fillna(100, inplace=True)
         self.futures.index = self.futures.code
-        self.futures_strategies.update(self.futures.strategy.to_dict())
-
-        self.n_futures = self.futures.shape[0]
 
         # 剔除不堅控的股票
         self.futures = self.futures[~self.futures.code.isin(self.FILTER_OUT)]
+        self.futures_strategies.update(self.futures.strategy.to_dict())
+        self.n_futures = self.futures.shape[0]
 
         # update_futures_to_monitor
         self.futures_to_monitor.update(self.futures.to_dict('index'))
