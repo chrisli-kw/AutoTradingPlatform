@@ -118,8 +118,16 @@ class Notification:
 
         code = msg['code']
         delivery_month = msg['delivery_month']
-        name = API.Contracts.Futures[code]
-        name = name[code+delivery_month].name if name else msg['contract']['option_right']
+
+        if msg['option_right'] == 'Future':
+            name = API.Contracts.Futures[code]
+            code_ = code+delivery_month
+        else:
+            name = API.Contracts.Options[code]
+            option = msg["option_right"][6:7]
+            code_ = f'{code}{delivery_month}{int(msg["strike_price"])}{option}'
+        name = name[code_].name
+
         account = msg['account_id']
         price = msg['price']
         quantity = msg['quantity']
