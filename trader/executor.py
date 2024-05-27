@@ -333,6 +333,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
             code = msg['contract']['code']
             symbol = code + msg['contract']['delivery_month']
+            market = 'Futures' if msg['contract']['option_right'] == 'Future' else 'Options'
             if symbol not in self.Quotes.AllTargets:
                 for k in self.Quotes.AllTargets:
                     if symbol in k:
@@ -351,7 +352,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
             if order['account']['account_id'] == self.account_id_futopt:
                 if operation['op_code'] == '00' or operation['op_msg'] == '':
-                    self.update_deal_list(symbol, order['oc_type'], 'Futures')
+                    self.update_deal_list(symbol, order['oc_type'], market)
 
                     # 紀錄成交的賣單
                     sign = -1 if order['oc_type'] == 'Cover' else 1
@@ -372,7 +373,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 # 若刪單成功就自清單移除
                 if operation['op_type'] == 'Cancel':
                     self.deleteOrder(symbol)
-                    self.update_deal_list(symbol, 'Cancel', 'Futures')
+                    self.update_deal_list(symbol, 'Cancel', market)
                     if order['oc_type'] == 'New':
                         self.futures_to_monitor[symbol] = None
 

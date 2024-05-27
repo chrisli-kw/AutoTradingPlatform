@@ -191,7 +191,7 @@ class WatchListTool(TimeTool, FileHandler):
 
             if action_type == 'Cancel' and target in self.stock_bought:
                 self.stock_bought.remove(target)
-        else:
+        elif market == 'Futures':
             if action_type == 'New' and target not in self.futures_opened:
                 self.futures_opened.append(target)
 
