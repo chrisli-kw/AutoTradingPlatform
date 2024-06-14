@@ -279,6 +279,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         df = self.tick_to_df_targets(quotes.AllTargets, quotes.NowTargets)
         df = self.revert_dividend_price(df, dividends)
         self.KBars['1T'] = self.concatKBars(self.KBars['1T'], df)
+        self.KBars['1T'] = self.featureFuncs['1T'](self.KBars['1T'])
 
 
 class TickDataProcesser(TimeTool, FileHandler):
