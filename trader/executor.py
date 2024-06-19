@@ -1021,10 +1021,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
     def get_margin_table(self):
         '''取得保證金清單'''
-        df = self.read_table('./lib/indexMarging.csv').reset_index()
-        df.columns = list(df.iloc[0, :])
-        df = df.iloc[1:, :-2]
-        df.原始保證金 = df.原始保證金.astype(int)
+        df = self.read_table('./lib/indexMarging.csv')
 
         codes = [[f.code, f.symbol, f.name]
                  for m in API.Contracts.Futures for f in m]

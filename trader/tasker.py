@@ -188,44 +188,51 @@ def runSelectStock():
         notifier.post(f"\n【Error】【選股程式】選股發生異常", msgType='Tasker')
 
 
-def runCrawlFromHTML():
+def runCrawlPutCallRatio():
     try:
-        # update PutCallRatio
-        step = 'PutCallRatio'
         df_pcr_new = crawler2.put_call_ratio()
         crawler2.export_put_call_ratio(df_pcr_new)
-        # notifier.post_put_call_ratio(df_pcr_new)
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
     except:
         logging.exception('Catch an exception:')
-        notifier.post(f"\n【Error】【爬蟲程式】{step}發生異常", msgType='Tasker')
+        notifier.post(f"\n【Error】【爬蟲程式】PutCallRatio發生異常", msgType='Tasker')
 
+
+def runCrawlExDividendList():
     try:
-        # 爬除權息資料
-        step = '爬除權息資料'
         dividends = crawler2.ex_dividend_list()
         crawler2.export_ex_dividend_list(dividends)
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
     except:
         logging.exception('Catch an exception:')
-        notifier.post(f"\n【Error】【爬蟲程式】{step}發生異常", msgType='Tasker')
+        notifier.post(f"\n【Error】【爬蟲程式】爬除權息資料發生異常", msgType='Tasker')
 
+
+def runCrawlFuturesTickData(date=TODAY_STR):
     try:
-        # 期貨逐筆成交資料
-        step = '期貨逐筆成交資料'
-        crawler2.get_FuturesTickData(TODAY_STR)
+        crawler2.get_FuturesTickData(date)
 
         # 轉換&更新期貨逐筆成交資料
-        df = tdp.convert_daily_tick(TODAY_STR, '1T')
+        df = tdp.convert_daily_tick(date, '1T')
         crawler2.export_futures_kbar(df)
-
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
     except:
         logging.exception('Catch an exception:')
-        notifier.post(f"\n【Error】【爬蟲程式】{step}發生異常", msgType='Tasker')
+        notifier.post(f"\n【Error】【爬蟲程式】期貨逐筆成交資料發生異常", msgType='Tasker')
+
+
+def runCrawlIndexMargin():
+    try:
+        df = crawler2.get_IndexMargin()
+        file_handler.save_table(df, './lib/indexMarging.csv')
+    except KeyboardInterrupt:
+        notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
+    except:
+        logging.exception('Catch an exception:')
+        notifier.post(f"\n【Error】【爬蟲程式】期貨股價指數類保證金發生異常", msgType='Tasker')
 
 
 def thread_subscribe(user, targets):
@@ -328,10 +335,20 @@ def runSimulationChecker():
 Tasks = {
     'create_env': [runCreateENV],
     'account_info': [runAccountInfo, runSimulationChecker],
-    'update_and_select_stock': [runCrawlStockData, runSelectStock, runCrawlFromHTML],
+    'update_and_select_stock': [
+        runCrawlStockData,
+        runSelectStock,
+        runCrawlPutCallRatio,
+        runCrawlExDividendList,
+        runCrawlFuturesTickData,
+        runCrawlIndexMargin
+    ],
     'crawl_stock_data': [runCrawlStockData],
     'select_stock': [runSelectStock],
-    'crawl_html': [runCrawlFromHTML],
+    'crawl_put_call_ratio': [runCrawlPutCallRatio],
+    'crawl_ex_dividend_list': [runCrawlExDividendList],
+    'crawl_futures_tick_data': [runCrawlFuturesTickData],
+    'crawl_index_margin': [runCrawlIndexMargin],
     'auto_trader': [runAutoTrader],
     'subscribe': [runShioajiSubscriber],
 }

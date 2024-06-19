@@ -293,6 +293,7 @@ class CrawlFromHTML(TimeTool, FileHandler):
     url_ex_dividend = 'https://www.twse.com.tw/rwd/zh/exRight/TWT48U?response=csv'
     url_futures_tick = 'https://www.taifex.com.tw/file/taifex/Dailydownload/DailydownloadCSV'
     url_cash_settle = 'https://www.sinotrade.com.tw/Stock/Stock_3_8_3'
+    url_futures_margin = 'https://www.taifex.com.tw/cht/5/indexMarging'
 
     def above_one_url(self, pageName: str, date: str, stockid: str):
         '''產生豹投資網站資料的URL'''
@@ -626,3 +627,13 @@ class CrawlFromHTML(TimeTool, FileHandler):
         except:
             logging.warning('查無全額交割股清單')
             return pd.DataFrame(columns=['股票代碼'])
+
+    def get_IndexMargin(self):
+        '''取得期貨股價指數類保證金'''
+
+        try:
+            df = pd.read_html(self.url_futures_margin, encoding='utf8')
+            return df[0]
+        except:
+            logging.exception('查詢失敗：')
+            return pd.DataFrame(columns=['商品別', '結算保證金', '維持保證金', '原始保證金'])
