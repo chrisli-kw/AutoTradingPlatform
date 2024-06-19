@@ -840,6 +840,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                                 'action': data['order']['action']
                             }
                         })
+                        self.futures_strategies[new_contract] = strategy
                         self.transfer_list.append(new_contract)
 
                     infos = dict(
