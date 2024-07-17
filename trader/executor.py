@@ -1436,38 +1436,38 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         with ThreadPoolExecutor() as executor:
             executor.submit(periodic_updates)
 
-        while True:
-            self.loop_pause()
-            now = datetime.now()
+            while True:
+                self.loop_pause()
+                now = datetime.now()
 
-            if self.is_not_trade_day(now):
-                logging.info('Non-trading time, stop monitoring')
-                for scale in ['2T', '5T', '15T', '30T', '60T']:
-                    self.updateKBars(scale)
-                break
-            elif all(x == 0 for x in [
-                self.n_stocks_long, self.n_stocks_short,
-                self.N_LIMIT_LS, self.N_LIMIT_SS,
-                self.N_FUTURES_LIMIT, self.n_futures
-            ]):
-                self._log_and_notify(f"【停止監控】{self.ACCOUNT_NAME} 無可監控清單")
-                break
+                if self.is_not_trade_day(now):
+                    logging.info('Non-trading time, stop monitoring')
+                    for scale in ['2T', '5T', '15T', '30T', '60T']:
+                        self.updateKBars(scale)
+                    break
+                elif all(x == 0 for x in [
+                    self.n_stocks_long, self.n_stocks_short,
+                    self.N_LIMIT_LS, self.N_LIMIT_SS,
+                    self.N_FUTURES_LIMIT, self.n_futures
+                ]):
+                    self._log_and_notify(f"【停止監控】{self.ACCOUNT_NAME} 無可監控清單")
+                    break
 
-            # TODO: merge stocks_to_monitor & futures_to_monitor
-            for target in list(self.stocks_to_monitor):
-                order = self.monitor_stocks(target)
-                if order.pos_target:
-                    order_data = self._place_order(order, market='Stocks')
-                    self._update_position(order, 'Stocks', order_data)
+                # TODO: merge stocks_to_monitor & futures_to_monitor
+                for target in list(self.stocks_to_monitor):
+                    order = self.monitor_stocks(target)
+                    if order.pos_target:
+                        order_data = self._place_order(order, market='Stocks')
+                        self._update_position(order, 'Stocks', order_data)
 
-            for target in list(self.futures_to_monitor):
-                order = self.monitor_futures(target)
-                if order.pos_target:
-                    order_data = self._place_order(order, market='Futures')
-                    self._update_position(order, 'Futures', order_data)
+                for target in list(self.futures_to_monitor):
+                    order = self.monitor_futures(target)
+                    if order.pos_target:
+                        order_data = self._place_order(order, market='Futures')
+                        self._update_position(order, 'Futures', order_data)
 
-        time.sleep(3)
-        self.unsubscribe_all(all_stocks+all_futures)
+            time.sleep(3)
+            self.unsubscribe_all(all_stocks+all_futures)
 
     def simulator_update_securityInfo(self, df: pd.DataFrame, table):
         market = 'stocks' if 'stocks' in table.__tablename__ else 'futures'
