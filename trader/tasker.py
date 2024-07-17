@@ -252,7 +252,7 @@ def thread_subscribe(user, targets):
     @api.on_quote_stk_v1()
     def stk_quote_callback_v1(exchange, tick):
         if tick.intraday_odd == 0 and tick.simtrade == 0:
-            tick_data = subscriber.stk_quote_v1(tick)
+            tick_data = subscriber.update_quote_v1(tick)
             redis_tick.to_redis({tick.code: tick_data})
 
     config = dotenv_values(f'./lib/envs/{user}.env')

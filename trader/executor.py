@@ -8,6 +8,7 @@ from sys import platform
 from shioaji import constant
 from collections import namedtuple
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
 
 from . import __version__
 from . import notifier, picker, crawler2, file_handler
@@ -334,8 +335,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             code = msg['contract']['code']
             symbol = code + msg['contract']['delivery_month']
             market = 'Futures' if msg['contract']['option_right'] == 'Future' else 'Options'
-            if symbol not in self.Quotes.AllTargets:
-                for k in self.Quotes.AllTargets:
+            if symbol not in self.Quotes.NowTargets:
+                for k in self.Quotes.NowTargets:
                     if symbol in k:
                         symbol = k
             order = msg['order']
@@ -428,7 +429,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 if tick.code not in self.Quotes.NowTargets:
                     logging.debug(f'[Quotes]First|{tick.code}|')
 
-                tick_data = self.stk_quote_v1(tick)
+                tick_data = self.update_quote_v1(tick)
                 # self.to_redis({tick.code: tick_data})
 
         @API.on_tick_fop_v1()
@@ -440,7 +441,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     if symbol not in self.Quotes.NowTargets:
                         logging.debug(f'[Quotes]First|{symbol}|')
 
-                    tick_data = self.fop_quote_v1(symbol, tick)
+                    tick_data = self.update_quote_v1(tick, code=symbol)
                     # self.to_redis({symbol: tick_data})
             except KeyError:
                 logging.exception('KeyError: ')
@@ -683,7 +684,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         return np.unique(all)
 
     def monitor_stocks(self, target: str):
-        if target in self.Quotes.NowTargets:  # and self.Quotes.NowIndex:
+        if target in self.Quotes.NowTargets:
             inputs = self.getQuotesNow(target).copy()
             data = self.stocks_to_monitor[target]
             strategy = self.stock_strategies[target]
@@ -1337,12 +1338,22 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         return is_empty
 
-    def loop_pause(self):
+    def loop_pause(self, freq=-1):
+        if freq == -1:
+            freq = MonitorFreq
+
         now = datetime.now()
         second = now.second
-        microsecond = now.microsecond/10**len(str(now.microsecond))
-        seconds = second % MonitorFreq + microsecond
-        time.sleep(MonitorFreq-seconds)
+        microsecond = now.microsecond / 1e6
+
+        # Calculate time to sleep until the next interval
+        next_time = (second + microsecond) % freq
+        sleep_time = freq - next_time
+
+        if sleep_time < 0:
+            sleep_time += freq
+
+        time.sleep(sleep_time)
 
     def run(self):
         '''執行自動交易'''
@@ -1383,7 +1394,48 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         text += f"\n【數據用量】{usage}MB"
         notifier.post(text, msgType='Monitor')
 
+        def periodic_updates():
+            while True:
+                self.loop_pause(freq=.5)
+                now = datetime.now()
+
+                # update K-bar data
+                is_trading_time = (
+                    (self.can_futures and now > TimeStartFuturesDay + timedelta(seconds=30)) or
+                    (self.can_stock and now > TimeStartStock + timedelta(seconds=30))
+                )
+                if is_trading_time and now.second == 0 and now.microsecond/1e6 < .2:
+                    self._update_K1(
+                        self.StrategySet.dividends, quotes=self.Quotes)
+                    self._set_target_quote_default(
+                        all_stocks+all_futures+self.transfer_list)
+                    self._set_index_quote_default()
+                    self.StrategySet.update_indicators(now, self.KBars)
+
+                    if now.minute % 2 == 0:
+                        self.updateKBars('2T')
+
+                    if now.minute % 5 == 0:
+                        self.updateKBars('5T')
+                        # 防止斷線用 TODO:待永豐更新後刪除
+                        balance = self.balance(mode='debug')
+                        if balance == -1:
+                            self._log_and_notify(
+                                f"【連線異常】{self.ACCOUNT_NAME} 無法查詢餘額")
+
+                    if now.minute % 15 == 0:
+                        self.updateKBars('15T')
+
+                    if now.minute % 30 == 0:
+                        self.updateKBars('30T')
+
+                    if now.minute == 0:
+                        self.updateKBars('60T')
+
         # 開始監控
+        with ThreadPoolExecutor() as executor:
+            executor.submit(periodic_updates)
+
         while True:
             self.loop_pause()
             now = datetime.now()
@@ -1400,37 +1452,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
             ]):
                 self._log_and_notify(f"【停止監控】{self.ACCOUNT_NAME} 無可監控清單")
                 break
-
-            # update K-bar data
-            is_trading_time = (
-                (self.can_futures and now > TimeStartFuturesDay + timedelta(seconds=30)) or
-                (self.can_stock and now > TimeStartStock + timedelta(seconds=30))
-            )
-            if is_trading_time and now.second == 0:
-                self._update_K1(self.StrategySet.dividends, quotes=self.Quotes)
-                self._set_target_quote_default(
-                    all_stocks+all_futures+self.transfer_list)
-                self._set_index_quote_default()
-                self.StrategySet.update_indicators(now, self.KBars)
-
-                if now.minute % 2 == 0:
-                    self.updateKBars('2T')
-
-                if now.minute % 5 == 0:
-                    self.updateKBars('5T')
-                    balance = self.balance(mode='debug')  # 防止斷線用 TODO:待永豐更新後刪除
-                    if balance == -1:
-                        self._log_and_notify(
-                            f"【連線異常】{self.ACCOUNT_NAME} 無法查詢餘額")
-
-                if now.minute % 15 == 0:
-                    self.updateKBars('15T')
-
-                if now.minute % 30 == 0:
-                    self.updateKBars('30T')
-
-                if now.minute == 0:
-                    self.updateKBars('60T')
 
             # TODO: merge stocks_to_monitor & futures_to_monitor
             for target in list(self.stocks_to_monitor):

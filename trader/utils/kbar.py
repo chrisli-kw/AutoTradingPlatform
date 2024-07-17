@@ -197,31 +197,31 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
                     df.loc[has_dividend, col] += _dividends
         return df
 
-    def tick_to_df_targets(self, q_all: dict, q_now: dict):
+    def tick_to_df_targets(self, quotes):
         '''將個股tick資料轉為K棒'''
 
-        if not q_all and not q_now:
+        q_all = quotes.AllTargets
+        q_now = quotes.NowTargets
+
+        if not q_all:
             return pd.DataFrame()
 
-        if any([] in q_all[s].values() for s in q_all):
-            q_all = {s: q_all[s] for s in q_all if [] not in q_all[s].values()}
-            q_all.update(
-                {s: {k: [v] for k, v in q_now[s].items()} for s in q_now if s not in q_all})
+        for target, values in q_all.items():
+            if None in values:
+                q_all[target].update({
+                    'Open': q_now[target]['price'],
+                    'High': q_now[target]['price'],
+                    'Low': q_now[target]['price'],
+                    'Close': q_now[target]['price']
+                })
 
-        tb = pd.DataFrame(q_all).T
-
-        if not tb.shape[1]:
-            return pd.DataFrame()
-
+        tb = pd.DataFrame(q_all).T.reset_index()
+        tb = tb.rename(columns={'index': 'name'}).dropna()
         tb['Time'] = pd.to_datetime(datetime.now())
-        tb['Open'] = tb.price.apply(lambda x: x[0])
-        tb['High'] = tb.price.apply(max)
-        tb['Low'] = tb.price.apply(min)
-        tb['Close'] = tb.price.apply(lambda x: x[-1])
-        tb.volume = tb.volume.apply(sum)
-        tb['Amount'] = tb.amount.apply(lambda x: x[-1])
-        tb = tb.reset_index().rename(
-            columns={'index': 'name', 'volume': 'Volume'})
+
+        if not tb.shape[0]:
+            return pd.DataFrame()
+
         return tb[self.kbar_columns]
 
     def tick_to_df_index(self, quotes: list):
@@ -276,7 +276,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
                 tb = self.tick_to_df_index(quotes.AllIndex[i])
                 self.KBars['1T'] = self.concatKBars(self.KBars['1T'], tb)
 
-        df = self.tick_to_df_targets(quotes.AllTargets, quotes.NowTargets)
+        df = self.tick_to_df_targets(quotes)
         df = self.revert_dividend_price(df, dividends)
         self.KBars['1T'] = self.concatKBars(self.KBars['1T'], df)
         self.KBars['1T'] = self.featureFuncs['1T'](self.KBars['1T'])
