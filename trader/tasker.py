@@ -6,7 +6,7 @@ from datetime import datetime
 from dotenv import dotenv_values
 from concurrent.futures import as_completed
 
-from . import executor, notifier, picker, crawler1, crawler2, tdp, file_handler
+from . import exec, notifier, picker, crawler1, crawler2, tdp, file_handler
 from .config import API, PATH, TODAY_STR, ACCOUNTS, TEnd, ConvertScales
 from .create_env import app
 from .utils.database import redis_tick
@@ -295,7 +295,7 @@ def runShioajiSubscriber():
     futures = []
     for i, user in enumerate(ACCOUNTS):
         targets = codes[N*i:N*(i+1)]
-        future = executor.submit(thread_subscribe, user, targets)
+        future = exec.submit(thread_subscribe, user, targets)
         futures.append(future)
 
     for future in as_completed(futures):

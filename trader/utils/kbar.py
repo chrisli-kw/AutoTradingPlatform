@@ -219,7 +219,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         tb = tb.rename(columns={'index': 'name'}).dropna()
         tb['Time'] = pd.to_datetime(datetime.now())
 
-        if not tb.shape[0]:
+        if not tb.shape[0] or tb.shape[1] == 1:
             return pd.DataFrame()
 
         return tb[self.kbar_columns]
@@ -268,17 +268,19 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
                 kbar = self.concatKBars(self.KBars[scale], tb)
                 self.KBars[scale] = self.featureFuncs[scale](kbar)
 
-    def _update_K1(self, dividends: dict, quotes):
+    def _update_K1(self, quotes, quote_type='Securities'):
         '''每隔1分鐘更新1分K'''
 
-        if TimeStartStock <= datetime.now() <= TimeEndStock:
-            for i in quotes.AllIndex:
-                tb = self.tick_to_df_index(quotes.AllIndex[i])
-                self.KBars['1T'] = self.concatKBars(self.KBars['1T'], tb)
+        if quote_type == 'Index':
+            if TimeStartStock <= datetime.now() <= TimeEndStock:
+                for i in quotes.AllIndex:
+                    tb = self.tick_to_df_index(quotes.AllIndex[i])
+                    self.KBars['1T'] = self.concatKBars(self.KBars['1T'], tb)
+        else:
+            df = self.tick_to_df_targets(quotes)
+            # df = self.revert_dividend_price(df, dividends) # TODO
+            self.KBars['1T'] = self.concatKBars(self.KBars['1T'], df)
 
-        df = self.tick_to_df_targets(quotes)
-        df = self.revert_dividend_price(df, dividends)
-        self.KBars['1T'] = self.concatKBars(self.KBars['1T'], df)
         self.KBars['1T'] = self.featureFuncs['1T'](self.KBars['1T'])
 
 

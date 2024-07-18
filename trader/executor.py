@@ -8,15 +8,13 @@ from sys import platform
 from shioaji import constant
 from collections import namedtuple
 from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor
 
 from . import __version__
-from . import notifier, picker, crawler2, file_handler
+from . import exec, notifier, picker, crawler2, file_handler
 from .config import API, PATH, TODAY, TODAY_STR, holidays, MonitorFreq
 from .config import FEE_RATE, TEnd, TTry, TimeStartStock, TimeStartFuturesDay, TimeEndStock
 from .config import TimeEndFuturesDay, TimeStartFuturesNight, TimeEndFuturesNight, TimeTransferFutures
 from .utils import get_contract
-from .utils.kbar import KBarTool
 from .utils.orders import OrderTool
 from .utils.cipher import CipherTool
 from .utils.accounts import AccountInfo
@@ -34,9 +32,8 @@ except:
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
-class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscriber):
+class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
     def __init__(self, config=None):
-        self.executor = ThreadPoolExecutor()
         self.ct = CipherTool(decrypt=True, encrypt=False)
         self.CONFIG = config
 
@@ -85,9 +82,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         self.FUTURES_MODEL_VERSION = self.getENV('FUTURES_MODEL_VERSION')
 
         super().__init__()
-        KBarTool.__init__(self, self.KBAR_START_DAYay)
+        Subscriber.__init__(self, self.KBAR_START_DAYay)
         OrderTool.__init__(self)
-        Subscriber.__init__(self)
         WatchListTool.__init__(self, self.ACCOUNT_NAME)
 
         # 股票可進場籌碼 (進場時判斷用)
@@ -1307,19 +1303,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
         return is_holiday or not (now <= TEnd)
 
     def is_break_loop(self, now: datetime):
-        if self.is_not_trade_day(now):
-            logging.info('Non-trading time, stop monitoring')
-            for scale in ['2T', '5T', '15T', '30T', '60T']:
-                self.updateKBars(scale)
-            return True
-        elif all(x == 0 for x in [
-            self.n_stocks_long, self.n_stocks_short,
-            self.N_LIMIT_LS, self.N_LIMIT_SS,
-            self.N_FUTURES_LIMIT, self.n_futures
-        ]):
-            self._log_and_notify(f"【停止監控】{self.ACCOUNT_NAME} 無可監控清單")
-            return True
-        return False
+        return (
+            self.is_not_trade_day(now) or
+            all(x == 0 for x in [
+                self.n_stocks_long, self.n_stocks_short,
+                self.N_LIMIT_LS, self.N_LIMIT_SS,
+                self.N_FUTURES_LIMIT, self.n_futures
+            ])
+        )
 
     def check_remove_monitor(self, target: str, action_type: str, market='Stocks'):
         if action_type == 'Open':
@@ -1354,10 +1345,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         return is_empty
 
-    def loop_pause(self, freq=-1):
-        if freq == -1:
-            freq = MonitorFreq
-
+    def loop_pause(self, freq=MonitorFreq):
         now = datetime.now()
         second = now.second
         microsecond = now.microsecond / 1e6
@@ -1412,7 +1400,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
 
         def periodic_updates():
             while True:
-                self.loop_pause(freq=.1)
+                self.loop_pause(freq=.5)
                 now = datetime.now()
 
                 if self.is_break_loop(now):
@@ -1423,12 +1411,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                     (self.can_futures and now > TimeStartFuturesDay + timedelta(seconds=30)) or
                     (self.can_stock and now > TimeStartStock + timedelta(seconds=30))
                 )
-                if is_trading_time and now.second == 0 and now.microsecond/1e6 < .1:
-                    self._update_K1(
-                        self.StrategySet.dividends, quotes=self.Quotes)
-                    self._set_target_quote_default(
-                        all_stocks+all_futures+self.transfer_list)
-                    self._set_index_quote_default()
+                if is_trading_time and now.second == 0 and now.microsecond/1e6 < .5:
                     self.StrategySet.update_indicators(now, self.KBars)
 
                     if now.minute % 2 == 0:
@@ -1452,7 +1435,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                         self.updateKBars('60T')
 
         # 開始監控
-        self.executor.submit(periodic_updates)
+        exec.submit(periodic_updates)
 
         while True:
             self.loop_pause()
@@ -1473,6 +1456,18 @@ class StrategyExecutor(AccountInfo, WatchListTool, KBarTool, OrderTool, Subscrib
                 if order.pos_target:
                     order_data = self._place_order(order, market='Futures')
                     self._update_position(order, 'Futures', order_data)
+
+        logging.info('Non-trading time, stop monitoring')
+
+        for scale in ['2T', '5T', '15T', '30T', '60T']:
+            self.updateKBars(scale)
+
+        if all(x == 0 for x in [
+            self.n_stocks_long, self.n_stocks_short,
+            self.N_LIMIT_LS, self.N_LIMIT_SS,
+            self.N_FUTURES_LIMIT, self.n_futures
+        ]):
+            self._log_and_notify(f"【停止監控】{self.ACCOUNT_NAME} 無可監控清單")
 
         time.sleep(3)
         self.unsubscribe_all(all_stocks+all_futures)

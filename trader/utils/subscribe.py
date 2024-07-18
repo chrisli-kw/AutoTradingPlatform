@@ -1,8 +1,11 @@
 import numpy as np
+import pandas as pd
 from typing import Union
+from threading import Lock
 
 from ..config import API
 from . import get_contract
+from .kbar import KBarTool
 
 
 class Quotes:
@@ -13,11 +16,14 @@ class Quotes:
     TempKbars = {}
 
 
-class Subscriber:
-    def __init__(self):
+class Subscriber(KBarTool):
+    def __init__(self, kbar_start_day=''):
+        KBarTool.__init__(self, kbar_start_day)
+
         # 即時成交資料, 所有成交資料, 下單資料
         self.BidAsk = {}
         self.Quotes = Quotes()
+        self.lock = Lock()
 
     def _set_target_quote_default(self, targets: list):
         '''初始化股票/期權盤中資訊'''
@@ -40,12 +46,18 @@ class Subscriber:
         self.Quotes.AllIndex = {'TSE001': [], 'OTC101': []}
 
     def index_v0(self, quote: dict):
-        if quote['Code'] == '001':
-            self.Quotes.NowIndex['TSE001'] = quote
-            self.Quotes.AllIndex['TSE001'].append(quote)
-        elif quote['Code'] == '101':
-            self.Quotes.NowIndex['OTC101'] = quote
-            self.Quotes.AllIndex['OTC101'].append(quote)
+        indexes = {'001': 'TSE001', '101': 'OTC101'}
+        code = indexes[quote['Code']]
+        t1 = pd.to_datetime(quote['Time'])
+        t2 = pd.to_datetime(self.Quotes.NowIndex[code])
+
+        if code in self.Quotes.NowIndex and t1.minute != t2.minute:
+            with self.lock:
+                self._update_K1(self.Quotes, quote_type='Index')
+                self.Quotes.AllIndex[code] = []
+
+        self.Quotes.NowIndex[code] = quote
+        self.Quotes.AllIndex[code].append(quote)
 
     def update_quote_v1(self, tick, code=''):
         '''處理即時成交資料'''
@@ -67,8 +79,16 @@ class Subscriber:
 
         price = tick_data['close']
         tick_data['price'] = price
-        kbar_data = self.Quotes.AllTargets[code].copy()
 
+        if (
+            code in self.Quotes.NowTargets and
+            tick_data['datetime'].minute != self.Quotes.NowTargets[code]['datetime'].minute
+        ):
+            with self.lock:
+                self._update_K1(self.Quotes)
+                self._set_target_quote_default([code])
+
+        kbar_data = self.Quotes.AllTargets[code].copy()
         self.Quotes.AllTargets[code] = {
             'Open': price if kbar_data['Open'] is None else kbar_data['Open'],
             'High': max(kbar_data['High'], price),
