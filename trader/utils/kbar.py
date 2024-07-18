@@ -7,7 +7,7 @@ from typing import List, Dict
 from datetime import datetime, timedelta
 
 from ..config import API, PATH, TODAY, TODAY_STR, TimeStartStock, TimeEndStock
-from ..config import KbarFeatures
+from ..config import KbarFeatures, MonitorFreq
 from ..indicators.signals import TechnicalSignals
 from . import get_contract, concat_df
 from .time import TimeTool
@@ -217,7 +217,8 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
 
         tb = pd.DataFrame(q_all).T.reset_index()
         tb = tb.rename(columns={'index': 'name'}).dropna()
-        tb['Time'] = pd.to_datetime(datetime.now())
+        tb['Time'] = pd.to_datetime(
+            datetime.now() + timedelta(seconds=max(1, MonitorFreq)))
 
         if not tb.shape[0] or tb.shape[1] == 1:
             return pd.DataFrame()
