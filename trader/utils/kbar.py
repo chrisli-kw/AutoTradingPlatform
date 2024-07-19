@@ -218,7 +218,8 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         tb = pd.DataFrame(q_all).T.reset_index()
         tb = tb.rename(columns={'index': 'name'}).dropna()
         tb['Time'] = pd.to_datetime(
-            datetime.now() + timedelta(seconds=max(1, MonitorFreq)))
+            datetime.now())  # +
+        # timedelta(seconds=max(1, MonitorFreq)))
 
         if not tb.shape[0] or tb.shape[1] == 1:
             return pd.DataFrame()
