@@ -1406,13 +1406,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 if self.is_break_loop(now):
                     break
 
+                self.StrategySet.update_indicators(now, self.KBars)
+
                 # update K-bar data
                 is_trading_time = (
                     (self.can_futures and now > TimeStartFuturesDay + timedelta(seconds=30)) or
                     (self.can_stock and now > TimeStartStock + timedelta(seconds=30))
                 )
                 if is_trading_time and now.second == 0 and now.microsecond/1e6 < .5:
-                    self.StrategySet.update_indicators(now, self.KBars)
 
                     if now.minute % 2 == 0:
                         self.updateKBars('2T')
