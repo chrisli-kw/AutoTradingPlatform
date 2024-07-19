@@ -48,13 +48,15 @@ class Subscriber(KBarTool):
     def index_v0(self, quote: dict):
         indexes = {'001': 'TSE001', '101': 'OTC101'}
         code = indexes[quote['Code']]
-        t1 = pd.to_datetime(quote['Time'])
-        t2 = pd.to_datetime(self.Quotes.NowIndex[code])
 
-        if code in self.Quotes.NowIndex and t1.minute != t2.minute:
-            with self.lock:
-                self._update_K1(self.Quotes, quote_type='Index')
-                self.Quotes.AllIndex[code] = []
+        if code in self.Quotes.NowIndex:
+            t1 = pd.to_datetime(quote['Time'])
+            t2 = pd.to_datetime(self.Quotes.NowIndex[code]['Time'])
+
+            if code in self.Quotes.NowIndex and t1.minute != t2.minute:
+                with self.lock:
+                    self._update_K1(self.Quotes, quote_type='Index')
+                    self.Quotes.AllIndex[code] = []
 
         self.Quotes.NowIndex[code] = quote
         self.Quotes.AllIndex[code].append(quote)
