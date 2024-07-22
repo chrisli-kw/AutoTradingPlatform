@@ -1435,7 +1435,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                     if now > TimeStartFuturesNight and now.minute == 0:
                         self.updateKBars('60T')
                     elif now > TimeStartFuturesDay and now.minute == 45:
-                        self.updateKBars('30T')
+                        self.updateKBars('60T')
 
         # 開始監控
         exec.submit(periodic_updates)
