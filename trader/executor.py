@@ -1406,8 +1406,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 if self.is_break_loop(now):
                     break
 
-                self.StrategySet.update_indicators(now, self.KBars)
-
                 # update K-bar data
                 is_trading_time = (
                     (self.can_futures and now > TimeStartFuturesDay + timedelta(seconds=30)) or
