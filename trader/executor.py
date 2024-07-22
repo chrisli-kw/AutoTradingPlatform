@@ -1566,11 +1566,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
             f'{PATH}/stock_pool/statement_{self.ACCOUNT_NAME}.csv')
         self.StrategySet.export_strategy_data()
 
-        if (datetime.now().weekday() not in [5, 6]):
-            for freq, df in self.KBars.items():
-                if freq != '1D':
-                    filename = f'{PATH}/Kbars/k{freq[:-1]}min_{self.ACCOUNT_NAME}.csv'
-                    self.save_table(df, filename)
+        for freq, df in self.KBars.items():
+            if freq != '1D':
+                filename = f'{PATH}/Kbars/k{freq[:-1]}min_{self.ACCOUNT_NAME}.csv'
+                self.save_table(df, filename)
 
         if self.can_stock:
             self.__save_simulate_securityInfo()
