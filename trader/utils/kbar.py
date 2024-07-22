@@ -261,7 +261,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         t2 = t1 - timedelta(minutes=_scale + .5)
         if not self.KBars[scale][self.KBars[scale].Time >= t2].shape[0]:
             tb = self.KBars['1T'].copy()
-            tb = tb[(tb.Time >= t2) & (tb.Time < t1)]
+            tb = tb[(tb.Time > t2) & (tb.Time <= t1)]
             if tb.shape[0]:
                 tb = self.convert_kbar(tb, scale=scale)
 
