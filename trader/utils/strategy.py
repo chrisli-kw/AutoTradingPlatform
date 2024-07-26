@@ -37,6 +37,7 @@ class StrategyTool:
         }
         self.QuantityFunc = {}
         self.revert_action = {}
+        self.n_categories = None
 
     def set_config(self, **kwargs):
         self.account_name = kwargs.get('account_name', 'unknown')
@@ -82,7 +83,7 @@ class StrategyTool:
 
     def setNStockLimitLong(self, KBars: dict = None):
         '''
-        Set the number limit of securities of a portfolio can hold 
+        Set the number limit of securities of a portfolio can hold
         for a long strategy
         '''
 
@@ -94,7 +95,7 @@ class StrategyTool:
 
     def setNStockLimitShort(self, KBars: dict = None):
         '''
-        Set the number limit of securities of a portfolio can hold 
+        Set the number limit of securities of a portfolio can hold
         for a short strategy
         '''
 
@@ -132,6 +133,13 @@ class StrategyTool:
         except:
             logging.warning('==========exdividends.csv不存在，無除權息股票清單==========')
             return {}
+
+    def get_strategy_list(self, market='Stocks'):
+        if market == 'Stocks':
+            strategies = self.STRATEGIES_STOCK.copy()
+        else:
+            strategies = self.STRATEGIES_FUTURES.copy()
+        return strategies.sort_values(ascending=False).name.to_list()
 
     def get_put_call_ratio(self):
         '''取得前一個交易日收盤後的Put-Call ratio'''

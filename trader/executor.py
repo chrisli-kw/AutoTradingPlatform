@@ -48,6 +48,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         self.KBAR_START_DAYay = self.getENV('KBAR_START_DAYay', 'date')
         self.MODE = self.getENV('MODE')
         self.MARKET = self.getENV('MARKET')
+        self.FILTER_IN = self.getENV('FILTER_IN', 'dict')
         self.FILTER_OUT = self.getENV('FILTER_OUT', 'list')
         self.STRATEGY_STOCK = self.getENV('STRATEGY_STOCK', 'list')
         self.PRICE_THRESHOLD = self.getENV('PRICE_THRESHOLD', 'int')
@@ -96,7 +97,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         self.total_market_value = 0
         self.punish_list = []
         self.pct_chg_DowJones = self.get_pct_chg_DowJones()
-        self.n_categories = None
 
         # 期貨可進場籌碼 (進場時判斷用)
         self.futures_strategies = {}
@@ -140,6 +140,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 if 'none' in env.lower():
                     return []
                 return env.replace(' ', '').split(',')
+            elif type_ == 'dict':
+                envs = {}
+                for e in  env.split(','):
+                    e = e.split(':')
+                    envs.update({e[0]: e[1]})
+                return envs
             elif type_ == 'date' and env:
                 return pd.to_datetime(env)
             elif type_ == 'decrypt':
@@ -151,6 +157,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
             return 0
         elif type_ == 'list':
             return []
+        elif type_ == 'dict':
+            return {}
         return None
 
     def _set_trade_risks(self):
@@ -490,7 +498,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
             return []
 
         # 讀取選股清單
-        self.stock_strategies = self.get_stock_pool()
+        self.stock_strategies = self.get_securityPool('Stocks')
 
         # 取得遠端庫存
         self.stocks = self.get_securityInfo('Stocks')
@@ -545,7 +553,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
             return []
 
         # 讀取選股清單
-        self.futures_strategies = self.get_futures_pool()
+        self.futures_strategies = self.get_securityPool('Futures')
 
         # 取得遠端庫存
         self.futures = self.get_securityInfo('Futures')
@@ -1031,78 +1039,41 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         df['code'] = (df.商品別 + month).map(codes)
         return df.dropna().set_index('code')
 
-    def get_stock_pool(self):
-        '''取得股票選股池。pools = {stockid: strategy}'''
+    def get_securityPool(self, market='Stocks'):
+        '''
+        Get the target securities pool with the format:
+          {code: strategy}
+        '''
 
         pools = {}
+        if market=='Stocks':
+            pools.update(self.FILTER_IN)
+        else:
+            due_year_month = self.GetDueMonth()
+            pools.update({
+                f'{code}{due_year_month}': st for code, st in self.FILTER_IN.items()})
 
         df = picker.get_selection_files()
         if df.shape[0]:
             # 排除不交易的股票
-            # ### 全額交割股不買
-            day_filter_out = crawler2.get_CashSettle()
-            df = df[~df.code.isin(day_filter_out.股票代碼.values)]
+            if market=='Stocks':
+                # 全額交割股不買
+                day_filter_out = crawler2.get_CashSettle()
+                df = df[~df.code.isin(day_filter_out.股票代碼.values)]
+            
+                # 排除高價股
+                df = df[df.Close <= self.PRICE_THRESHOLD]
+
+                strategies = self.STRATEGY_STOCK
+            else:
+                strategies = self.STRATEGY_FUTURES
+
             df = df[~df.code.isin(self.FILTER_OUT)]
-
-            # 排除高價股
-            df = df[df.Close <= self.PRICE_THRESHOLD]
-
             df = df.sort_values('Close')
 
-            # 建立族群清單
-            n_category = df.groupby('category').code.count().to_dict()
-            df['n_category'] = df.category.map(n_category)
-            self.n_categories = (
-                df.sort_values('n_category', ascending=False)
-                .set_index('code').n_category.to_dict())
-
-            # 族群清單按照策略權重 & pc_ratio 決定
-            # 權重大的先加入，避免重複
-            if self.StrategySet.pc_ratio >= 115:
-                sort_order = ['long_weight', 'short_weight']
-            else:
-                sort_order = ['short_weight', 'long_weight']
-            strategies = self.StrategySet.STRATEGIES_STOCK.sort_values(
-                sort_order, ascending=False).name.to_list()
-
-            for s in strategies:
-                if s in df.Strategy.values and s in self.STRATEGY_STOCK:
-                    code = df[df.Strategy == s].code
-                    pools.update({stock: s for stock in code})
-                    df = df[~df.code.isin(code)]
-
-        return pools
-
-    def get_futures_pool(self):
-        '''取得期權目標商品清單。pools = {symbol: stragety}'''
-
-        pools = {}
-
-        due_year_month = self.GetDueMonth()
-        for st in self.STRATEGY_FUTURES:
-            if '小台' in st:
-                pools.update({f'MXF{due_year_month}': st})
-            elif '大台' in st:
-                pools.update({f'TXF{due_year_month}': st})
-
-        df = picker.get_selection_files()
-        if df.shape[0]:
-            # 排除不交易的股票
-            df = df[~df.code.isin(self.FILTER_OUT)]
-
-            df = df.sort_values('Close')
-
-            # 族群清單按照策略權重 & pc_ratio 決定
-            # 權重大的先加入，避免重複
-            if self.StrategySet.pc_ratio >= 115:
-                sort_order = ['long_weight', 'short_weight']
-            else:
-                sort_order = ['short_weight', 'long_weight']
-            strategies = self.StrategySet.STRATEGIES_FUTURES.sort_values(
-                sort_order, ascending=False).name.to_list()
-
-            for s in strategies:
-                if s in df.Strategy.values and s in self.STRATEGY_FUTURES:
+            strategies_ordered = self.StrategySet.get_strategy_list(market)
+            for s in strategies_ordered:
+                if s in df.Strategy.values and s in strategies:
                     code = df[df.Strategy == s].code
                     pools.update({stock: s for stock in code})
                     df = df[~df.code.isin(code)]

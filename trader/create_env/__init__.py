@@ -51,7 +51,10 @@ def _create_env(inputs):
         # 市場類型:stock/futures/stock and futures
         MARKET={markets[inputs['MARKET']]}
 
-        # 過濾掉不監控股票的清單，沒有等號後面空白
+        # 加入要監控的清單，沒有等號後面空白
+        FILTER_IN={inputs['FILTER_IN']}
+
+        # 過濾掉不監控的清單，沒有等號後面空白
         FILTER_OUT={inputs['FILTER_OUT']}
 
         # 股票要執行的策略
