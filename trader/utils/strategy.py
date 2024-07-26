@@ -111,7 +111,19 @@ class StrategyTool:
 
     def _get_value(self, data: pd.DataFrame, stockid: str, col: str):
         if isinstance(data, pd.DataFrame):
-            tb = data[data.name == stockid]
+            # Check if the dataframe is empty
+            if data.empty:
+                logging.info(f"Dataframe is empty for stockid: {stockid}")
+                return 0
+
+            # Check if there's any missing value
+            if data.tail(1).isnull().values.any():
+                logging.info(
+                    f"Dataframe contains NaN values for stockid: {stockid} --> ")
+                logging.info(f'{data.tail().to_string()}')
+                data = data.fillna(0)
+
+            tb = data[data.name == stockid].copy()
 
             if tb.shape[0]:
                 return tb[col].values[-1]
