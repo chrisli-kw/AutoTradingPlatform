@@ -1467,63 +1467,50 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 filename=f'{PATH}/stock_pool/simulation_{market.lower()}_{self.ACCOUNT_NAME}.pkl'
             )
 
-    def __save_simulate_securityInfo(self):
-        '''儲存模擬交易模式下的股票庫存表'''
-        if not self.can_stock or not self.simulation:
+    def __save_simulate_securityInfo(self, market='Stocks'):
+        '''儲存模擬交易模式下的庫存表'''
+
+        if not self.can_stock or not self.can_futures or not self.simulation:
             return
 
-        # 儲存庫存
-        logging.debug(f'stocks_to_monitor: {self.stocks_to_monitor}')
-        df = {k: v for k, v in self.stocks_to_monitor.items() if v}
+        if market == 'Stocks':
+            monitor_list = self.stocks_to_monitor
+        else:
+            monitor_list = self.futures_to_monitor
+
+        logging.debug(f'{market.lower()}_to_monitor: {monitor_list}')
+        df = {k: v for k, v in monitor_list.items() if v}
         df = pd.DataFrame(df).T
         if df.shape[0]:
             df = df[df.account_id.str.contains('simulate')]
-            df = df.sort_values('code').reset_index()
+            df['account'] = self.ACCOUNT_NAME
+
+            if market == 'Stocks':
+                df = df.sort_values('code').reset_index()
+                df.yd_quantity = df.quantity
+                df['pnl'] = df.action.apply(lambda x: 1 if x == 'Buy' else -1)
+            else:
+                df = df.reset_index(drop=True)
+
+                if 'order' in df.columns:
+                    df['direction'] = df.order.apply(lambda x: x['action'])
+                else:
+                    df['direction'] = df.action
+                df['pnl'] = df.direction.apply(
+                    lambda x: 1 if x == 'Buy' else -1)
+
             if self.is_not_trade_day(datetime.now()):
                 df['last_price'] = 0
             else:
                 df['last_price'] = df.code.map(
                     {s: self.getQuotesNow(s)['price'] for s in df.code})
-            df['pnl'] = df.action.apply(lambda x: 1 if x == 'Buy' else -1)
+
             df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
-            df.yd_quantity = df.quantity
-            df['account'] = self.ACCOUNT_NAME
-            df = df[self.get_info_default('Stocks').columns]
+            df = df[self.get_info_default(market).columns]
         else:
-            df = self.get_info_default('Stocks')
+            df = self.get_info_default(market)
 
-        self.simulator_update_securityInfo(df, market='Stocks')
-
-    def __save_simulate_futuresInfo(self):
-        '''儲存模擬交易模式下的期貨庫存表'''
-        if not self.can_futures or not self.simulation:
-            return
-
-        # 儲存庫存
-        logging.debug(f'futures_to_monitor: {self.futures_to_monitor}')
-        df = {k: v for k, v in self.futures_to_monitor.items() if v}
-        df = pd.DataFrame(df).T
-        if df.shape[0]:
-            df = df[df.account_id.str.contains('simulate')]
-            df = df.reset_index(drop=True)
-            if 'order' in df.columns:
-                df['direction'] = df.order.apply(lambda x: x['action'])
-            else:
-                df['direction'] = df.action
-            if self.is_not_trade_day(datetime.now()):
-                df['last_price'] = 0
-            else:
-                df['last_price'] = df.code.map(
-                    {s: self.getQuotesNow(s)['price'] for s in df.code})
-            df['pnl'] = df.direction.apply(
-                lambda x: 1 if x == 'Buy' else -1)
-            df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
-            df['account'] = self.ACCOUNT_NAME
-            df = df[self.get_info_default('Futures').columns]
-        else:
-            df = self.get_info_default('Futures')
-
-        self.simulator_update_securityInfo(df, market='Futures')
+        self.simulator_update_securityInfo(df, market)
 
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''
@@ -1541,6 +1528,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 filename = f'{PATH}/Kbars/k{freq[:-1]}min_{self.ACCOUNT_NAME}.csv'
                 self.save_table(df, filename)
 
-        self.__save_simulate_securityInfo()
-        self.__save_simulate_futuresInfo()
+        self.__save_simulate_securityInfo('Stocks')
+        self.__save_simulate_securityInfo('Futures')
         time.sleep(1)
