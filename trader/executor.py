@@ -142,7 +142,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 return env.replace(' ', '').split(',')
             elif type_ == 'dict':
                 envs = {}
-                for e in  env.split(','):
+                for e in env.split(','):
                     e = e.split(':')
                     envs.update({e[0]: e[1]})
                 return envs
@@ -1000,10 +1000,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         '''取得證券庫存清單'''
 
         if self.simulation:
-            df_default = {
-                'Stocks': self.df_securityInfo,
-                'Futures': self.df_futuresInfo
-            }
             try:
                 if db.HAS_DB:
                     table = SecurityInfoStocks if market == 'Stocks' else SecurityInfoFutures
@@ -1011,10 +1007,10 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 else:
                     df = file_handler.read_table(
                         f'{PATH}/stock_pool/simulation_{market.lower()}_{self.ACCOUNT_NAME}.pkl',
-                        df_default=df_default[market]
+                        df_default=self.get_info_default(market)
                     )
             except:
-                df = df_default[market]
+                df = self.get_info_default(market)
 
             df['account_id'] = 'simulate'
 
@@ -1046,7 +1042,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         '''
 
         pools = {}
-        if market=='Stocks':
+        if market == 'Stocks':
             pools.update(self.FILTER_IN)
         else:
             due_year_month = self.GetDueMonth()
@@ -1056,11 +1052,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         df = picker.get_selection_files()
         if df.shape[0]:
             # 排除不交易的股票
-            if market=='Stocks':
+            if market == 'Stocks':
                 # 全額交割股不買
                 day_filter_out = crawler2.get_CashSettle()
                 df = df[~df.code.isin(day_filter_out.股票代碼.values)]
-            
+
                 # 排除高價股
                 df = df[df.Close <= self.PRICE_THRESHOLD]
 
@@ -1446,8 +1442,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         time.sleep(3)
         self.unsubscribe_all(all_stocks+all_futures)
 
-    def simulator_update_securityInfo(self, df: pd.DataFrame, table):
-        market = 'stocks' if 'stocks' in table.__tablename__ else 'futures'
+    def simulator_update_securityInfo(self, df: pd.DataFrame, market='Stocks'):
+        if df.empty:
+            return
+
+        table = SecurityInfoStocks if market == 'Stocks' else SecurityInfoFutures
         if db.HAS_DB:
             match_account = table.account == self.ACCOUNT_NAME
             codes = db.query(table.code, match_account).code.values
@@ -1465,70 +1464,66 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         else:
             self.save_table(
                 df=df,
-                filename=f'{PATH}/stock_pool/simulation_{market}_{self.ACCOUNT_NAME}.pkl'
+                filename=f'{PATH}/stock_pool/simulation_{market.lower()}_{self.ACCOUNT_NAME}.pkl'
             )
 
     def __save_simulate_securityInfo(self):
         '''儲存模擬交易模式下的股票庫存表'''
-        if self.simulation:
-            # 儲存庫存
-            logging.debug(f'stocks_to_monitor: {self.stocks_to_monitor}')
-            logging.debug(
-                f'stocks shape: {self.stocks.shape}; watchlist shape: {self.watchlist.shape}')
-            df = {k: v for k, v in self.stocks_to_monitor.items() if v}
-            df = pd.DataFrame(df).T
-            if df.shape[0]:
-                # df = df[df.account_id == f'simulate-{self.ACCOUNT_NAME}']
-                df = df[df.account_id.str.contains('simulate')]
-                df = df.sort_values('code').reset_index()
-                if self.is_not_trade_day(datetime.now()):
-                    df['last_price'] = 0
-                else:
-                    df['last_price'] = df.code.map(
-                        {s: self.getQuotesNow(s)['price'] for s in df.code})
-                df['pnl'] = df.action.apply(lambda x: 1 if x == 'Buy' else -1)
-                df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
-                df.yd_quantity = df.quantity
-                df['account'] = self.ACCOUNT_NAME
-                df = df[self.df_securityInfo.columns]
-            else:
-                df = self.df_securityInfo
-            logging.debug(
-                f'stocks shape: {df.shape}; watchlist shape: {self.watchlist.shape}')
+        if not self.can_stock or not self.simulation:
+            return
 
-            if df.shape[0]:
-                self.simulator_update_securityInfo(df, SecurityInfoStocks)
+        # 儲存庫存
+        logging.debug(f'stocks_to_monitor: {self.stocks_to_monitor}')
+        df = {k: v for k, v in self.stocks_to_monitor.items() if v}
+        df = pd.DataFrame(df).T
+        if df.shape[0]:
+            df = df[df.account_id.str.contains('simulate')]
+            df = df.sort_values('code').reset_index()
+            if self.is_not_trade_day(datetime.now()):
+                df['last_price'] = 0
+            else:
+                df['last_price'] = df.code.map(
+                    {s: self.getQuotesNow(s)['price'] for s in df.code})
+            df['pnl'] = df.action.apply(lambda x: 1 if x == 'Buy' else -1)
+            df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
+            df.yd_quantity = df.quantity
+            df['account'] = self.ACCOUNT_NAME
+            df = df[self.get_info_default('Stocks').columns]
+        else:
+            df = self.get_info_default('Stocks')
+
+        self.simulator_update_securityInfo(df, market='Stocks')
 
     def __save_simulate_futuresInfo(self):
         '''儲存模擬交易模式下的期貨庫存表'''
-        if self.simulation:
-            # 儲存庫存
-            logging.debug(f'futures_to_monitor: {self.futures_to_monitor}')
-            df = {k: v for k, v in self.futures_to_monitor.items() if v}
-            df = pd.DataFrame(df).T
-            if df.shape[0]:
-                df = df[df.account_id.str.contains('simulate')]
-                df = df.reset_index(drop=True)
-                # df['id'] = np.arange(df.shape[0])
-                if 'order' in df.columns:
-                    df['direction'] = df.order.apply(lambda x: x['action'])
-                else:
-                    df['direction'] = df.action
-                if self.is_not_trade_day(datetime.now()):
-                    df['last_price'] = 0
-                else:
-                    df['last_price'] = df.code.map(
-                        {s: self.getQuotesNow(s)['price'] for s in df.code})
-                df['pnl'] = df.direction.apply(
-                    lambda x: 1 if x == 'Buy' else -1)
-                df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
-                df['account'] = self.ACCOUNT_NAME
-                df = df[self.df_futuresInfo.columns]
-            else:
-                df = self.df_futuresInfo
+        if not self.can_futures or not self.simulation:
+            return
 
-            if df.shape[0]:
-                self.simulator_update_securityInfo(df, SecurityInfoFutures)
+        # 儲存庫存
+        logging.debug(f'futures_to_monitor: {self.futures_to_monitor}')
+        df = {k: v for k, v in self.futures_to_monitor.items() if v}
+        df = pd.DataFrame(df).T
+        if df.shape[0]:
+            df = df[df.account_id.str.contains('simulate')]
+            df = df.reset_index(drop=True)
+            if 'order' in df.columns:
+                df['direction'] = df.order.apply(lambda x: x['action'])
+            else:
+                df['direction'] = df.action
+            if self.is_not_trade_day(datetime.now()):
+                df['last_price'] = 0
+            else:
+                df['last_price'] = df.code.map(
+                    {s: self.getQuotesNow(s)['price'] for s in df.code})
+            df['pnl'] = df.direction.apply(
+                lambda x: 1 if x == 'Buy' else -1)
+            df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
+            df['account'] = self.ACCOUNT_NAME
+            df = df[self.get_info_default('Futures').columns]
+        else:
+            df = self.get_info_default('Futures')
+
+        self.simulator_update_securityInfo(df, market='Futures')
 
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''
@@ -1546,10 +1541,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 filename = f'{PATH}/Kbars/k{freq[:-1]}min_{self.ACCOUNT_NAME}.csv'
                 self.save_table(df, filename)
 
-        if self.can_stock:
-            self.__save_simulate_securityInfo()
-
-        if self.can_futures:
-            self.__save_simulate_futuresInfo()
-
+        self.__save_simulate_securityInfo()
+        self.__save_simulate_futuresInfo()
         time.sleep(1)

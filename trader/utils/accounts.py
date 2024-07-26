@@ -38,20 +38,6 @@ class AccountInfo(TimeTool, FileHandler):
         self.HAS_FUTOPT_ACCOUNT = False
         self.desposal_margin = 0
         self.ProfitAccCount = 0  # 權益總值
-        self.df_securityInfo = pd.DataFrame(
-            columns=[
-                'account', 'market',
-                'code', 'order_cond', 'action', 'pnl',
-                'cost_price', 'quantity', 'yd_quantity', 'last_price'
-            ]
-        )
-        self.df_futuresInfo = pd.DataFrame(
-            columns=[
-                'account', 'market',
-                'code', 'action', 'quantity', 'cost_price',
-                'last_price', 'pnl'
-            ]
-        )
 
     def _login(self, API_KEY, SECRET_KEY, account_name):
         n = 0
@@ -168,7 +154,7 @@ class AccountInfo(TimeTool, FileHandler):
             stocks.insert(1, 'name', stocks.code.apply(self.get_stock_name))
             stocks[['account', 'market']] = [self.account_name, 'Stocks']
             return stocks
-        return self.df_securityInfo
+        return self.get_info_default('Stocks')
 
     def get_profit_loss(self, start: str, end: str):
         '''查詢已實現損益'''
@@ -340,6 +326,25 @@ class AccountInfo(TimeTool, FileHandler):
         tb = pd.read_excel(df, sheet_name='dentist_1')
         return concat_df(tb, pd.DataFrame([row]), reset_index=True)
 
+    def get_info_default(self, market='Stocks'):
+        '''Get info default table'''
+
+        if market == 'Stocks':
+            return pd.DataFrame(
+                columns=[
+                    'account', 'market',
+                    'code', 'order_cond', 'action', 'pnl',
+                    'cost_price', 'quantity', 'yd_quantity', 'last_price'
+                ]
+            )
+        return pd.DataFrame(
+            columns=[
+                'account', 'market',
+                'code', 'action', 'quantity', 'cost_price',
+                'last_price', 'pnl'
+            ]
+        )
+
     def get_account_margin(self):
         '''期權保證金資訊'''
 
@@ -364,7 +369,7 @@ class AccountInfo(TimeTool, FileHandler):
 
         positions = API.list_positions(API.futopt_account)
         if not positions:
-            return self.df_futuresInfo
+            return self.get_info_default('Futures')
 
         df = self._obj_2_df(positions)
         if df.shape[0]:
@@ -374,7 +379,7 @@ class AccountInfo(TimeTool, FileHandler):
             })
             df[['account', 'market']] = [self.account_name, 'Futures']
             return df
-        return self.df_futuresInfo
+        return self.get_info_default('Futures')
 
     def get_settle_profitloss(self, start_date: str, end_date: str, market='Stocks'):
         '''查詢已實現損益'''
