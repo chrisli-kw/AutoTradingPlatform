@@ -9,9 +9,10 @@ from .. import progress_bar
 
 
 class RedisTools:
-    def __init__(self, redisKey):
+    def __init__(self, redisKey='Trader', ttl=86400):
         self.HAS_REDIS = HAS_REDIS
         self.REDIS_KEY = redisKey
+        self.ttl = ttl
         self.redis_client = self.init_client()
 
     def init_client(self):
@@ -24,6 +25,7 @@ class RedisTools:
                 password=REDIS_PWD,
                 decode_responses=False
             )
+        return None
 
     def _data2byte(self, data: Iterable):
         return pickle.dumps(data)
@@ -31,23 +33,32 @@ class RedisTools:
     def to_redis(self, data: dict):
         '''insert data to Redis at a time'''
 
+        if not self.HAS_REDIS:
+            return
+
         N = len(data)
         if N > 1:
             pipe = self.redis_client.pipeline()
 
             for i, c in enumerate(data):
-                pipe.set(f'{self.REDIS_KEY}:{c}', self._data2byte(data[c]))
+                key = f'{self.REDIS_KEY}:{c}'
+                pipe.set(key, self._data2byte(data[c]))
+                pipe.expire(key, self.ttl)
                 progress_bar(N, i)
 
             pipe.execute()
 
         else:
             for k, v in data.items():
-                self.redis_client.set(
-                    f'{self.REDIS_KEY}:{k}', self._data2byte(v))
+                key = f'{self.REDIS_KEY}:{k}'
+                self.redis_client.set(key, self._data2byte(v))
+                self.redis_client.expire(key, self.ttl)
 
     def query(self, key: str):
         '''query data from redis'''
+
+        if not self.HAS_REDIS:
+            return
 
         n = 0
         while n < 5:
@@ -70,6 +81,10 @@ class RedisTools:
             return None
 
     def query_keys(self, keys: str = None, match: str = None):
+
+        if not self.HAS_REDIS:
+            return
+
         if not keys and not match:
             keys = self.redis_client.keys()
         elif match:
@@ -81,16 +96,26 @@ class RedisTools:
     def delete_keys(self, keys: list):
         '''delete data stored in Redis by key'''
 
+        if not self.HAS_REDIS:
+            return
+
         for k in keys:
             self.redis_client.delete(f'{self.REDIS_KEY}:{k}')
 
     def clear_all(self):
         '''delete all data stored in Redis'''
 
+        if not self.HAS_REDIS:
+            return
+
         self.redis_client.delete(*self.redis_client.keys())
 
     def memory_usage(self):
         '''check Redis memory usage'''
+
+        if not self.HAS_REDIS:
+            return
+
         used_memory = self.redis_client.info()['total_system_memory_human']
 
         print(f'Total keys = {len(self.redis_client.keys())}')
