@@ -368,12 +368,12 @@ class TickDataProcesser(TimeTool, FileHandler):
         df = df.drop([date_name, '成交時間', 'DueMonth'], axis=1)
         df = df.sort_values('Time').reset_index(drop=True)
 
-        condition1 = (df.Time.dt.hour == 13) & (df.Time.dt.minute == 45)
-        condition2 = (df.Time.dt.hour == 5) & (df.Time.dt.minute == 0)
-        if not df[condition1].empty:
-            df.loc[condition1, 'Time'] -= timedelta(seconds=1)
-        elif not df[condition2].empty:
-            df.loc[condition2, 'Time'] -= timedelta(seconds=1)
+        # condition1 = (df.Time.dt.hour == 13) & (df.Time.dt.minute == 45)
+        # condition2 = (df.Time.dt.hour == 5) & (df.Time.dt.minute == 0)
+        # if not df[condition1].empty:
+        #     df.loc[condition1, 'Time'] -= timedelta(seconds=1)
+        # elif not df[condition2].empty:
+        #     df.loc[condition2, 'Time'] -= timedelta(seconds=1)
         return df
 
     def expand_columns(self, df: pd.DataFrame):
