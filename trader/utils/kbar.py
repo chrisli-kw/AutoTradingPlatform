@@ -178,7 +178,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             return (
                 tb.set_index('Time')
                 .groupby('name')
-                .resample(scale, closed='left', label='left')
+                .resample(scale, closed='right', label='right')
                 .apply(self.maps)
                 .reset_index(level='Time')
                 .reset_index(drop=True)
@@ -258,10 +258,11 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
 
         _scale = self._scale_converter(scale)
         t1 = datetime.now()
-        t2 = t1 - timedelta(minutes=_scale + .5)
+        t2 = t1 - timedelta(minutes=_scale - .5)
         if not self.KBars[scale][self.KBars[scale].Time >= t2].shape[0]:
             tb = self.KBars['1T'].copy()
-            tb = tb[(tb.Time > t2) & (tb.Time <= t1)]
+            # tb = tb[(tb.Time > t2) & (tb.Time <= t1)]
+            tb = tb[(tb.Time <= t1)].tail(_scale)
             if tb.shape[0]:
                 tb = self.convert_kbar(tb, scale=scale)
 
