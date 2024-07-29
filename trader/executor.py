@@ -1373,23 +1373,29 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 if self.is_break_loop(now):
                     break
 
+                # 防止斷線用 TODO:待永豐更新後刪除
+                if now.minute % 10 == 0 and now.second == 0:
+                    balance = self.balance(mode='debug')
+                    if balance == -1:
+                        self._log_and_notify(
+                            f"【連線異常】{self.ACCOUNT_NAME} 無法查詢餘額")
+
                 # update K-bar data
+                td = timedelta(seconds=MonitorFreq)
                 is_trading_time = (
-                    (self.can_futures and now > TimeStartFuturesDay + timedelta(seconds=30)) or
-                    (self.can_stock and now > TimeStartStock + timedelta(seconds=30))
+                    (self.can_futures and (
+                        TimeStartFuturesDay+td < now <= TimeEndFuturesDay or
+                        TimeStartFuturesNight+td < now <= TimeEndFuturesNight
+                    )) or
+                    (self.can_stock and TimeStartStock+td < now <= TimeEndStock)
                 )
-                if is_trading_time and now.second == 0 and now.microsecond/1e6 < .5:
+                if is_trading_time and MonitorFreq <= now.second:
 
                     if now.minute % 2 == 0:
                         self.updateKBars('2T')
 
                     if now.minute % 5 == 0:
                         self.updateKBars('5T')
-                        # 防止斷線用 TODO:待永豐更新後刪除
-                        balance = self.balance(mode='debug')
-                        if balance == -1:
-                            self._log_and_notify(
-                                f"【連線異常】{self.ACCOUNT_NAME} 無法查詢餘額")
 
                     if now.minute % 15 == 0:
                         self.updateKBars('15T')

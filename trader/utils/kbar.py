@@ -7,7 +7,7 @@ from typing import List, Dict
 from datetime import datetime, timedelta
 
 from ..config import API, PATH, TODAY, TODAY_STR, TimeStartStock, TimeEndStock
-from ..config import KbarFeatures, MonitorFreq
+from ..config import KbarFeatures
 from ..indicators.signals import TechnicalSignals
 from . import get_contract, concat_df
 from .time import TimeTool
@@ -261,9 +261,8 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         t2 = t1 - timedelta(minutes=_scale - .5)
         if not self.KBars[scale][self.KBars[scale].Time >= t2].shape[0]:
             tb = self.KBars['1T'].copy()
-            # tb = tb[(tb.Time > t2) & (tb.Time <= t1)]
             tb = tb[(tb.Time <= t1)].tail(_scale)
-            if tb.shape[0]:
+            if tb.shape[0] and tb.Time.min().minute % _scale > 0:
                 tb = self.convert_kbar(tb, scale=scale)
 
                 for col in KbarFeatures[scale]:
@@ -367,13 +366,6 @@ class TickDataProcesser(TimeTool, FileHandler):
 
         df = df.drop([date_name, '成交時間', 'DueMonth'], axis=1)
         df = df.sort_values('Time').reset_index(drop=True)
-
-        # condition1 = (df.Time.dt.hour == 13) & (df.Time.dt.minute == 45)
-        # condition2 = (df.Time.dt.hour == 5) & (df.Time.dt.minute == 0)
-        # if not df[condition1].empty:
-        #     df.loc[condition1, 'Time'] -= timedelta(seconds=1)
-        # elif not df[condition2].empty:
-        #     df.loc[condition2, 'Time'] -= timedelta(seconds=1)
         return df
 
     def expand_columns(self, df: pd.DataFrame):
