@@ -167,3 +167,26 @@ class TimeTool:
             time.sleep(1)
 
         print("Time remaining: 0min 0s", end="\r", flush=True)
+
+    @staticmethod
+    def round_time(dt: datetime = None, round_to=60):
+        """
+        Round a datetime object to any time laps in seconds
+        dt : datetime.datetime object, default now.
+        round_to : Closest number of seconds to round to, default 1 minute.
+        """
+
+        if dt is None:
+            dt = datetime.now()
+
+        if isinstance(dt, str):
+            dt = pd.to_datetime(dt)
+            dt = datetime(dt.year, dt.month, dt.day, dt.hour,
+                          dt.minute, dt.second, dt.microsecond)
+
+        if 5 < dt.second < 55:
+            return dt.replace(second=0, microsecond=0)
+
+        seconds = (dt - dt.min).seconds
+        rounding = (seconds + round_to // 2) // round_to * round_to
+        return dt + timedelta(0, rounding - seconds, -dt.microsecond)

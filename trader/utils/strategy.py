@@ -119,7 +119,7 @@ class StrategyTool:
             # Check if there's any missing value
             if data.tail(1).isnull().values.any():
                 logging.info(
-                    f"Dataframe contains NaN values for stockid: {stockid} --> ")
+                    f"Dataframe contains NaN values for stockid: {stockid} when getting {col} value --> ")
                 logging.info(f'{data.tail().to_string()}')
                 data = data.fillna(0)
 

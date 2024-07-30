@@ -1366,59 +1366,43 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         notifier.post(text, msgType='Monitor')
 
         def periodic_updates():
-            while True:
-                self.loop_pause(freq=.5)
-                now = datetime.now()
+            # 防止斷線用 TODO:待永豐更新後刪除
+            if now.minute % 10 == 0 and now.second == 0:
+                balance = self.balance(mode='debug')
+                if balance == -1:
+                    self._log_and_notify(
+                        f"【連線異常】{self.ACCOUNT_NAME} 無法查詢餘額")
 
-                if self.is_break_loop(now):
-                    break
+            # update K-bar data
+            if MonitorFreq <= now.second:
+                if now.minute % 2 == 0:
+                    self.updateKBars('2T')
 
-                # 防止斷線用 TODO:待永豐更新後刪除
-                if now.minute % 10 == 0 and now.second == 0:
-                    balance = self.balance(mode='debug')
-                    if balance == -1:
-                        self._log_and_notify(
-                            f"【連線異常】{self.ACCOUNT_NAME} 無法查詢餘額")
+                if now.minute % 5 == 0:
+                    self.updateKBars('5T')
 
-                # update K-bar data
-                td = timedelta(seconds=MonitorFreq)
-                is_trading_time = (
-                    (self.can_futures and (
-                        TimeStartFuturesDay+td < now <= TimeEndFuturesDay or
-                        TimeStartFuturesNight+td < now <= TimeEndFuturesNight
-                    )) or
-                    (self.can_stock and TimeStartStock+td < now <= TimeEndStock)
-                )
-                if is_trading_time and MonitorFreq <= now.second:
+                if now.minute % 15 == 0:
+                    self.updateKBars('15T')
 
-                    if now.minute % 2 == 0:
-                        self.updateKBars('2T')
+                if now > TimeStartFuturesNight and now.minute % 30 == 0:
+                    self.updateKBars('30T')
+                elif now > TimeStartFuturesDay and now.minute % 30 in [15, 45]:
+                    self.updateKBars('30T')
 
-                    if now.minute % 5 == 0:
-                        self.updateKBars('5T')
-
-                    if now.minute % 15 == 0:
-                        self.updateKBars('15T')
-
-                    if now > TimeStartFuturesNight and now.minute % 30 == 0:
-                        self.updateKBars('30T')
-                    elif now > TimeStartFuturesDay and now.minute % 30 in [15, 45]:
-                        self.updateKBars('30T')
-
-                    if now > TimeStartFuturesNight and now.minute == 0:
-                        self.updateKBars('60T')
-                    elif now > TimeStartFuturesDay and now.minute == 45:
-                        self.updateKBars('60T')
+                if now > TimeStartFuturesNight and now.minute == 0:
+                    self.updateKBars('60T')
+                elif now > TimeStartFuturesDay and now.minute == 45:
+                    self.updateKBars('60T')
 
         # 開始監控
-        exec.submit(periodic_updates)
-
         while True:
             self.loop_pause()
             now = datetime.now()
 
             if self.is_break_loop(now):
                 break
+
+            periodic_updates()
 
             # TODO: merge stocks_to_monitor & futures_to_monitor
             for target in list(self.stocks_to_monitor):

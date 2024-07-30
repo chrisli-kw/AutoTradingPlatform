@@ -48,6 +48,13 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         self.KBars = {
             freq: pd.DataFrame(columns=self.kbar_columns) for freq in self.featureFuncs
         }
+        self.is_kbar_1t_updated = {
+            '2T': False,
+            '5T': False,
+            '15T': False,
+            '30T': False,
+            '60T': False
+        }
 
     def __set_daysdata(self, kbar_start_day):
         '''
@@ -257,25 +264,38 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         '''檢查並更新K棒資料表'''
 
         _scale = self._scale_converter(scale)
-        t1 = datetime.now()
-        t2 = t1 - timedelta(minutes=_scale - .5)
-        if not self.KBars[scale][self.KBars[scale].Time >= t2].shape[0]:
-            tb = self.KBars['1T'].copy()
-            tb = tb[(tb.Time <= t1)].tail(_scale)
-            if tb.shape[0] and tb.Time.min().minute % _scale > 0:
-                tb = self.convert_kbar(tb, scale=scale)
+        now = self.round_time(datetime.now())
+        t1 = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
+        t2 = now - timedelta(minutes=_scale - .5)
+        tb = self.KBars['1T'].tail(_scale)[self.kbar_columns].copy()
 
-                for col in KbarFeatures[scale]:
-                    tb[col] = None
+        if (
+            not self.is_kbar_1t_updated[scale] or
+            not self.KBars[scale][self.KBars[scale].Time >= t2].empty or
+            tb.isnull().values.any()
+        ):
+            return
 
-                kbar = self.concatKBars(self.KBars[scale], tb)
-                self.KBars[scale] = self.featureFuncs[scale](kbar)
+        tb = tb[(tb.Time >= t2) & (tb.Time < t1)]
+        tb.Time = tb.Time.astype(str).apply(self.round_time)
+        if tb.shape[0]:
+            logging.debug(
+                f'[2] Update {scale} kbar data| from {tb.Time.min()} to {tb.Time.max()}')
+            tb = self.convert_kbar(tb, scale=scale)
+
+            for col in KbarFeatures[scale]:
+                tb[col] = None
+
+            kbar = self.concatKBars(self.KBars[scale], tb)
+            self.KBars[scale] = self.featureFuncs[scale](kbar)
+            self.is_kbar_1t_updated[scale] = False
 
     def _update_K1(self, quotes, quote_type='Securities'):
         '''每隔1分鐘更新1分K'''
 
+        now = datetime.now()
         if quote_type == 'Index':
-            if TimeStartStock <= datetime.now() <= TimeEndStock:
+            if TimeStartStock <= now <= TimeEndStock:
                 for i in quotes.AllIndex:
                     tb = self.tick_to_df_index(quotes.AllIndex[i])
                     self.KBars['1T'] = self.concatKBars(self.KBars['1T'], tb)
@@ -285,6 +305,21 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             self.KBars['1T'] = self.concatKBars(self.KBars['1T'], df)
 
         self.KBars['1T'] = self.featureFuncs['1T'](self.KBars['1T'])
+
+        if self.round_time(now).minute % 2 == 0:
+            self.is_kbar_1t_updated['2T'] = True
+
+        if self.round_time(now).minute % 5 == 0:
+            self.is_kbar_1t_updated['5T'] = True
+
+        if self.round_time(now).minute % 15 == 0:
+            self.is_kbar_1t_updated['15T'] = True
+
+        if self.round_time(now).minute % 30 == 0:
+            self.is_kbar_1t_updated['30T'] = True
+
+        if self.round_time(now).minute == 0:
+            self.is_kbar_1t_updated['60T'] = True
 
 
 class TickDataProcesser(TimeTool, FileHandler):
