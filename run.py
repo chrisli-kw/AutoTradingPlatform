@@ -5,7 +5,7 @@ from argparse import ArgumentParser
 from logging.handlers import RotatingFileHandler
 
 from trader import __version__ as ver
-from trader.config import TODAY_STR, holidays
+from trader.config import TODAY_STR, holidays, LOG_LEVEL
 from trader.tasker import Tasks
 
 
@@ -36,7 +36,7 @@ for handler in logging.root.handlers[:]:
     logging.root.removeHandler(handler)
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=LOG_LEVEL,
     format='%(asctime)s.%(msecs)03d|%(levelname)s: %(message)s',
     datefmt='%Y-%m-%d %a %H:%M:%S',
     handlers=[

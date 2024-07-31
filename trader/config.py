@@ -60,6 +60,7 @@ def get_holidays():
 
 # 使用者相關
 ACCOUNTS = get_settings("ACCOUNT", "USERS", dataType='list')
+LOG_LEVEL = get_settings("ACCOUNT", "LOG_LEVEL")
 
 # 資料庫相關
 REDIS_HOST = get_settings('DB', 'REDIS_HOST')
