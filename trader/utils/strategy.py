@@ -113,14 +113,14 @@ class StrategyTool:
         if isinstance(data, pd.DataFrame):
             # Check if the dataframe is empty
             if data.empty:
-                logging.info(f"Dataframe is empty for stockid: {stockid}")
+                logging.warning(f"Dataframe is empty for stockid: {stockid}")
                 return 0
 
             # Check if there's any missing value
             if data.tail(1).isnull().values.any():
-                logging.info(
+                logging.warningv(
                     f"Dataframe contains NaN values for stockid: {stockid} when getting {col} value --> ")
-                logging.info(f'{data.tail().to_string()}')
+                logging.warning(f'{data.tail().to_string()}')
                 data = data.fillna(0)
 
             tb = data[data.name == stockid].copy()
@@ -154,7 +154,7 @@ class StrategyTool:
         return strategies.sort_values(ascending=False).name.to_list()
 
     def get_put_call_ratio(self):
-        '''取得前一個交易日收盤後的Put-Call ratio'''
+        '''Get the latest Put-Call ratio'''
         if db.HAS_DB:
             pc_ratio = db.query(PutCallRatioList.PutCallRatio)
             if pc_ratio.shape[0]:
@@ -167,7 +167,7 @@ class StrategyTool:
             return pc_ratio.PutCallRatio.values[-1]
         except:
             logging.warning(
-                '==========put_call_ratio.csv不存在，無前一交易日的Put/Call Ratio==========')
+                '==========put_call_ratio.csv does not exist, the trader will run without Put/Call Ratio==========')
             return 100
 
     def transfer_position(self, inputs: dict, kbars: dict, **kwargs):

@@ -198,9 +198,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
             self.get_account_margin()
         self.desposal_margin = min(
             account_balance+self.desposal_margin, self.MARGIN_LIMIT)
-        logging.info(f'權益總值: {self.ProfitAccCount}')
         logging.info(
-            f'Margin available = {self.desposal_margin} (limit: {self.MARGIN_LIMIT})')
+            f'[AccountInfo] Margin: total={self.ProfitAccCount}; available={self.desposal_margin}; limit={self.MARGIN_LIMIT}')
 
     def _set_leverage(self, stockids: list):
         '''
@@ -408,17 +407,19 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         # 登入
         self._login(self.__API_KEY__, self.__SECRET_KEY__, self.ACCOUNT_NAME)
         self.account_id_stock = API.stock_account.account_id
-        logging.info(f'Stock account ID: {self.account_id_stock}')
+        logging.info(
+            f'[AccountInfo] Stock account ID: {self.account_id_stock}')
 
         if self.HAS_FUTOPT_ACCOUNT:
             self.can_futures = 'futures' in self.MARKET
             self.account_id_futopt = API.futopt_account.account_id
             self._set_futures_code_list()
-            logging.info(f'Futures account ID: {self.account_id_futopt}')
+            logging.info(
+                f'[AccountInfo] Futures account ID: {self.account_id_futopt}')
 
         # 啟動憑證 (Mac 不需啟動)
         if platform != 'darwin':
-            logging.info(f'Activate {self.ACCOUNT_NAME} CA')
+            logging.info(f'[AccountInfo] Activate {self.ACCOUNT_NAME} CA')
             if self.__CA_PASSWD__:
                 ca_passwd = self.__CA_PASSWD__
             else:
@@ -468,12 +469,12 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 logging.warning(info)
 
             else:
-                logging.info(
+                logging.warning(
                     f'Response code: {resp_code} | Event code: {event_code} | info: {info} | Event: {event}')
 
                 if info == 'Session connect timeout' or event_code == 1:
                     time.sleep(5)
-                    logging.info(f'登出系統: {API.logout()}')
+                    logging.warning(f'API log out: {API.logout()}')
                     logging.warning('Re-login')
 
                     time.sleep(5)
@@ -662,7 +663,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 self.stocks_to_monitor.update({stock: None})
 
     def update_after_interfere(self, target: str, action_type: str, market):
-        logging.info(
+        logging.warning(
             f'[Monitor List]Interfere|{market}|{target}|{action_type}|')
 
         infos = dict(
@@ -1280,7 +1281,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
 
         is_empty = self.check_is_empty(target, market)
         if is_empty:
-            logging.info(f'[Monitor List]Remove|{market}|{target}|')
+            logging.debug(f'[Monitor List]Remove|{market}|{target}|')
             if market == 'Stocks':
                 day_trade = self.StrategySet.isDayTrade(
                     self.stock_strategies[target])
@@ -1329,7 +1330,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         usage = round(API.usage().bytes/2**20, 2)
         self.subscribe_all(all_stocks+all_futures)
 
-        logging.info(f"Current data usage: {usage}")
+        logging.info(f"[AccountInfo] Current data usage: {usage}")
         logging.info(f"Today's punish lis: {self.punish_list}")
         logging.info(f"Stocks Ex-dividend: {self.StrategySet.dividends}")
         logging.info(f"Previous Put/Call ratio: {self.StrategySet.pc_ratio}")

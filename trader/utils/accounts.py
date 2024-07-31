@@ -61,7 +61,7 @@ class AccountInfo(TimeTool, FileHandler):
             if len(accounts) > 1:
                 API.set_default_account(accounts[nth_account-1])
             else:
-                logging.warning('此ID只有一個證券戶')
+                logging.warning('The number of accounts of this ID is 1')
 
         self.account_name = account_name
 
@@ -78,7 +78,7 @@ class AccountInfo(TimeTool, FileHandler):
             try:
                 return API.settlements(API.stock_account)
             except:
-                logging.warning('無法取得交割資訊，重試中')
+                logging.warning('Cannot get settlement info, retrying...')
                 n += 1
 
                 if n >= 60:
@@ -141,7 +141,7 @@ class AccountInfo(TimeTool, FileHandler):
                 stocks = self._obj_2_df(stocks)
                 break
             except:
-                logging.warning('無法取得庫存，重試中')
+                logging.warning('Cannot get the security info, retrying...')
                 time.sleep(1)
         stocks = stocks.rename(columns={
             'cond': 'order_cond',

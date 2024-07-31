@@ -162,7 +162,7 @@ class WatchListTool(TimeTool, FileHandler):
             position = self.futures_to_monitor[target]['position']
 
         is_empty = (quantity <= 0 or position <= 0)
-        logging.info(
+        logging.debug(
             f'[Monitor List]Check|{market}|{target}|{is_empty}|quantity: {quantity}; position: {position}|')
         return is_empty
 
@@ -170,18 +170,18 @@ class WatchListTool(TimeTool, FileHandler):
         if market == 'Stocks':
             self.stocks_to_monitor.pop(target, None)
             if day_trade:
-                logging.info(f'[Monitor List]Reset|Stocks|{target}|')
+                logging.debug(f'[Monitor List]Reset|Stocks|{target}|')
                 self.stocks_to_monitor[target] = None
         else:
             self.futures_to_monitor.pop(target, None)
             if day_trade:
-                logging.info(f'[Monitor List]Reset|Futures|{target}|')
+                logging.debug(f'[Monitor List]Reset|Futures|{target}|')
                 self.futures_to_monitor[target] = None
 
     def update_deal_list(self, target: str, action_type: str, market='Stocks'):
         '''更新下單暫存清單'''
 
-        logging.info(f'[Monitor List]{action_type}|{market}|{target}|')
+        logging.debug(f'[Monitor List]{action_type}|{market}|{target}|')
         if market == 'Stocks':
             if action_type == 'Sell' and len(target) == 4 and target not in self.stock_sold:
                 self.stock_sold.append(target)
@@ -241,5 +241,5 @@ class WatchListTool(TimeTool, FileHandler):
                 position_ = self.futures_to_monitor[target]['position']
                 quantity_ = self.futures_to_monitor[target]['order']['quantity']
 
-        logging.info(
+        logging.debug(
             f'[Monitor List]{stage}|{target}|{action}|quantity: {quantity_}; position: {position_}|')

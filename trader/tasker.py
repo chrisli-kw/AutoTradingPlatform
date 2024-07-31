@@ -70,10 +70,10 @@ def runAccountInfo():
 
             # 登出
             time.sleep(5)
-            logging.info(f'登出系統: {API.logout()}')
+            logging.info(f'API log out: {API.logout()}')
             time.sleep(10)
 
-        logging.info('儲存資訊')
+        logging.info('Export data')
         writer = pd.ExcelWriter(
             f'{PATH}/daily_info/{account.filename}', engine='xlsxwriter')
 
@@ -111,7 +111,7 @@ def runAutoTrader(account):
             notifier.post(
                 f"\n【Error】【下單機監控】{se.ACCOUNT_NAME}資料儲存失敗", msgType='Tasker')
 
-        logging.info(f'登出系統: {API.logout()}')
+        logging.info(f'API log out: {API.logout()}')
         notifier.post(f"\n【停止監控】{se.ACCOUNT_NAME}關閉程式並登出", msgType='Tasker')
 
     del se
@@ -129,7 +129,7 @@ def runCrawlStockData(account: str, start=None, end=None):
                 f'Current time is still early, will start to crawl after {target}')
             aInfo.CountDown(target)
 
-        logging.info('開始爬蟲')
+        logging.info('Start the crawler')
 
         # Log-in account
         API_KEY = config['API_KEY']
@@ -168,7 +168,7 @@ def runCrawlStockData(account: str, start=None, end=None):
             filename = f'{crawler1.folder_path}/stock_data_1T.pkl'
             file_handler.save_table(df, filename)
     finally:
-        logging.info(f'登出系統: {API.logout()}')
+        logging.info(f'API log out: {API.logout()}')
 
 
 def runSelectStock():
@@ -262,7 +262,7 @@ def thread_subscribe(user, targets):
     time.sleep(2)
 
     try:
-        logging.info('subscribe_targets')
+        logging.info('Subscribe targets')
         for t in targets:
             if t[:3] in api.Contracts.Indexs.__dict__:
                 target = api.Contracts.Indexs[t[:3]][t]
