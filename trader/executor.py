@@ -15,16 +15,10 @@ from .config import (
     PATH,
     TODAY,
     TODAY_STR,
-    holidays,
     MonitorFreq,
     FEE_RATE,
-    TEnd,
     TTry,
-    TimeStartFuturesDay,
     TimeEndStock,
-    TimeEndFuturesDay,
-    TimeStartFuturesNight,
-    TimeEndFuturesNight,
     TimeTransferFutures
 )
 from .utils import get_contract
@@ -1254,7 +1248,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         )
 
     def is_trading_time_(self, now: datetime):
-        '''檢查是否為非交易時段'''
+        '''檢查是否為交易時段'''
 
         if self.can_futures:
             return self.is_trading_time(
@@ -1376,29 +1370,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
 
             # update K-bar data
             if MonitorFreq <= now.second:
-                if now.minute % 2 == 0:
-                    self.updateKBars('2T')
-
-                if now.minute % 5 == 0:
-                    self.updateKBars('5T')
-
-                if now.minute % 15 == 0:
-                    self.updateKBars('15T')
-
-                if (
-                    self.is_trading_time(now, period='Night') or
-                    self.is_trading_time(now, market='Stocks')
-                ):
-                    if now.minute % 30 == 0:
-                        self.updateKBars('30T')
-                    if now.minute == 0:
-                        self.updateKBars('60T')
-
-                elif self.is_trading_time(now, period='Day'):
-                    if now.minute % 30 == 15:
-                        self.updateKBars('30T')
-                    if now.minute == 45:
-                        self.updateKBars('60T')
+                for freq in [2, 5, 15, 30, 60]:
+                    if now.minute % freq == 0:
+                        self.updateKBars(f'{freq}T')
 
         # 開始監控
         while True:

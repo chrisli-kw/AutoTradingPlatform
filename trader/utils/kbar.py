@@ -315,27 +315,10 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
 
         self.KBars['1T'] = self.featureFuncs['1T'](self.KBars['1T'])
 
-        rounded_time = self.round_time(now)
-        if rounded_time.minute % 2 == 0:
-            self.is_kbar_1t_updated['2T'] = True
-
-        if rounded_time.minute % 5 == 0:
-            self.is_kbar_1t_updated['5T'] = True
-
-        if rounded_time.minute % 15 == 0:
-            self.is_kbar_1t_updated['15T'] = True
-
-        if self.is_trading_time(rounded_time, period='Night'):
-            if rounded_time.minute % 30 == 0:
-                self.is_kbar_1t_updated['30T'] = True
-            if rounded_time.minute == 0:
-                self.is_kbar_1t_updated['60T'] = True
-
-        elif self.is_trading_time(rounded_time, period='Day'):
-            if rounded_time.minute % 30 == 15:
-                self.is_kbar_1t_updated['30T'] = True
-            if rounded_time.minute == 45:
-                self.is_kbar_1t_updated['60T'] = True
+        now = self.round_time(now)
+        for freq in [2, 5, 15, 30, 60]:
+            if now.minute % freq == 0:
+                self.is_kbar_1t_updated[f'{freq}T'] = True
 
 
 class TickDataProcesser(TimeTool, FileHandler):
