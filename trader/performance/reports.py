@@ -247,7 +247,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
             tb['profit'].sum()
 
             for name, col in [['1', 1], ['101', 2]]:
-                temp = table[table.name == name]
+                temp = table[table.name == name].copy()
                 fig = self.add_candlestick(fig, temp, 1, col, plot_volume=True)
                 fig.update_xaxes(
                     rangeslider=dict(visible=False),
@@ -489,7 +489,7 @@ class BacktestReport(SuplotHandler, FileHandler):
                 )
         else:
             fig = self.add_candlestick(
-                fig, Kbars['1D'], row=4, col=1, plot_volume=True)
+                fig, Kbars['1D'].copy(), row=4, col=1, plot_volume=True)
 
         # Put/Call Ratio
         if 'put_call_ratio' in Kbars:
