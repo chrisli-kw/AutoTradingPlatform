@@ -94,6 +94,7 @@ Go to ```./lib``` and create a ```config.ini``` file, which has 6 main sections:
 ```ini
 [ACCOUNT] # user names
 USERS = your_env_file_name
+LOG_LEVEL = DEBUG
 
 [DATA]
 DATA_PATH = your/path/to/save/datasets
