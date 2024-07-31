@@ -4,7 +4,16 @@ import pandas as pd
 from typing import Union
 from datetime import datetime, timedelta
 
-from ..config import TODAY_STR, holidays, TimeTransferFutures
+from ..config import (
+    TODAY_STR,
+    holidays,
+    TimeStartStock,
+    TimeEndStock,
+    TimeStartFuturesDay,
+    TimeEndFuturesDay,
+    TimeStartFuturesNight,
+    TimeEndFuturesNight
+)
 
 
 class TimeTool:
@@ -190,3 +199,26 @@ class TimeTool:
         seconds = (dt - dt.min).seconds
         rounding = (seconds + round_to // 2) // round_to * round_to
         return dt + timedelta(0, rounding - seconds, -dt.microsecond)
+
+    @staticmethod
+    def is_trading_time(dt: datetime, td: timedelta = 0, market='Futures', period='Both'):
+        '''Check if current time is trading itme'''
+
+        is_holiday = pd.to_datetime(TODAY_STR) in holidays
+        if is_holiday:
+            return False
+
+        if td == 0:
+            td = timedelta()
+
+        if market == 'Futures':
+            is_day_time = TimeStartFuturesDay+td < dt <= TimeEndFuturesDay
+            is_after_hour = TimeStartFuturesNight+td < dt <= TimeEndFuturesNight
+
+            if period == 'Day':
+                return is_day_time
+            elif period == 'Night':
+                return is_after_hour
+            return (is_day_time or is_after_hour)
+
+        return TimeStartStock+td < dt <= TimeEndStock

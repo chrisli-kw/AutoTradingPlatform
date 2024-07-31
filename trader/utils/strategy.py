@@ -4,7 +4,7 @@ from datetime import datetime
 from collections import namedtuple
 
 from .. import file_handler
-from ..config import PATH, TODAY_STR, TimeTransferFutures, StrategyList
+from ..config import PATH, TODAY_STR, StrategyList
 from ..utils.database import db
 from ..utils.database.tables import PutCallRatioList, ExDividendTable
 

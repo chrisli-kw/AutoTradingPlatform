@@ -6,8 +6,17 @@ from tqdm import tqdm
 from typing import List, Dict
 from datetime import datetime, timedelta
 
-from ..config import API, PATH, TODAY, TODAY_STR, TimeStartStock, TimeEndStock
-from ..config import KbarFeatures
+from ..config import (
+    API,
+    PATH,
+    TODAY,
+    TODAY_STR,
+    KbarFeatures,
+    TimeStartStock,
+    TimeEndStock,
+    TimeStartFuturesDay,
+    TimeStartFuturesNight,
+)
 from ..indicators.signals import TechnicalSignals
 from . import get_contract, concat_df
 from .time import TimeTool
@@ -280,7 +289,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         tb.Time = tb.Time.astype(str).apply(self.round_time)
         if tb.shape[0]:
             logging.debug(
-                f'[2] Update {scale} kbar data| from {tb.Time.min()} to {tb.Time.max()}')
+                f'Update {scale} kbar data| from {tb.Time.min()} to {tb.Time.max()}')
             tb = self.convert_kbar(tb, scale=scale)
 
             for col in KbarFeatures[scale]:
@@ -306,20 +315,27 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
 
         self.KBars['1T'] = self.featureFuncs['1T'](self.KBars['1T'])
 
-        if self.round_time(now).minute % 2 == 0:
+        rounded_time = self.round_time(now)
+        if rounded_time.minute % 2 == 0:
             self.is_kbar_1t_updated['2T'] = True
 
-        if self.round_time(now).minute % 5 == 0:
+        if rounded_time.minute % 5 == 0:
             self.is_kbar_1t_updated['5T'] = True
 
-        if self.round_time(now).minute % 15 == 0:
+        if rounded_time.minute % 15 == 0:
             self.is_kbar_1t_updated['15T'] = True
 
-        if self.round_time(now).minute % 30 == 0:
-            self.is_kbar_1t_updated['30T'] = True
+        if self.is_trading_time(rounded_time, period='Night'):
+            if rounded_time.minute % 30 == 0:
+                self.is_kbar_1t_updated['30T'] = True
+            if rounded_time.minute == 0:
+                self.is_kbar_1t_updated['60T'] = True
 
-        if self.round_time(now).minute == 0:
-            self.is_kbar_1t_updated['60T'] = True
+        elif self.is_trading_time(rounded_time, period='Day'):
+            if rounded_time.minute % 30 == 15:
+                self.is_kbar_1t_updated['30T'] = True
+            if rounded_time.minute == 45:
+                self.is_kbar_1t_updated['60T'] = True
 
 
 class TickDataProcesser(TimeTool, FileHandler):

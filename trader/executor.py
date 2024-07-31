@@ -9,11 +9,24 @@ from shioaji import constant
 from collections import namedtuple
 from datetime import datetime, timedelta
 
-from . import __version__
-from . import exec, notifier, picker, crawler2, file_handler
-from .config import API, PATH, TODAY, TODAY_STR, holidays, MonitorFreq
-from .config import FEE_RATE, TEnd, TTry, TimeStartStock, TimeStartFuturesDay, TimeEndStock
-from .config import TimeEndFuturesDay, TimeStartFuturesNight, TimeEndFuturesNight, TimeTransferFutures
+from . import __version__, notifier, picker, crawler2, file_handler
+from .config import (
+    API,
+    PATH,
+    TODAY,
+    TODAY_STR,
+    holidays,
+    MonitorFreq,
+    FEE_RATE,
+    TEnd,
+    TTry,
+    TimeStartFuturesDay,
+    TimeEndStock,
+    TimeEndFuturesDay,
+    TimeStartFuturesNight,
+    TimeEndFuturesNight,
+    TimeTransferFutures
+)
 from .utils import get_contract
 from .utils.orders import OrderTool
 from .utils.cipher import CipherTool
@@ -805,7 +818,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
 
                 return self.OrderInfo(**infos)
 
-            c1 = octype == 'New' and enoughOpen and not self.is_not_trade_day(
+            c1 = octype == 'New' and enoughOpen and self.is_trading_time_(
                 inputs['datetime'])
             c2 = octype == 'Cover'
             if quantity > 0 and pos_balance > 0 and (c1 or c2):
@@ -1240,38 +1253,26 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
             (quota > 0)
         )
 
-    def is_not_trade_day(self, now: datetime):
+    def is_trading_time_(self, now: datetime):
         '''檢查是否為非交易時段'''
-        is_holiday = pd.to_datetime(TODAY_STR) in holidays
 
         if self.can_futures:
-            period = self.TRADING_PERIOD
+            return self.is_trading_time(
+                now,
+                td=timedelta(minutes=-6),
+                market='Futures',
+                period=self.TRADING_PERIOD
+            )
 
-            td = timedelta(minutes=6)
-            if not is_holiday:
-                if period == 'Day' and TimeStartFuturesDay - td <= now <= TimeEndFuturesDay:
-                    return False
-
-                if period == 'Night' and TimeStartFuturesNight - td <= now <= TimeEndFuturesNight:
-                    return False
-
-                if period == 'Both':
-                    both_trade_periods = [
-                        (TimeStartFuturesDay, TimeEndFuturesDay),
-                        (TimeStartFuturesNight, TimeEndFuturesNight)
-                    ]
-
-                    for start, end in both_trade_periods:
-                        if start - td <= now <= end:
-                            return False
-
-            return True
-
-        return is_holiday or not (now <= TEnd)
+        return self.is_trading_time(
+            now,
+            td=timedelta(minutes=-20),
+            market='Stocks'
+        )
 
     def is_break_loop(self, now: datetime):
         return (
-            self.is_not_trade_day(now) or
+            not self.is_trading_time_(now) or
             all(x == 0 for x in [
                 self.n_stocks_long, self.n_stocks_short,
                 self.N_LIMIT_LS, self.N_LIMIT_SS,
@@ -1384,15 +1385,20 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 if now.minute % 15 == 0:
                     self.updateKBars('15T')
 
-                if now > TimeStartFuturesNight and now.minute % 30 == 0:
-                    self.updateKBars('30T')
-                elif now > TimeStartFuturesDay and now.minute % 30 in [15, 45]:
-                    self.updateKBars('30T')
+                if (
+                    self.is_trading_time(now, period='Night') or
+                    self.is_trading_time(now, market='Stocks')
+                ):
+                    if now.minute % 30 == 0:
+                        self.updateKBars('30T')
+                    if now.minute == 0:
+                        self.updateKBars('60T')
 
-                if now > TimeStartFuturesNight and now.minute == 0:
-                    self.updateKBars('60T')
-                elif now > TimeStartFuturesDay and now.minute == 45:
-                    self.updateKBars('60T')
+                elif self.is_trading_time(now, period='Day'):
+                    if now.minute % 30 == 15:
+                        self.updateKBars('30T')
+                    if now.minute == 45:
+                        self.updateKBars('60T')
 
         # 開始監控
         while True:
@@ -1489,11 +1495,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 df['pnl'] = df.direction.apply(
                     lambda x: 1 if x == 'Buy' else -1)
 
-            if self.is_not_trade_day(datetime.now()):
-                df['last_price'] = 0
-            else:
+            if self.is_trading_time_(datetime.now()):
                 df['last_price'] = df.code.map(
                     {s: self.getQuotesNow(s)['price'] for s in df.code})
+            else:
+                df['last_price'] = 0
 
             df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
             df = df[self.get_info_default(market).columns]
