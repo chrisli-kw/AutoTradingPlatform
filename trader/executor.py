@@ -469,7 +469,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 logging.warning(info)
 
             else:
-                logging.warning(
+                logging.info(
                     f'Response code: {resp_code} | Event code: {event_code} | info: {info} | Event: {event}')
 
                 if info == 'Session connect timeout' or event_code == 1:
@@ -1441,7 +1441,11 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
     def __save_simulate_securityInfo(self, market='Stocks'):
         '''儲存模擬交易模式下的庫存表'''
 
-        if not self.can_stock or not self.can_futures or not self.simulation:
+        if (
+            not self.simulation or
+            (market == 'Stocks' and not self.can_stock) or
+            (market == 'Futures' and not self.can_futures)
+        ):
             return
 
         if market == 'Stocks':
