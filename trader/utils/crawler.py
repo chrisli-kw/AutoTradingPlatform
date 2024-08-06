@@ -128,26 +128,7 @@ class CrawlStockData(FileHandler):
         N = q.qsize()
 
         if not start:
-            # If not assigned "start", then the crawler automatically determine
-            # a start date either by querying the database (update=True) or
-            # by setting start = '2017-01-01'.
-            if update:
-                if db.HAS_DB:
-                    dates = db.query(KBarTables[self.scale].Time)
-                    if dates.shape[0]:
-                        last_end = dates.Time.max()
-                    else:
-                        last_end = self.timetool.last_business_day()
-                else:
-                    filename = f'{PATH}/Kbars/{self.filename}_{self.scale}.pkl'
-                    ref = self.timetool.last_business_day()
-                    last_end = self.read_table(
-                        filename=filename,
-                        df_default=pd.DataFrame({'Time': [ref]})
-                    ).Time.max()
-                start = self.timetool._strf_timedelta(last_end, -1)
-            else:
-                start = '2017-01-01'
+            start = TODAY_STR if update else '2017-01-01'
 
         self.StockData = np.array([None]*N)
         logging.info(f'Strat crawling, from {start} to {end}')

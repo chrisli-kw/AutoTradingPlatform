@@ -200,8 +200,7 @@ class TimeTool:
         rounding = (seconds + round_to // 2) // round_to * round_to
         return dt + timedelta(0, rounding - seconds, -dt.microsecond)
 
-    @staticmethod
-    def is_trading_time(dt: datetime, td: timedelta = 0, market='Futures', period='Both'):
+    def is_trading_time(self, dt: datetime, td: timedelta = 0, market='Futures', period='Both'):
         '''Check if current time is trading itme'''
 
         is_holiday = pd.to_datetime(TODAY_STR) in holidays
@@ -212,7 +211,13 @@ class TimeTool:
             td = timedelta()
 
         if market == 'Futures':
-            is_day_time = TimeStartFuturesDay+td < dt <= TimeEndFuturesDay
+            due_day = self.DueDays[(2024, 8)]
+            if str(dt.date()) == str(due_day.date()):
+                end = due_day.replace(hour=13, minute=30)
+            else:
+                end = TimeEndFuturesDay
+
+            is_day_time = TimeStartFuturesDay + td < dt <= end
             is_after_hour = TimeStartFuturesNight+td < dt <= TimeEndFuturesNight
 
             if period == 'Day':
