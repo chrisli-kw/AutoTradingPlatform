@@ -391,7 +391,7 @@ class StrategyExecutor(
                     self.deleteOrder(symbol)
                     self.update_deal_list(symbol, 'Cancel', market)
                     if order['oc_type'] == 'New':
-                        self.futures_to_monitor[symbol] = None
+                        TradeData.Futures.Monitor[symbol] = None
 
                 # 更新監控庫存
                 msg['code'] = symbol
@@ -399,13 +399,7 @@ class StrategyExecutor(
 
         elif stat == constant.OrderState.FuturesDeal:
             notifier.post_fDeal(stat, msg)
-
-            code = msg['code']
-            delivery_month = msg['delivery_month']
-            symbol = code + delivery_month
-            if symbol in self.futures_to_monitor and self.futures_to_monitor[symbol] is not None:
-                price = msg['price']
-                self.futures_to_monitor[symbol]['cost_price'] = price
+            CallbackHandler.fDeal(msg)
 
     def login_and_activate(self):
         # 登入
@@ -575,12 +569,12 @@ class StrategyExecutor(
         self.n_futures = self.futures.shape[0]
 
         # update_futures_to_monitor
-        self.futures_to_monitor.update(self.futures.to_dict('index'))
-        self.futures_to_monitor.update({
-            f: None for f in TradeData.Futures.Strategy if f not in self.futures_to_monitor})
+        TradeData.Futures.Monitor.update(self.futures.to_dict('index'))
+        TradeData.Futures.Monitor.update({
+            f: None for f in TradeData.Futures.Strategy if f not in TradeData.Futures.Monitor})
 
         # 新增歷史K棒資料
-        all_futures = list(self.futures_to_monitor)
+        all_futures = list(TradeData.Futures.Monitor)
         all_futures = self.StrategySet.append_monitor_list(all_futures)
         self.history_kbars(all_futures)
 
@@ -589,7 +583,7 @@ class StrategyExecutor(
             KBars=self.KBars)
         self._set_margin_limit()
         self.margin_table = self.get_margin_table()
-        logging.debug(f'futures_to_monitor: {self.futures_to_monitor}')
+        logging.debug(f'futures_to_monitor: {TradeData.Futures.Monitor}')
         return all_futures
 
     def _update_position(self, order: namedtuple, market: str, order_data: dict):
@@ -771,7 +765,7 @@ class StrategyExecutor(
 
         if target in self.Quotes.NowTargets and self.N_FUTURES_LIMIT != 0:
             inputs = self.getQuotesNow(target).copy()
-            data = self.futures_to_monitor[target]
+            data = TradeData.Futures.Monitor[target]
             strategy = TradeData.Futures.Strategy[target]
 
             # new position
@@ -838,8 +832,8 @@ class StrategyExecutor(
                     if isTransfer:
                         new_contract = f'{target[:3]}{self.GetDueMonth()}'
                         self.transfer_margin(target, new_contract)
-                        self.futures_to_monitor.update({new_contract: None})
-                        self.futures_to_monitor.pop(target, None)
+                        TradeData.Futures.Monitor.update({new_contract: None})
+                        TradeData.Futures.Monitor.pop(target, None)
                         self.history_kbars([new_contract])
                         self.subscribe_all([new_contract])
                         TradeData.Futures.Transferred.update({
@@ -1345,7 +1339,7 @@ class StrategyExecutor(
                     order_data = self._place_order(order, market='Stocks')
                     self._update_position(order, 'Stocks', order_data)
 
-            for target in list(self.futures_to_monitor):
+            for target in list(TradeData.Futures.Monitor):
                 order = self.monitor_futures(target)
                 if order.pos_target:
                     order_data = self._place_order(order, market='Futures')
@@ -1378,7 +1372,7 @@ class StrategyExecutor(
 
         df = self.simulator.monitor_list_to_df(
             self.ACCOUNT_NAME,
-            data=self.stocks_to_monitor if market == 'Stocks' else self.futures_to_monitor,
+            data=self.stocks_to_monitor if market == 'Stocks' else TradeData.Futures.Monitor,
             quotes=self.Quotes,
             market=market,
             is_trading_time=self.is_trading_time_(datetime.now())

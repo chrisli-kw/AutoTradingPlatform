@@ -67,6 +67,8 @@ class Simulator(FileHandler):
         else:
             df = TradeData[market].InfoDefault
 
+        return df
+
     def update_securityInfo(self, account: str, df: pd.DataFrame, market='Stocks'):
         if df.empty:
             return

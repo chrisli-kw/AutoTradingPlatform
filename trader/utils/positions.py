@@ -27,7 +27,7 @@ class WatchListTool(TimeTool, FileHandler):
         self.stock_sold = []
 
         # futures
-        self.futures_to_monitor = {}
+        TradeData.Futures.Monitor = {}
 
     def get_watchlist(self):
         """Load watchlist data"""
@@ -167,8 +167,8 @@ class WatchListTool(TimeTool, FileHandler):
             quantity = self.stocks_to_monitor[target]['quantity']
             position = self.stocks_to_monitor[target]['position']
         else:
-            quantity = self.futures_to_monitor[target]['order']['quantity']
-            position = self.futures_to_monitor[target]['position']
+            quantity = TradeData.Futures.Monitor[target]['order']['quantity']
+            position = TradeData.Futures.Monitor[target]['position']
 
         is_empty = (quantity <= 0 or position <= 0)
         logging.debug(
@@ -182,10 +182,10 @@ class WatchListTool(TimeTool, FileHandler):
                 logging.debug(f'[Monitor List]Reset|Stocks|{target}|')
                 self.stocks_to_monitor[target] = None
         else:
-            self.futures_to_monitor.pop(target, None)
+            TradeData.Futures.Monitor.pop(target, None)
             if day_trade:
                 logging.debug(f'[Monitor List]Reset|Futures|{target}|')
-                self.futures_to_monitor[target] = None
+                TradeData.Futures.Monitor[target] = None
 
     def update_deal_list(self, target: str, action_type: str, market='Stocks'):
         '''更新下單暫存清單'''
@@ -230,25 +230,25 @@ class WatchListTool(TimeTool, FileHandler):
 
         # New, Cover
         else:
-            if self.futures_to_monitor[target] is not None:
+            if TradeData.Futures.Monitor[target] is not None:
                 stage = 'Update|Futures'
                 quantity = data['order']['quantity']
 
-                self.futures_to_monitor[target]['position'] -= position
-                self.futures_to_monitor[target]['order']['quantity'] -= quantity
+                TradeData.Futures.Monitor[target]['position'] -= position
+                TradeData.Futures.Monitor[target]['order']['quantity'] -= quantity
             elif action == 'New':
                 stage = 'Add|Futures'
 
                 date = TODAY_STR.replace('-', '/')
                 data['contract'] = get_contract(target)
                 data['isDue'] = date == data['contract'].delivery_date
-                self.futures_to_monitor[target] = data
+                TradeData.Futures.Monitor[target] = data
             else:
                 stage = 'None|Futures'
 
             if 'None' not in stage:
-                position_ = self.futures_to_monitor[target]['position']
-                quantity_ = self.futures_to_monitor[target]['order']['quantity']
+                position_ = TradeData.Futures.Monitor[target]['position']
+                quantity_ = TradeData.Futures.Monitor[target]['order']['quantity']
 
         logging.debug(
             f'[Monitor List]{stage}|{target}|{action}|quantity: {quantity_}; position: {position_}|')
