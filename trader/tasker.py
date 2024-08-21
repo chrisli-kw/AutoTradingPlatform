@@ -13,7 +13,6 @@ from .utils.database import redis_tick
 from .utils.subscribe import Subscriber
 from .utils.accounts import AccountInfo
 from .executor import StrategyExecutor
-from .performance.reports import PerformanceReport
 
 try:
     from .scripts.TaskList import customTasks

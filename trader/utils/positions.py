@@ -109,6 +109,15 @@ class WatchListTool(TimeTool, FileHandler):
 
         self.remove_from_watchlist()
 
+    def merge_info(self, tbInfo: pd.DataFrame):
+        tbInfo = tbInfo.merge(
+            self.watchlist,
+            how='left',
+            on=['account', 'market', 'code']
+        )
+        tbInfo.position.fillna(100, inplace=True)
+        return tbInfo
+
     def remove_from_watchlist(self):
         '''Delete Watchlist data where position <= 0.'''
 

@@ -14,8 +14,6 @@ from ..config import (
     KbarFeatures,
     TimeStartStock,
     TimeEndStock,
-    TimeStartFuturesDay,
-    TimeStartFuturesNight,
 )
 from ..indicators.signals import TechnicalSignals
 from . import get_contract, concat_df

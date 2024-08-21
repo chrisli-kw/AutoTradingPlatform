@@ -4,7 +4,6 @@ import logging
 import numpy as np
 import pandas as pd
 from typing import Dict
-from sys import platform
 from shioaji import constant
 from collections import namedtuple
 from datetime import datetime, timedelta
@@ -41,7 +40,6 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
     def __init__(self, config=None):
-        self.ct = CipherTool(decrypt=True, encrypt=False)
         self.CONFIG = config
 
         # 交易帳戶設定
@@ -158,7 +156,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
             elif type_ == 'decrypt':
                 if not env or (not env[0].isdigit() and env[1:].isdigit()):
                     return env
-                return self.ct.decrypt(env)
+                ct = CipherTool(decrypt=True, encrypt=False)
+                return ct.decrypt(env)
             return env
         elif type_ == 'int':
             return 0
@@ -418,17 +417,16 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 f'[AccountInfo] Futures account ID: {self.account_id_futopt}')
 
         # 啟動憑證 (Mac 不需啟動)
-        if platform != 'darwin':
-            logging.info(f'[AccountInfo] Activate {self.ACCOUNT_NAME} CA')
-            if self.__CA_PASSWD__:
-                ca_passwd = self.__CA_PASSWD__
-            else:
-                ca_passwd = self.__ACCOUNT_ID__
-            API.activate_ca(
-                ca_path=f"./lib/ekey/551/{self.__ACCOUNT_ID__}/S/Sinopac.pfx",
-                ca_passwd=ca_passwd,
-                person_id=self.__ACCOUNT_ID__,
-            )
+        logging.info(f'[AccountInfo] Activate {self.ACCOUNT_NAME} CA')
+        if self.__CA_PASSWD__:
+            ca_passwd = self.__CA_PASSWD__
+        else:
+            ca_passwd = self.__ACCOUNT_ID__
+        API.activate_ca(
+            ca_path=f"./lib/ekey/551/{self.__ACCOUNT_ID__}/S/Sinopac.pfx",
+            ca_passwd=ca_passwd,
+            person_id=self.__ACCOUNT_ID__,
+        )
 
         # 系統 callback 設定
         self._set_callbacks()
@@ -515,12 +513,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         self.init_watchlist(self.stocks, self.stock_strategies)
 
         # 庫存的處理
-        self.stocks = self.stocks.merge(
-            self.watchlist,
-            how='left',
-            on=['account', 'market', 'code']
-        )
-        self.stocks.position.fillna(100, inplace=True)
+        self.stocks = self.merge_info(self.stocks)
         self.stock_strategies.update(
             self.stocks.set_index('code').strategy.to_dict())
 
@@ -568,12 +561,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
 
         # 庫存的處理
         self.futures = preprocess_(self.futures)
-        self.futures = self.futures.merge(
-            self.watchlist,
-            how='left',
-            on=['account', 'market', 'code']
-        )
-        self.futures.position.fillna(100, inplace=True)
+        self.futures = self.merge_info(self.futures)
         self.futures.index = self.futures.code
 
         # 剔除不堅控的股票
@@ -588,6 +576,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
 
         # 新增歷史K棒資料
         all_futures = list(self.futures_to_monitor)
+        all_futures = self.StrategySet.append_monitor_list(all_futures)
         self.history_kbars(all_futures)
 
         # 交易風險控制
@@ -845,6 +834,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                         new_contract = f'{target[:3]}{self.GetDueMonth()}'
                         self.margin_table[new_contract] = self.margin_table[target]
                         self.futures_to_monitor.update({new_contract: None})
+                        self.futures_to_monitor.pop(target, None)
                         self.history_kbars([new_contract])
                         self.subscribe_all([new_contract])
                         self.futures_transferred.pop(target, None)

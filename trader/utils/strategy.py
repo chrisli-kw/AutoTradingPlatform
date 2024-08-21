@@ -188,3 +188,6 @@ class StrategyTool:
 
     def export_strategy_data(self):
         pass
+
+    def append_monitor_list(self, monitor_list: list):
+        return monitor_list

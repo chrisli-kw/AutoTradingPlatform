@@ -70,11 +70,3 @@ class CipherTool:
 
         print("Can't decrypt without private key")
         return msg
-
-
-if __name__ == "__main__":
-
-    ct = CipherTool()
-    msg = 'Hello World'
-    encrypted = ct.encrypt(msg)
-    print(encrypted)
