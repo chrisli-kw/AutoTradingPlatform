@@ -1,12 +1,14 @@
+import os
 import logging
 import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
-from ..config import PATH, TODAY_STR
+from ..config import PATH, TODAY_STR, API
 from . import get_contract, concat_df
 from .time import TimeTool
 from .file import FileHandler
+from .objs import TradeData
 from .database import db
 from .database.tables import Watchlist
 
@@ -26,8 +28,6 @@ class WatchListTool(TimeTool, FileHandler):
 
         # futures
         self.futures_to_monitor = {}
-        self.futures_opened = []
-        self.futures_closed = []
 
     def get_watchlist(self):
         """Load watchlist data"""
@@ -201,14 +201,14 @@ class WatchListTool(TimeTool, FileHandler):
             if action_type == 'Cancel' and target in self.stock_bought:
                 self.stock_bought.remove(target)
         elif market == 'Futures':
-            if action_type == 'New' and target not in self.futures_opened:
-                self.futures_opened.append(target)
+            if action_type == 'New' and target not in TradeData.Futures.Opened:
+                TradeData.Futures.Opened.append(target)
 
-            if action_type == 'Cover' and target not in self.futures_closed:
-                self.futures_closed.append(target)
+            if action_type == 'Cover' and target not in TradeData.Futures.Closed:
+                TradeData.Futures.Closed.append(target)
 
-            if action_type == 'Cancel' and target in self.futures_opened:
-                self.futures_opened.remove(target)
+            if action_type == 'Cancel' and target in TradeData.Futures.Opened:
+                TradeData.Futures.Opened.remove(target)
 
     def update_position_quantity(self, action: str, data: dict, position: float = 100):
         '''更新監控庫存(成交回報)'''
@@ -252,3 +252,46 @@ class WatchListTool(TimeTool, FileHandler):
 
         logging.debug(
             f'[Monitor List]{stage}|{target}|{action}|quantity: {quantity_}; position: {position_}|')
+
+
+class FuturesMargin(TimeTool, FileHandler):
+    def __init__(self) -> None:
+        self.full_path_name = './lib/indexMarging.csv'
+        self.margin_table = None
+
+    def get_margin_table(self, type='dict'):
+        '''Get futures margin table'''
+
+        if not os.path.exists(self.full_path_name):
+            return None
+
+        df = self.read_table(self.full_path_name)
+
+        codes = [[f.code, f.symbol, f.name]
+                 for m in API.Contracts.Futures for f in m]
+        codes = pd.DataFrame(codes, columns=['code', 'symbol', 'name'])
+        codes = codes.set_index('name').symbol.to_dict()
+
+        month = self.GetDueMonth()[-2:]
+        df['code'] = (df.商品別 + month).map(codes)
+        df = df.dropna().set_index('code')
+
+        if type == 'dict':
+            return df.原始保證金.to_dict()
+        return df
+
+    def get_open_margin(self, target: str, quantity: int):
+        '''計算期貨保證金額'''
+
+        if self.margin_table and target in self.margin_table:
+            fee = 100
+            return self.margin_table[target]*quantity + fee
+        return 0
+
+    def transfer_margin(self, target_old: str, target_new: str):
+        '''Add new target margin on the futures due days'''
+
+        if self.margin_table is None:
+            return
+
+        self.margin_table[target_new] = self.margin_table[target_old]

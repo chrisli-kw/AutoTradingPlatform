@@ -2,6 +2,7 @@ import logging
 import pandas as pd
 import configparser
 import shioaji as sj
+from dotenv import dotenv_values
 from datetime import datetime, timedelta
 
 
@@ -9,6 +10,10 @@ API = sj.Shioaji()
 TODAY = datetime.today()
 SystemConfig = configparser.ConfigParser()
 SystemConfig.read('./lib/config.ini', encoding='utf8')
+
+
+def get_env(account_name: str):
+    return dotenv_values(f'./lib/envs/{account_name}.env')
 
 
 def getList(section, option):

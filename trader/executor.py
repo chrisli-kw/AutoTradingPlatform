@@ -8,7 +8,7 @@ from shioaji import constant
 from collections import namedtuple
 from datetime import datetime, timedelta
 
-from . import __version__, notifier, picker, crawler2, file_handler
+from . import __version__, notifier, picker, crawler2
 from .config import (
     API,
     PATH,
@@ -21,11 +21,13 @@ from .config import (
     TimeTransferFutures
 )
 from .utils import get_contract
+from .utils.objs import TradeData
 from .utils.orders import OrderTool
 from .utils.cipher import CipherTool
 from .utils.accounts import AccountInfo
 from .utils.subscribe import Subscriber
-from .utils.positions import WatchListTool
+from .utils.simulation import Simulator
+from .utils.positions import WatchListTool, FuturesMargin
 from .utils.callback import CallbackHandler
 from .utils.database import db
 from .utils.database.tables import SecurityInfoStocks, SecurityInfoFutures
@@ -38,7 +40,13 @@ except:
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
-class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
+class StrategyExecutor(
+    AccountInfo,
+    WatchListTool,
+    FuturesMargin,
+    OrderTool,
+    Subscriber
+):
     def __init__(self, config=None):
         self.CONFIG = config
 
@@ -76,6 +84,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         }
         self.STOCK_MODEL_VERSION = self.getENV('STOCK_MODEL_VERSION')
         self.simulation = self.MODE == 'Simulation'
+        self.simulator = Simulator()
 
         # 期貨使用者設定
         self.TRADING_PERIOD = self.getENV('TRADING_PERIOD')
@@ -91,6 +100,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         Subscriber.__init__(self, self.KBAR_START_DAYay)
         OrderTool.__init__(self)
         WatchListTool.__init__(self, self.ACCOUNT_NAME)
+        FuturesMargin.__init__(self)
 
         # 股票可進場籌碼 (進場時判斷用)
         self.simulate_amount = np.iinfo(np.int64).max
@@ -104,13 +114,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         self.pct_chg_DowJones = self.get_pct_chg_DowJones()
 
         # 期貨可進場籌碼 (進場時判斷用)
-        self.futures_strategies = {}
-        self.futures_transferred = {}
-        self.transfer_list = []
         self.n_futures = 0
         self.futures = pd.DataFrame()
-        self.Futures_Code_List = {}
-        self.margin_table = None
 
         # 交易相關
         self.can_stock = 'stock' in self.MARKET
@@ -229,9 +234,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
 
     def _set_futures_code_list(self):
         '''期貨商品代號與代碼對照表'''
-        if self.can_futures and self.Futures_Code_List == {}:
+        if self.can_futures and TradeData.Futures.CodeList == {}:
             logging.debug('Set Futures_Code_List')
-            self.Futures_Code_List = {
+            TradeData.Futures.CodeList = {
                 f.code: f.symbol for m in API.Contracts.Futures for f in m}
 
     def _order_callback(self, stat, msg):
@@ -447,7 +452,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         def fop_quote_callback_v1(exchange, tick):
             try:
                 if tick.simtrade == 0:
-                    symbol = self.Futures_Code_List[tick.code]
+                    symbol = TradeData.Futures.CodeList[tick.code]
 
                     if symbol not in self.Quotes.NowTargets:
                         logging.debug(f'[Quotes]First|{symbol}|')
@@ -489,7 +494,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
 
         @API.on_bidask_fop_v1()
         def fop_quote_callback(exchange, bidask):
-            symbol = self.Futures_Code_List[bidask.code]
+            symbol = TradeData.Futures.CodeList[bidask.code]
             self.BidAsk[symbol] = bidask
 
     def _log_and_notify(self, msg: str):
@@ -554,7 +559,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
             return []
 
         # 讀取選股清單
-        self.futures_strategies = self.get_securityPool('Futures')
+        TradeData.Futures.Strategy = self.get_securityPool('Futures')
 
         # 取得遠端庫存
         self.futures = self.get_securityInfo('Futures')
@@ -566,13 +571,13 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
 
         # 剔除不堅控的股票
         self.futures = self.futures[~self.futures.code.isin(self.FILTER_OUT)]
-        self.futures_strategies.update(self.futures.strategy.to_dict())
+        TradeData.Futures.Strategy.update(self.futures.strategy.to_dict())
         self.n_futures = self.futures.shape[0]
 
         # update_futures_to_monitor
         self.futures_to_monitor.update(self.futures.to_dict('index'))
         self.futures_to_monitor.update({
-            f: None for f in self.futures_strategies if f not in self.futures_to_monitor})
+            f: None for f in TradeData.Futures.Strategy if f not in self.futures_to_monitor})
 
         # 新增歷史K棒資料
         all_futures = list(self.futures_to_monitor)
@@ -583,7 +588,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         self.N_FUTURES_LIMIT = self.StrategySet.setNFuturesLimit(
             KBars=self.KBars)
         self._set_margin_limit()
-        self.margin_table = self.get_margin_table().原始保證金.to_dict()
+        self.margin_table = self.get_margin_table()
         logging.debug(f'futures_to_monitor: {self.futures_to_monitor}')
         return all_futures
 
@@ -632,7 +637,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         if market == 'Stocks':
             strategies = self.stock_strategies
         else:
-            strategies = self.futures_strategies
+            strategies = TradeData.Futures.Strategy
         self.update_watchlist_position(order, self.Quotes, strategies)
 
     def update_stocks_to_monitor(self):
@@ -666,7 +671,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         if market == 'Stocks':
             strategies = self.stock_strategies
         else:
-            strategies = self.futures_strategies
+            strategies = TradeData.Futures.Strategy
         self.update_watchlist_position(order, self.Quotes, strategies)
 
     def merge_buy_sell_lists(self, stocks_pool: Dict[str, str], market='Stocks'):
@@ -767,7 +772,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         if target in self.Quotes.NowTargets and self.N_FUTURES_LIMIT != 0:
             inputs = self.getQuotesNow(target).copy()
             data = self.futures_to_monitor[target]
-            strategy = self.futures_strategies[target]
+            strategy = TradeData.Futures.Strategy[target]
 
             # new position
             if data is None:
@@ -785,20 +790,20 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 quantity = data['order']['quantity']
                 enoughOpen = False
 
-            if target in self.futures_transferred:
+            if target in TradeData.Futures.Transferred:
                 msg = f'{target} 轉倉-New'
                 infos = dict(
                     action_type=actionType,
-                    action=self.futures_transferred[target]['action'],
+                    action=TradeData.Futures.Transferred[target]['action'],
                     target=target,
-                    quantity=self.futures_transferred[target]['quantity'],
+                    quantity=TradeData.Futures.Transferred[target]['quantity'],
                     octype=octype,
                     pos_target=100,
                     pos_balance=0,
                     reason=msg
                 )
                 self._log_and_notify(msg)
-                self.futures_transferred.pop(target)
+                TradeData.Futures.Transferred.pop(target)
 
                 return self.OrderInfo(**infos)
 
@@ -832,20 +837,18 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 if actionInfo.position:
                     if isTransfer:
                         new_contract = f'{target[:3]}{self.GetDueMonth()}'
-                        self.margin_table[new_contract] = self.margin_table[target]
+                        self.transfer_margin(target, new_contract)
                         self.futures_to_monitor.update({new_contract: None})
                         self.futures_to_monitor.pop(target, None)
                         self.history_kbars([new_contract])
                         self.subscribe_all([new_contract])
-                        self.futures_transferred.pop(target, None)
-                        self.futures_transferred.update({
+                        TradeData.Futures.Transferred.update({
                             new_contract: {
                                 'quantity': quantity,
                                 'action': data['order']['action']
                             }
                         })
-                        self.futures_strategies[new_contract] = strategy
-                        self.transfer_list.append(new_contract)
+                        TradeData.Futures.Strategy[new_contract] = strategy
 
                     infos = dict(
                         action_type=actionType,
@@ -998,40 +1001,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         '''取得證券庫存清單'''
 
         if self.simulation:
-            try:
-                if db.HAS_DB:
-                    table = SecurityInfoStocks if market == 'Stocks' else SecurityInfoFutures
-                    df = db.query(table, table.account == self.ACCOUNT_NAME)
-                else:
-                    df = file_handler.read_table(
-                        f'{PATH}/stock_pool/simulation_{market.lower()}_{self.ACCOUNT_NAME}.pkl',
-                        df_default=self.get_info_default(market)
-                    )
-            except:
-                df = self.get_info_default(market)
-
-            df['account_id'] = 'simulate'
-
-        else:
-            if market == 'Stocks':
-                df = self.securityInfo()
-                return df[df.code.apply(len) == 4]
-
-            df = self.get_openpositions()
-        return df
-
-    def get_margin_table(self):
-        '''取得保證金清單'''
-        df = self.read_table('./lib/indexMarging.csv')
-
-        codes = [[f.code, f.symbol, f.name]
-                 for m in API.Contracts.Futures for f in m]
-        codes = pd.DataFrame(codes, columns=['code', 'symbol', 'name'])
-        codes = codes.set_index('name').symbol.to_dict()
-
-        month = self.GetDueMonth()[-2:]
-        df['code'] = (df.商品別 + month).map(codes)
-        return df.dropna().set_index('code')
+            return self.simulator.securityInfo(self.ACCOUNT_NAME, market)
+        return self.securityInfo(market)
 
     def get_securityPool(self, market='Stocks'):
         '''
@@ -1118,14 +1089,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         slot = int(min(slot, quantity_limit))
         slot = min(slot, 499)
         return slot
-
-    def get_open_margin(self, target: str, quantity: int):
-        '''計算期貨保證金額'''
-
-        if target in self.Quotes.NowTargets and self.margin_table and target in self.margin_table:
-            fee = 100
-            return self.margin_table[target]*quantity + fee
-        return 0
 
     def get_pct_chg_DowJones(self):
         '''取得道瓊指數前一天的漲跌幅'''
@@ -1217,8 +1180,8 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         '''計算可開倉的期貨口數 & 金額'''
 
         # 更新可開倉的期貨標的數
-        open_deals = len(self.futures_opened)
-        close_deals = len(self.futures_closed)
+        open_deals = len(TradeData.Futures.Opened)
+        close_deals = len(TradeData.Futures.Closed)
         quota = abs(self.N_FUTURES_LIMIT) - \
             self.n_futures - open_deals + close_deals
 
@@ -1281,7 +1244,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
 
             else:
                 day_trade = self.StrategySet.isDayTrade(
-                    self.futures_strategies[target])
+                    TradeData.Futures.Strategy[target])
                 self.reset_monitor_list(target, 'Futures', day_trade=day_trade)
 
                 if target in self.futures.code.values:
@@ -1336,7 +1299,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         logging.info(
             f'[Stock Position Limit] Short: {self.POSITION_LIMIT_SHORT}')
         logging.info(f'[Stock Model Version] {self.STOCK_MODEL_VERSION}')
-        logging.info(f'[Futures Strategy] {self.futures_strategies}')
+        logging.info(f'[Futures Strategy] {TradeData.Futures.Strategy}')
         logging.info(f'[Futures position] {self.n_futures}')
         logging.info(f'[Futures portfolio Limit] {self.N_FUTURES_LIMIT}')
         logging.info(f'[Futures Model Version] {self.FUTURES_MODEL_VERSION}')
@@ -1403,31 +1366,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         time.sleep(3)
         self.unsubscribe_all(all_stocks+all_futures)
 
-    def simulator_update_securityInfo(self, df: pd.DataFrame, market='Stocks'):
-        if df.empty:
-            return
-
-        table = SecurityInfoStocks if market == 'Stocks' else SecurityInfoFutures
-        if db.HAS_DB:
-            match_account = table.account == self.ACCOUNT_NAME
-            codes = db.query(table.code, match_account).code.values
-            tb = df[~df.code.isin(codes)]
-            update_values = df[df.code.isin(codes)].set_index('code')
-
-            # add new stocks
-            db.dataframe_to_DB(tb, table)
-
-            # update in-stocks
-            update_values = update_values.to_dict('index')
-            for target, values in update_values.items():
-                condition = table.code == target, match_account
-                db.update(table, values, *condition)
-        else:
-            self.save_table(
-                df=df,
-                filename=f'{PATH}/stock_pool/simulation_{market.lower()}_{self.ACCOUNT_NAME}.pkl'
-            )
-
     def __save_simulate_securityInfo(self, market='Stocks'):
         '''儲存模擬交易模式下的庫存表'''
 
@@ -1438,44 +1376,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         ):
             return
 
-        if market == 'Stocks':
-            monitor_list = self.stocks_to_monitor
-        else:
-            monitor_list = self.futures_to_monitor
-
-        logging.debug(f'{market.lower()}_to_monitor: {monitor_list}')
-        df = {k: v for k, v in monitor_list.items() if v}
-        df = pd.DataFrame(df).T
-        if df.shape[0]:
-            df = df[df.account_id.str.contains('simulate')]
-            df['account'] = self.ACCOUNT_NAME
-
-            if market == 'Stocks':
-                df = df.sort_values('code').reset_index()
-                df.yd_quantity = df.quantity
-                df['pnl'] = df.action.apply(lambda x: 1 if x == 'Buy' else -1)
-            else:
-                df = df.reset_index(drop=True)
-
-                if 'order' in df.columns:
-                    df['direction'] = df.order.apply(lambda x: x['action'])
-                else:
-                    df['direction'] = df.action
-                df['pnl'] = df.direction.apply(
-                    lambda x: 1 if x == 'Buy' else -1)
-
-            if self.is_trading_time_(datetime.now()):
-                df['last_price'] = df.code.map(
-                    {s: self.getQuotesNow(s)['price'] for s in df.code})
-            else:
-                df['last_price'] = 0
-
-            df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
-            df = df[self.get_info_default(market).columns]
-        else:
-            df = self.get_info_default(market)
-
-        self.simulator_update_securityInfo(df, market)
+        df = self.simulator.monitor_list_to_df(
+            self.ACCOUNT_NAME,
+            data=self.stocks_to_monitor if market == 'Stocks' else self.futures_to_monitor,
+            quotes=self.Quotes,
+            market=market,
+            is_trading_time=self.is_trading_time_(datetime.now())
+        )
+        self.simulator.update_securityInfo(self.ACCOUNT_NAME, df, market)
 
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''

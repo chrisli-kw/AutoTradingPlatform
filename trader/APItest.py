@@ -1,8 +1,7 @@
 import time
 import shioaji as sj
-from dotenv import dotenv_values
 
-from .config import TODAY
+from .config import TODAY, get_env
 from .utils.time import TimeTool
 
 
@@ -96,7 +95,7 @@ class APITester(TimeTool):
         '''Shioaji 帳號測試'''
 
         for i in range(2):
-            config = dotenv_values(f'./lib/envs/{account}.env')
+            config = get_env(account)
             API_KEY = config['API_KEY']
             SECRET_KEY = config['SECRET_KEY']
 

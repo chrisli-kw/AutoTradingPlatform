@@ -1,13 +1,11 @@
-import os
 import time
 import logging
 import pandas as pd
 from datetime import datetime
-from dotenv import dotenv_values
 from concurrent.futures import as_completed
 
 from . import exec, notifier, picker, crawler1, crawler2, tdp, file_handler
-from .config import API, PATH, TODAY_STR, ACCOUNTS, TEnd, ConvertScales
+from .config import API, PATH, TODAY_STR, ACCOUNTS, TEnd, ConvertScales, get_env
 from .create_env import app
 from .utils.database import redis_tick
 from .utils.subscribe import Subscriber
@@ -36,7 +34,7 @@ def runAccountInfo():
         logging.debug(f'ACCOUNTS: {ACCOUNTS}')
         for env in ACCOUNTS:
             logging.debug(f'Load 【{env}】 config')
-            config = dotenv_values(f'./lib/envs/{env}.env')
+            config = get_env(env)
 
             API_KEY = config['API_KEY']
             SECRET_KEY = config['SECRET_KEY']
@@ -89,9 +87,9 @@ def runAccountInfo():
         API.logout()
 
 
-def runAutoTrader(account):
+def runAutoTrader(account: str):
     try:
-        config = dotenv_values(f'./lib/envs/{account}.env')
+        config = get_env(account)
         se = StrategyExecutor(config=config)
         se.login_and_activate()
         se.run()
@@ -118,7 +116,7 @@ def runAutoTrader(account):
 
 def runCrawlStockData(account: str, start=None, end=None):
     target = pd.to_datetime('15:05:00')
-    config = dotenv_values(f'./lib/envs/{account}.env')
+    config = get_env(account)
     aInfo = AccountInfo()
 
     try:
@@ -234,7 +232,7 @@ def runCrawlIndexMargin():
         notifier.post(f"\n【Error】【爬蟲程式】期貨股價指數類保證金發生異常", msgType='Tasker')
 
 
-def thread_subscribe(user, targets):
+def thread_subscribe(user: str, targets: list):
     import shioaji as sj
 
     subscriber = Subscriber()
@@ -254,7 +252,7 @@ def thread_subscribe(user, targets):
             tick_data = subscriber.update_quote_v1(tick)
             redis_tick.to_redis({tick.code: tick_data})
 
-    config = dotenv_values(f'./lib/envs/{user}.env')
+    config = get_env(user)
     API_KEY = config['API_KEY']
     SECRET_KEY = config['SECRET_KEY']
     api.login(API_KEY, SECRET_KEY)
@@ -304,7 +302,7 @@ def runShioajiSubscriber():
 def runSimulationChecker():
     try:
         for account in ACCOUNTS:
-            config = dotenv_values(f'./lib/envs/{account}.env')
+            config = get_env(account)
 
             if config['MODE'] == 'Simulation':
                 se = StrategyExecutor(config=config)

@@ -10,6 +10,7 @@ from ..config import API, PATH, TODAY, TODAY_STR
 from . import concat_df
 from .time import TimeTool
 from .file import FileHandler
+from .objs import TradeData
 
 
 class AccountInfo(TimeTool, FileHandler):
@@ -130,31 +131,36 @@ class AccountInfo(TimeTool, FileHandler):
             return stockname.name
         return stockname
 
-    def securityInfo(self):
+    def securityInfo(self, market='Stocks'):
         '''查庫存明細'''
-        while True:
-            try:
-                stocks = API.list_positions(
-                    API.stock_account,
-                    unit=sj.constant.Unit.Share
-                )
-                stocks = self._obj_2_df(stocks)
-                break
-            except:
-                logging.warning('Cannot get the security info, retrying...')
-                time.sleep(1)
-        stocks = stocks.rename(columns={
-            'cond': 'order_cond',
-            'direction': 'action',
-            'price': 'cost_price',
-        })
-        if stocks.shape[0]:
-            stocks.pnl = stocks.pnl.astype(int)  # 未實現損益
-            stocks.order_cond = stocks.order_cond.astype(str)  # 交易別
-            stocks.insert(1, 'name', stocks.code.apply(self.get_stock_name))
-            stocks[['account', 'market']] = [self.account_name, 'Stocks']
-            return stocks
-        return self.get_info_default('Stocks')
+
+        if market == 'Stocks':
+            while True:
+                try:
+                    stocks = API.list_positions(
+                        API.stock_account,
+                        unit=sj.constant.Unit.Share
+                    )
+                    stocks = self._obj_2_df(stocks)
+                    break
+                except:
+                    logging.warning('Cannot get the security info, retrying')
+                    time.sleep(1)
+            stocks = stocks.rename(columns={
+                'cond': 'order_cond',
+                'direction': 'action',
+                'price': 'cost_price',
+            })
+            if stocks.shape[0]:
+                names = stocks.code.apply(self.get_stock_name)
+                stocks.pnl = stocks.pnl.astype(int)  # 未實現損益
+                stocks.order_cond = stocks.order_cond.astype(str)  # 交易別
+                stocks.insert(1, 'name', names)
+                stocks[['account', 'market']] = [self.account_name, 'Stocks']
+                return stocks
+            return TradeData['Stocks'].InfoDefault
+
+        return self.get_openpositions()
 
     def get_profit_loss(self, start: str, end: str):
         '''查詢已實現損益'''
@@ -326,25 +332,6 @@ class AccountInfo(TimeTool, FileHandler):
         tb = pd.read_excel(df, sheet_name='dentist_1')
         return concat_df(tb, pd.DataFrame([row]), reset_index=True)
 
-    def get_info_default(self, market='Stocks'):
-        '''Get info default table'''
-
-        if market == 'Stocks':
-            return pd.DataFrame(
-                columns=[
-                    'account', 'market',
-                    'code', 'order_cond', 'action', 'pnl',
-                    'cost_price', 'quantity', 'yd_quantity', 'last_price'
-                ]
-            )
-        return pd.DataFrame(
-            columns=[
-                'account', 'market',
-                'code', 'action', 'quantity', 'cost_price',
-                'last_price', 'pnl'
-            ]
-        )
-
     def get_account_margin(self):
         '''期權保證金資訊'''
 
@@ -369,7 +356,7 @@ class AccountInfo(TimeTool, FileHandler):
 
         positions = API.list_positions(API.futopt_account)
         if not positions:
-            return self.get_info_default('Futures')
+            return TradeData['Futures'].InfoDefault
 
         df = self._obj_2_df(positions)
         if df.shape[0]:
@@ -379,7 +366,7 @@ class AccountInfo(TimeTool, FileHandler):
             })
             df[['account', 'market']] = [self.account_name, 'Futures']
             return df
-        return self.get_info_default('Futures')
+        return TradeData['Futures'].InfoDefault
 
     def get_settle_profitloss(self, start_date: str, end_date: str, market='Stocks'):
         '''查詢已實現損益'''
