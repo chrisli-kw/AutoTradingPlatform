@@ -103,19 +103,10 @@ class StrategyExecutor(
         FuturesMargin.__init__(self)
 
         # 股票可進場籌碼 (進場時判斷用)
-        self.simulate_amount = np.iinfo(np.int64).max
-        self.stocks = pd.DataFrame()
         self.desposal_money = 0
-        self.stock_strategies = {}
-        self.n_stocks_long = 0
-        self.n_stocks_short = 0
         self.total_market_value = 0
         self.punish_list = []
         self.pct_chg_DowJones = self.get_pct_chg_DowJones()
-
-        # 期貨可進場籌碼 (進場時判斷用)
-        self.n_futures = 0
-        self.futures = pd.DataFrame()
 
         # 交易相關
         self.can_stock = 'stock' in self.MARKET
@@ -175,8 +166,9 @@ class StrategyExecutor(
     def _set_trade_risks(self):
         '''設定交易風險值: 可交割金額、總市值'''
 
-        cost_value = (self.stocks.quantity * self.stocks.cost_price).sum()
-        pnl = self.stocks.pnl.sum()
+        df = TradeData.Stocks.Info.copy()
+        cost_value = (df.quantity*df.cost_price).sum()
+        pnl = df.pnl.sum()
         if self.simulation:
             account_balance = self.INIT_POSITION
             settle_info = pnl
@@ -195,8 +187,8 @@ class StrategyExecutor(
         '''計算可交割的保證金額，不可超過帳戶可下單的保證金額上限'''
         if self.simulation:
             account_balance = 0
-            self.desposal_margin = self.simulate_amount
-            self.ProfitAccCount = self.simulate_amount
+            self.desposal_margin = self.simulator.simulate_amount
+            self.ProfitAccCount = self.simulator.simulate_amount
         else:
             account_balance = self.balance()
             self.get_account_margin()
@@ -285,7 +277,7 @@ class StrategyExecutor(
                         infos = dict(
                             action=order['action'], target=stock, pos_target=100, pos_balance=100)
                         # 若本日還沒有下過融資且剩餘券數為0，才可以改下現股
-                        if q_balance == 0 and stock not in self.stock_bought:
+                        if q_balance == 0 and stock not in TradeData.Stocks.Bought:
                             orderinfo = self.OrderInfo(
                                 quantity=1000 *
                                 int(order['quantity']*(1-leverage)),
@@ -503,38 +495,39 @@ class StrategyExecutor(
             return []
 
         # 讀取選股清單
-        self.stock_strategies = self.get_securityPool('Stocks')
+        TradeData.Stocks.Strategy = self.get_securityPool('Stocks')
 
         # 取得遠端庫存
-        self.stocks = self.get_securityInfo('Stocks')
+        info = self.get_securityInfo('Stocks')
 
         # 取得策略清單
-        self.init_watchlist(self.stocks, self.stock_strategies)
+        self.init_watchlist(info)
 
         # 庫存的處理
-        self.stocks = self.merge_info(self.stocks)
-        self.stock_strategies.update(
-            self.stocks.set_index('code').strategy.to_dict())
+        info = self.merge_info(info)
+        TradeData.Stocks.Strategy.update(
+            info.set_index('code').strategy.to_dict())
 
         # 剔除不堅控的股票
-        self.stocks = self.stocks[~self.stocks.code.isin(self.FILTER_OUT)]
+        info = info[~info.code.isin(self.FILTER_OUT)]
 
         # 新增歷史K棒資料
         self.update_stocks_to_monitor()
-        all_targets = list(self.stocks_to_monitor)
+        all_targets = list(TradeData.Stocks.Monitor)
         self.history_kbars(['TSE001', 'OTC101'] + all_targets)
 
         # 交易風險控制
-        buy_condition = self.stocks.action == 'Buy'
-        self.n_stocks_long = self.stocks[buy_condition].shape[0]
-        self.n_stocks_short = self.stocks[~buy_condition].shape[0]
+        buy_condition = info.action == 'Buy'
+        TradeData.Stocks.N_Long = info[buy_condition].shape[0]
+        TradeData.Stocks.N_Short = info[~buy_condition].shape[0]
+        TradeData.Stocks.Info = info
         self.N_LIMIT_LS = self.StrategySet.setNStockLimitLong(KBars=self.KBars)
         self.N_LIMIT_SS = self.StrategySet.setNStockLimitShort(
             KBars=self.KBars)
         self.punish_list = crawler2.get_punish_list().證券代號.to_list()
         self._set_leverage(all_targets)
         self._set_trade_risks()
-        logging.debug(f'stocks_to_monitor: {self.stocks_to_monitor}')
+        logging.debug(f'Stocks to monitor: {TradeData.Stocks.Monitor}')
         return all_targets
 
     def init_futures(self):
@@ -556,22 +549,22 @@ class StrategyExecutor(
         TradeData.Futures.Strategy = self.get_securityPool('Futures')
 
         # 取得遠端庫存
-        self.futures = self.get_securityInfo('Futures')
+        info = self.get_securityInfo('Futures')
 
         # 庫存的處理
-        self.futures = preprocess_(self.futures)
-        self.futures = self.merge_info(self.futures)
-        self.futures.index = self.futures.code
+        info = preprocess_(info)
+        info = self.merge_info(info)
+        info.index = info.code
 
         # 剔除不堅控的股票
-        self.futures = self.futures[~self.futures.code.isin(self.FILTER_OUT)]
-        TradeData.Futures.Strategy.update(self.futures.strategy.to_dict())
-        self.n_futures = self.futures.shape[0]
+        info = info[~info.code.isin(self.FILTER_OUT)]
+        TradeData.Futures.Strategy.update(info.strategy.to_dict())
 
         # update_futures_to_monitor
-        TradeData.Futures.Monitor.update(self.futures.to_dict('index'))
+        TradeData.Futures.Monitor.update(info.to_dict('index'))
         TradeData.Futures.Monitor.update({
             f: None for f in TradeData.Futures.Strategy if f not in TradeData.Futures.Monitor})
+        TradeData.Futures.Info = info
 
         # 新增歷史K棒資料
         all_futures = list(TradeData.Futures.Monitor)
@@ -583,7 +576,7 @@ class StrategyExecutor(
             KBars=self.KBars)
         self._set_margin_limit()
         self.margin_table = self.get_margin_table()
-        logging.debug(f'futures_to_monitor: {TradeData.Futures.Monitor}')
+        logging.debug(f'Futures to monitor: {TradeData.Futures.Monitor}')
         return all_futures
 
     def _update_position(self, order: namedtuple, market: str, order_data: dict):
@@ -628,27 +621,23 @@ class StrategyExecutor(
         order = self.update_pos_target(order, is_empty)
 
         # append watchlist or udpate watchlist position
-        if market == 'Stocks':
-            strategies = self.stock_strategies
-        else:
-            strategies = TradeData.Futures.Strategy
-        self.update_watchlist_position(order, self.Quotes, strategies)
+        self.update_watchlist_position(order, self.Quotes)
 
     def update_stocks_to_monitor(self):
         '''更新買進/賣出股票監控清單'''
 
-        df = self.stocks.copy()
+        df = TradeData.Stocks.Info.copy()
         df.index = df.code
         if not self.simulation:
             df.order_cond = df.order_cond.apply(lambda x: x._value_)
-        self.stocks_to_monitor.update(df.to_dict('index'))
+        TradeData.Stocks.Monitor.update(df.to_dict('index'))
 
-        for stock, stra in self.stock_strategies.items():
+        for stock, stra in TradeData.Stocks.Strategy.items():
             if (
                 (self.can_buy and self.StrategySet.isLong(stra)) or
                 (self.can_sell and self.StrategySet.isShort(stra))
-            ) and (stock not in self.stocks_to_monitor):
-                self.stocks_to_monitor.update({stock: None})
+            ) and (stock not in TradeData.Stocks.Monitor):
+                TradeData.Stocks.Monitor.update({stock: None})
 
     def update_after_interfere(self, target: str, action_type: str, market):
         logging.warning(
@@ -661,20 +650,15 @@ class StrategyExecutor(
         )
         order = self.OrderInfo(**infos)
         self.check_remove_monitor(target, action_type, market)
-
-        if market == 'Stocks':
-            strategies = self.stock_strategies
-        else:
-            strategies = TradeData.Futures.Strategy
-        self.update_watchlist_position(order, self.Quotes, strategies)
+        self.update_watchlist_position(order, self.Quotes)
 
     def merge_buy_sell_lists(self, stocks_pool: Dict[str, str], market='Stocks'):
         '''合併進出場清單: 將庫存與選股清單，合併'''
 
-        if market == 'Stocks' and self.stocks.shape[0]:
-            sells = self.stocks.code.values
-        elif market == 'Futures' and self.futures.shape[0]:
-            sells = self.futures.code.values
+        if market == 'Stocks' and TradeData.Stocks.Info.shape[0]:
+            sells = TradeData.Stocks.Info.code.values
+        elif market == 'Futures' and TradeData.Futures.Info.shape[0]:
+            sells = TradeData.Futures.Info.code.values
         else:
             sells = []
 
@@ -687,8 +671,8 @@ class StrategyExecutor(
     def monitor_stocks(self, target: str):
         if target in self.Quotes.NowTargets:
             inputs = self.getQuotesNow(target).copy()
-            data = self.stocks_to_monitor[target]
-            strategy = self.stock_strategies[target]
+            data = TradeData.Stocks.Monitor[target]
+            strategy = TradeData.Stocks.Strategy[target]
             isLongStrategy = self.StrategySet.isLong(strategy)
             isDTStrategy = self.StrategySet.isDayTrade(strategy)
             isSell = (
@@ -716,8 +700,8 @@ class StrategyExecutor(
                 quantity = data['quantity']
                 enoughOpen = False
 
-            inStocks = target in self.stocks.code.values
-            inDeal = target in self.stock_bought + self.stock_sold
+            inStocks = target in TradeData.Stocks.Info.code.values
+            inDeal = target in TradeData.Stocks.Bought + TradeData.Stocks.Sold
 
             is_day_trade = isDTStrategy and inDeal and (not inStocks)
             isOpen = actionType == 'Open' and enoughOpen
@@ -1100,8 +1084,9 @@ class StrategyExecutor(
         if order_cond == 'ShortSelling':
             return price
 
-        cost_price = self.stocks.set_index('code').cost_price.to_dict()
-        if target in cost_price:
+        if target in TradeData.Stocks.Info.code.values:
+            cost_price = TradeData.Stocks.Info.set_index(
+                'code').cost_price.to_dict()
             return cost_price[target]
         return 0
 
@@ -1133,11 +1118,11 @@ class StrategyExecutor(
             return False
 
         # 更新可買進的股票額度 TODO: buy_deals, sell_deals會合計多空股票數，使quota1, quota2無法精準
-        buy_deals = len([s for s in self.stock_bought if len(s) == 4])
-        sell_deals = len([s for s in self.stock_sold if len(s) == 4])
-        quota1 = abs(self.N_LIMIT_LS) - self.n_stocks_long - \
+        buy_deals = len([s for s in TradeData.Stocks.Bought if len(s) == 4])
+        sell_deals = len([s for s in TradeData.Stocks.Sold if len(s) == 4])
+        quota1 = abs(self.N_LIMIT_LS) - TradeData.Stocks.N_Long - \
             buy_deals + sell_deals
-        quota2 = abs(self.N_LIMIT_SS) - self.n_stocks_short + \
+        quota2 = abs(self.N_LIMIT_SS) - TradeData.Stocks.N_Short + \
             buy_deals - sell_deals
 
         # 更新已委託金額
@@ -1177,7 +1162,7 @@ class StrategyExecutor(
         open_deals = len(TradeData.Futures.Opened)
         close_deals = len(TradeData.Futures.Closed)
         quota = abs(self.N_FUTURES_LIMIT) - \
-            self.n_futures - open_deals + close_deals
+            TradeData.Futures.Info.shape[0] - open_deals + close_deals
 
         # 更新已委託金額
         df = self.filterOrderTable('Futures')
@@ -1216,13 +1201,20 @@ class StrategyExecutor(
         return (
             not self.is_trading_time_(now) or
             all(x == 0 for x in [
-                self.n_stocks_long, self.n_stocks_short,
-                self.N_LIMIT_LS, self.N_LIMIT_SS,
-                self.N_FUTURES_LIMIT, self.n_futures
+                TradeData.Stocks.N_Long,
+                TradeData.Stocks.N_Short,
+                self.N_LIMIT_LS,
+                self.N_LIMIT_SS,
+                self.N_FUTURES_LIMIT,
+                TradeData.Futures.Info.shape[0]
             ])
         )
 
     def check_remove_monitor(self, target: str, action_type: str, market='Stocks'):
+
+        def remove_(df):
+            return df[df.code != target]
+
         if action_type == 'Open':
             return False
 
@@ -1231,22 +1223,21 @@ class StrategyExecutor(
             logging.debug(f'[Monitor List]Remove|{market}|{target}|')
             if market == 'Stocks':
                 day_trade = self.StrategySet.isDayTrade(
-                    self.stock_strategies[target])
-                self.reset_monitor_list(target, 'Stocks', day_trade=False)
-                if target in self.stocks.code.values:
-                    self.stocks = self.stocks[self.stocks.code != target]
+                    TradeData.Stocks.Strategy[target])
+                self.reset_monitor_list(target, market, day_trade=False)
+                if target in TradeData.Stocks.Info.code.values:
+                    TradeData.Stocks.Info = remove_(TradeData.Stocks.Info)
 
             else:
                 day_trade = self.StrategySet.isDayTrade(
                     TradeData.Futures.Strategy[target])
-                self.reset_monitor_list(target, 'Futures', day_trade=day_trade)
+                self.reset_monitor_list(target, market, day_trade=day_trade)
 
-                if target in self.futures.code.values:
-                    self.futures = self.futures[self.futures.code != target]
-                    self.n_futures = self.futures.shape[0]
+                if target in TradeData.Futures.Info.code.values:
+                    TradeData.Futures.Info = remove_(TradeData.Futures.Info)
 
         if self.simulation and db.HAS_DB:
-            table = SecurityInfoStocks if market == 'Stocks' else SecurityInfoFutures
+            table = self.simulator.get_table(market)
             db.delete(
                 table,
                 table.code == target,
@@ -1283,9 +1274,9 @@ class StrategyExecutor(
         logging.info(f"Previous Put/Call ratio: {self.StrategySet.pc_ratio}")
         logging.info(f'Start to monitor, basic settings:')
         logging.info(f'Mode:{self.MODE}, Strategy: {self.STRATEGY_STOCK}')
-        logging.info(f'[Stock Strategy] {self.stock_strategies}')
-        logging.info(f'[Stock Position] Long: {self.n_stocks_long}')
-        logging.info(f'[Stock Position] Short: {self.n_stocks_short}')
+        logging.info(f'[Stock Strategy] {TradeData.Stocks.Strategy}')
+        logging.info(f'[Stock Position] Long: {TradeData.Stocks.N_Long}')
+        logging.info(f'[Stock Position] Short: {TradeData.Stocks.N_Short}')
         logging.info(f'[Stock Portfolio Limit] Long: {self.N_LIMIT_LS}')
         logging.info(f'[Stock Portfolio Limit] Short: {self.N_LIMIT_SS}')
         logging.info(
@@ -1294,7 +1285,7 @@ class StrategyExecutor(
             f'[Stock Position Limit] Short: {self.POSITION_LIMIT_SHORT}')
         logging.info(f'[Stock Model Version] {self.STOCK_MODEL_VERSION}')
         logging.info(f'[Futures Strategy] {TradeData.Futures.Strategy}')
-        logging.info(f'[Futures position] {self.n_futures}')
+        logging.info(f'[Futures position] {TradeData.Futures.Info.shape[0]}')
         logging.info(f'[Futures portfolio Limit] {self.N_FUTURES_LIMIT}')
         logging.info(f'[Futures Model Version] {self.FUTURES_MODEL_VERSION}')
 
@@ -1333,7 +1324,7 @@ class StrategyExecutor(
             periodic_updates()
 
             # TODO: merge stocks_to_monitor & futures_to_monitor
-            for target in list(self.stocks_to_monitor):
+            for target in list(TradeData.Stocks.Monitor):
                 order = self.monitor_stocks(target)
                 if order.pos_target:
                     order_data = self._place_order(order, market='Stocks')
@@ -1351,9 +1342,12 @@ class StrategyExecutor(
             self.updateKBars(scale)
 
         if all(x == 0 for x in [
-            self.n_stocks_long, self.n_stocks_short,
-            self.N_LIMIT_LS, self.N_LIMIT_SS,
-            self.N_FUTURES_LIMIT, self.n_futures
+            TradeData.Stocks.N_Long,
+            TradeData.Stocks.N_Short,
+            self.N_LIMIT_LS,
+            self.N_LIMIT_SS,
+            self.N_FUTURES_LIMIT,
+            TradeData.Futures.Info.shape[0]
         ]):
             self._log_and_notify(f"【停止監控】{self.ACCOUNT_NAME} 無可監控清單")
 
@@ -1372,7 +1366,7 @@ class StrategyExecutor(
 
         df = self.simulator.monitor_list_to_df(
             self.ACCOUNT_NAME,
-            data=self.stocks_to_monitor if market == 'Stocks' else TradeData.Futures.Monitor,
+            data=TradeData.Stocks.Monitor if market == 'Stocks' else TradeData.Futures.Monitor,
             quotes=self.Quotes,
             market=market,
             is_trading_time=self.is_trading_time_(datetime.now())
@@ -1381,7 +1375,7 @@ class StrategyExecutor(
 
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''
-        if 'position' in self.stocks.columns and not self.simulation:
+        if 'position' in TradeData.Stocks.Info.columns and not self.simulation:
             codeList = self.get_securityInfo('Stocks').code.to_list()
             self.update_watchlist(codeList)
 

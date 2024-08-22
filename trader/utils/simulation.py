@@ -1,4 +1,5 @@
 import logging
+import numpy as np
 import pandas as pd
 
 from .. import PATH
@@ -9,10 +10,16 @@ from .objs import TradeData
 
 
 class Simulator(FileHandler):
+    simulate_amount = np.iinfo(np.int64).max
+
+    def get_table(self, market='Stocks'):
+        table = SecurityInfoStocks if market == 'Stocks' else SecurityInfoFutures
+        return table
+
     def securityInfo(self, account: str, market='Stocks'):
         try:
             if db.HAS_DB:
-                table = SecurityInfoStocks if market == 'Stocks' else SecurityInfoFutures
+                table = self.get_table(market)
                 df = db.query(table, table.account == account)
             else:
                 df = self.read_table(
@@ -73,7 +80,7 @@ class Simulator(FileHandler):
         if df.empty:
             return
 
-        table = SecurityInfoStocks if market == 'Stocks' else SecurityInfoFutures
+        table = self.get_table(market)
         if db.HAS_DB:
             match_account = table.account == account
             codes = db.query(table.code, match_account).code.values

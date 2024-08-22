@@ -9,6 +9,13 @@ class Stocks:
             'cost_price', 'quantity', 'yd_quantity', 'last_price'
         ]
     )
+    Info = pd.DataFrame()
+    Strategy = {}
+    Monitor = {}
+    N_Long = 0
+    N_Short = 0
+    Bought = []
+    Sold = []
 
 
 class Futures:
@@ -19,7 +26,9 @@ class Futures:
             'last_price', 'pnl'
         ]
     )
+    Info = pd.DataFrame()
     Strategy = {}
+    Monitor = {}
     Opened = []
     Closed = []
     Transferred = {}
