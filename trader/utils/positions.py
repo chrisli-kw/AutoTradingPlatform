@@ -15,7 +15,7 @@ from .database.tables import Watchlist
 
 class WatchListTool(TimeTool, FileHandler):
 
-    def __init__(self, account_name):
+    def __init__(self, account_name: str):
         self.account_name = account_name
         self.MatchAccount = Watchlist.account == self.account_name
         self.watchlist_file = f'watchlist_{account_name}'
@@ -279,7 +279,7 @@ class FuturesMargin(TimeTool, FileHandler):
         '''計算期貨保證金額'''
 
         if self.margin_table and target in self.margin_table:
-            fee = 100
+            fee = 100  # TODO
             return self.margin_table[target]*quantity + fee
         return 0
 

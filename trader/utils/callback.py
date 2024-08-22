@@ -25,3 +25,7 @@ class CallbackHandler:
         if msg['order_lot'] == 'Common':
             msg['quantity'] *= 1000
         return msg
+
+    @staticmethod
+    def fut_symbol(msg: dict):
+        return msg['contract']['code'] + msg['contract']['delivery_month']

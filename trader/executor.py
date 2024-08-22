@@ -27,10 +27,9 @@ from .utils.cipher import CipherTool
 from .utils.accounts import AccountInfo
 from .utils.subscribe import Subscriber
 from .utils.simulation import Simulator
-from .utils.positions import WatchListTool, FuturesMargin
+from .utils.positions import WatchListTool
 from .utils.callback import CallbackHandler
 from .utils.database import db
-from .utils.database.tables import SecurityInfoStocks, SecurityInfoFutures
 try:
     from .scripts.StrategySet import StrategySet as StrategySets
 except:
@@ -43,7 +42,6 @@ ssl._create_default_https_context = ssl._create_unverified_context
 class StrategyExecutor(
     AccountInfo,
     WatchListTool,
-    FuturesMargin,
     OrderTool,
     Subscriber
 ):
@@ -98,9 +96,8 @@ class StrategyExecutor(
 
         super().__init__()
         Subscriber.__init__(self, self.KBAR_START_DAYay)
-        OrderTool.__init__(self)
+        OrderTool.__init__(self, self.ACCOUNT_NAME)
         WatchListTool.__init__(self, self.ACCOUNT_NAME)
-        FuturesMargin.__init__(self)
 
         # 股票可進場籌碼 (進場時判斷用)
         self.desposal_money = 0
@@ -239,38 +236,21 @@ class StrategyExecutor(
             order = msg['order']
             operation = msg['operation']
 
-            c2 = operation['op_code'] == '00' or operation['op_msg'] == ''
             c3 = order['action'] == 'Buy'
-            c4 = operation['op_code'] == '88' and '此證券配額張數不足' in operation['op_msg']
-
             if order['account']['account_id'] == self.account_id_stock:
                 notifier.post_tftOrder(stat, msg)
                 self.update_deal_list(stock, order['action'], 'Stocks')
 
                 leverage = self.check_leverage(stock, order['order_cond'])
-                if c2 and c3:
-                    # 記錄委託成功的買單
-                    price = order['price']
-                    quantity = order['quantity']
-                    if order['order_lot'] == 'Common':
-                        quantity *= 1000
-                    order_data = {
-                        'Time': datetime.now(),
-                        'market': 'Stocks',
-                        'code': stock,
-                        'action': order['action'],
-                        'price': price,
-                        'quantity': quantity,
-                        'amount': self.get_stock_amount(stock, price, quantity, order['order_cond']),
-                        'order_cond': order['order_cond'],
-                        'order_lot': order['order_lot'],
-                        'leverage': leverage,
-                        'account_id': order['account']['account_id']
-                    }
+
+                if self.is_new_order(operation) and c3:
+                    order_data = self.generate_data(
+                        stock, order['price'], order, 'Stocks')
+                    order_data['leverage'] = leverage
                     self.appendOrder(order_data)
 
                 # 若融資配額張數不足，改現股買進 ex: '此證券配額張數不足，餘額 0 張（證金： 0 ）'
-                elif c4:
+                elif self.is_insufficient_quota(operation):
                     q_balance = operation['op_msg'].split(' ')
                     if len(q_balance) > 1:
                         q_balance = int(q_balance[1])
@@ -295,7 +275,7 @@ class StrategyExecutor(
                             self._place_order(orderinfo, market='Stocks')
 
                 # 若刪單成功就自清單移除
-                if operation['op_type'] == 'Cancel':
+                if self.is_cancel_order(operation):
                     self.deleteOrder(stock)
                     if c3:
                         self.update_deal_list(stock, 'Cancel', 'Stocks')
@@ -306,87 +286,57 @@ class StrategyExecutor(
             stock = msg['code']
             msg = CallbackHandler.update_stock_msg(msg)
 
-            quantity = msg['quantity']
             if msg['action'] == 'Sell':
-
                 self.update_deal_list(stock, msg['action'], 'Stocks')
 
                 price = msg['price']
-                leverage = self.check_leverage(stock, msg['order_cond'])
-                cost_price = self.get_cost_price(
-                    stock, price, msg['order_cond'])
-
-                # 紀錄成交的賣單
-                order_data = {
-                    'Time': datetime.now(),
-                    'market': 'Stocks',
-                    'code': stock,
-                    'price': -price,
-                    'quantity': quantity,
-                    # 賣出金額 - 融資金額 - 手續費
-                    'amount': -(price - cost_price*leverage)*quantity*(1 - FEE_RATE),
-                    'order_cond': msg['order_cond'],
-                    'order_lot': msg['order_lot'],
-                    'leverage': leverage,
-                    'account_id': msg['account_id']
-                }
+                order_data = self.generate_data(stock, price, msg, 'Stocks')
+                order_data['leverage'] = self.check_leverage(
+                    stock, msg['order_cond'])
                 self.appendOrder(order_data)
 
             # 更新監控庫存
-            if not self.simulation:
-                self.update_position_quantity(msg['action'], msg)
+            self.update_position_quantity(msg['action'], msg)
 
         elif stat == constant.OrderState.FuturesOrder:
             notifier.post_fOrder(stat, msg)
 
-            code = msg['contract']['code']
-            symbol = code + msg['contract']['delivery_month']
+            symbol = CallbackHandler.fut_symbol(msg)
             market = 'Futures' if msg['contract']['option_right'] == 'Future' else 'Options'
             if symbol not in self.Quotes.NowTargets:
                 for k in self.Quotes.NowTargets:
                     if symbol in k:
                         symbol = k
             order = msg['order']
-            operation = msg['operation']
             price = order['price']
             if price == 0:
                 price = self.getQuotesNow(symbol)['price']
             msg.update({
                 'symbol': symbol,
+                'code': symbol,
                 'cost_price': price,
                 'bst': datetime.now(),
                 'position': 100
             })
 
             if order['account']['account_id'] == self.account_id_futopt:
-                if operation['op_code'] == '00' or operation['op_msg'] == '':
+                operation = msg['operation']
+                if self.is_new_order(operation):
                     self.update_deal_list(symbol, order['oc_type'], market)
 
                     # 紀錄成交的賣單
-                    sign = -1 if order['oc_type'] == 'Cover' else 1
-                    quantity = order['quantity']
-                    order_data = {
-                        'Time': datetime.now(),
-                        'market': 'Futures',
-                        'code': symbol,
-                        'action': order['action'],
-                        'price': price*sign,
-                        'quantity': quantity,
-                        'amount': self.get_open_margin(symbol, quantity)*sign,
-                        'op_type': order['oc_type'],
-                        'account_id': order['account']['account_id']
-                    }
+                    order_data = self.generate_data(
+                        symbol, price, order, market)
                     self.appendOrder(order_data)
 
                 # 若刪單成功就自清單移除
-                if operation['op_type'] == 'Cancel':
+                if self.is_cancel_order(operation):
                     self.deleteOrder(symbol)
                     self.update_deal_list(symbol, 'Cancel', market)
                     if order['oc_type'] == 'New':
                         TradeData.Futures.Monitor[symbol] = None
 
                 # 更新監控庫存
-                msg['code'] = symbol
                 self.update_position_quantity(order['oc_type'], msg)
 
         elif stat == constant.OrderState.FuturesDeal:
@@ -653,6 +603,7 @@ class StrategyExecutor(
         self.update_watchlist_position(order, self.Quotes)
 
     def merge_buy_sell_lists(self, stocks_pool: Dict[str, str], market='Stocks'):
+        # TODO remove
         '''合併進出場清單: 將庫存與選股清單，合併'''
 
         if market == 'Stocks' and TradeData.Stocks.Info.shape[0]:
@@ -849,131 +800,82 @@ class StrategyExecutor(
     def _place_order(self, content: namedtuple, market='Stocks'):
         logging.debug(f'[OrderState.Content|{content}|')
 
-        is_stock = market == 'Stocks'
         target = content.target
+
+        if target not in self.BidAsk:
+            return
+
+        is_stock = market == 'Stocks'
         contract = get_contract(target)
-        if target in self.BidAsk:
-            quantity = self.get_sell_quantity(content, market)
-            price_type = 'MKT'
-            price = 0
-            order_lot = 'IntradayOdd' if content.quantity < 1000 and is_stock else 'Common'
+        quantity = self.get_sell_quantity(content, market)
+        price_type = 'MKT'
+        price = 0
+        order_lot = 'IntradayOdd' if content.quantity < 1000 and is_stock else 'Common'
 
-            if is_stock:
-                bid_ask = self.BidAsk[target]
-                bid_ask = bid_ask.bid_price if content.action == 'Sell' else bid_ask.ask_price
+        if is_stock:
+            bid_ask = self.BidAsk[target]
+            bid_ask = bid_ask.bid_price if content.action == 'Sell' else bid_ask.ask_price
 
-                # 零股交易
-                if 0 < content.quantity < 1000:
+            # 零股交易
+            if 0 < content.quantity < 1000:
+                price_type = 'LMT'
+                price = bid_ask[1]
+
+            # 整股交易
+            else:
+                if datetime.now() >= TTry:
                     price_type = 'LMT'
                     price = bid_ask[1]
+                elif target in self.punish_list:
+                    price_type = 'LMT'
+                    price = bid_ask[3]
+                elif contract.exchange == 'OES':
+                    price_type = 'LMT'
+                    price = self.getQuotesNow(target)['price']
 
-                # 整股交易
-                else:
-                    if datetime.now() >= TTry:
-                        price_type = 'LMT'
-                        price = bid_ask[1]
-                    elif target in self.punish_list:
-                        price_type = 'LMT'
-                        price = bid_ask[3]
-                    elif contract.exchange == 'OES':
-                        price_type = 'LMT'
-                        price = self.getQuotesNow(target)['price']
+        # 下單
+        log_msg = f'[OrderState.Info]|{target}|price:{price}, quantity:{quantity}, action:{content.action}, price_type:{price_type}, order_cond:{content.order_cond if is_stock else content.octype}, order_lot:{order_lot}|'
+        logging.debug(log_msg)
+        if self.simulation:
+            price = self.getQuotesNow(target)['price']
+            order_data = self.generate_data(target, price, content, market)
+            order_data['leverage'] = self.check_leverage(
+                target, content.order_cond)
+            self.appendOrder(order_data)
 
-                log_msg = f'[OrderState.Info]|{target}|price:{price}, quantity:{quantity}, action:{content.action}, price_type:{price_type}, order_cond:{content.order_cond}, order_lot:{order_lot}|'
-            else:
-                log_msg = f'[OrderState.Info]|{target}|price:{price}, quantity:{quantity}, action:{content.action}, price_type:{price_type}, order_cond:{content.octype}, order_lot:{order_lot}|'
-
-            # 下單
-            logging.debug(log_msg)
-            if self.simulation and is_stock:
-                price = self.getQuotesNow(target)['price']
-                quantity *= 1000
-                leverage = self.check_leverage(target, content.order_cond)
-                if content.action == 'Sell':
-                    cost_price = self.get_cost_price(
-                        target, price, content.order_cond)
-                    amount = -(price - cost_price*leverage) * \
-                        quantity*(1 - FEE_RATE)
-                else:
-                    amount = self.get_stock_amount(
-                        target, price, quantity, content.order_cond)
-
-                sign = -1 if content.action == 'Sell' else 1
-                order_data = {
-                    'Time': datetime.now(),
-                    'market': market,
-                    'code': target,
-                    'action': content.action,
-                    'price': price*sign,
-                    'quantity': quantity,
-                    'amount': amount,
-                    'order_cond': content.order_cond if is_stock else 'Cash',
-                    'order_lot': order_lot,
-                    'leverage': leverage,
-                    'account_id': f'simulate-{self.ACCOUNT_NAME}',
-                    'msg': content.reason
-                }
-                self.appendOrder(order_data)
-
-                logging.debug('Place simulate order complete.')
-                notifier.post(log_msg, msgType='Order')
-                return order_data
-
-            elif self.simulation and market == 'Futures':
-                price = self.getQuotesNow(target)['price']
-                sign = -1 if content.octype == 'Cover' else 1
-                order_data = {
-                    'Time': datetime.now(),
-                    'market': market,
-                    'code': target,
-                    'action': content.action,
-                    'price': price*sign,
-                    'quantity': quantity,
-                    'amount': self.get_open_margin(target, quantity)*sign,
-                    'op_type': content.octype,
-                    'account_id': f'simulate-{self.ACCOUNT_NAME}',
-                    'msg': content.reason
-                }
-                self.appendOrder(order_data)
-
-                logging.debug('Place simulate order complete.')
-                notifier.post(log_msg, msgType='Order')
-                return order_data
-
-            else:
-                # #ff0000 批次下單的張數 (股票>1000股的單位為【張】) #ff0000
-                q = 5 if order_lot == 'Common' else quantity
-                if is_stock:
-                    target_ = self.desposal_money
-                else:
-                    target_ = self.desposal_margin
-
-                enough_to_place = self.checkEnoughToPlace(market, target_)
-                while quantity > 0 and enough_to_place:
-                    order = API.Order(
-                        # 價格 (市價單 = 0)
-                        price=price,
-                        # 數量 (最小1張; 零股最小50股 or 全部庫存)
-                        quantity=min(quantity, q),
-                        # 動作: 買進/賣出
-                        action=content.action,
-                        # 市價單/限價單
-                        price_type=price_type,
-                        # ROD:當天都可成交
-                        order_type=constant.OrderType.ROD if is_stock else constant.OrderType.IOC,
-                        # 委託類型: 現股/融資
-                        order_cond=content.order_cond if is_stock else 'Cash',
-                        # 整張或零股
-                        order_lot=order_lot,
-                        # {Auto, New, Cover, DayTrade}(自動、新倉、平倉、當沖)
-                        octype='Auto' if is_stock else content.octype,
-                        account=API.stock_account if is_stock else API.futopt_account,
-                        # 先賣後買: True, False
-                        daytrade_short=content.daytrade_short,
-                    )
-                    result = API.place_order(contract, order)
-                    self.check_order_status(result, market)
-                    quantity -= q
+            logging.debug('Place simulate order complete.')
+            notifier.post(log_msg, msgType='Order')
+            return order_data
+        else:
+            # #ff0000 批次下單的張數 (股票>1000股的單位為【張】) #ff0000
+            q = 5 if order_lot == 'Common' else quantity
+            target_ = self.desposal_money if is_stock else self.desposal_margin
+            enough_to_place = self.checkEnoughToPlace(market, target_)
+            while quantity > 0 and enough_to_place:
+                order = API.Order(
+                    # 價格 (市價單 = 0)
+                    price=price,
+                    # 數量 (最小1張; 零股最小50股 or 全部庫存)
+                    quantity=min(quantity, q),
+                    # 動作: 買進/賣出
+                    action=content.action,
+                    # 市價單/限價單
+                    price_type=price_type,
+                    # ROD:當天都可成交
+                    order_type=constant.OrderType.ROD if is_stock else constant.OrderType.IOC,
+                    # 委託類型: 現股/融資
+                    order_cond=content.order_cond if is_stock else 'Cash',
+                    # 整張或零股
+                    order_lot=order_lot,
+                    # {Auto, New, Cover, DayTrade}(自動、新倉、平倉、當沖)
+                    octype='Auto' if is_stock else content.octype,
+                    account=API.stock_account if is_stock else API.futopt_account,
+                    # 先賣後買: True, False
+                    daytrade_short=content.daytrade_short,
+                )
+                result = API.place_order(contract, order)
+                self.check_order_status(result, market)
+                quantity -= q
 
     def get_securityInfo(self, market='Stocks'):
         '''取得證券庫存清單'''
@@ -1047,13 +949,6 @@ class StrategyExecutor(
 
         return 1000*quantity
 
-    def get_stock_amount(self, target: str, price: float, quantity: int, mode='long'):
-        '''計算股票委託金額'''
-
-        leverage = self.check_leverage(target, mode)
-        fee = max(price*quantity*FEE_RATE, 20)
-        return price*quantity*(1 - leverage) + fee
-
     def get_open_slot(self, target: str, strategy: str):
         '''計算買進口數'''
 
@@ -1078,24 +973,12 @@ class StrategyExecutor(
             return 100*round(dj[0]/dj[1] - 1, 4)
         return 0
 
-    def get_cost_price(self, target: str, price: float, order_cond: str):
-        '''取得股票的進場價'''
-
-        if order_cond == 'ShortSelling':
-            return price
-
-        if target in TradeData.Stocks.Info.code.values:
-            cost_price = TradeData.Stocks.Info.set_index(
-                'code').cost_price.to_dict()
-            return cost_price[target]
-        return 0
-
     def check_leverage(self, target: str, mode='long'):
         '''取得個股的融資/融券成數'''
-        if mode in ['long', 'MarginTrading'] and target in self.LEVERAGE_LONG:
-            return self.LEVERAGE_LONG[target]
-        elif mode in ['short', 'ShortSelling'] and target in self.LEVERAGE_SHORT:
-            return 1 - self.LEVERAGE_SHORT[target]
+        if mode in ['long', 'MarginTrading']:
+            return self.LEVERAGE_LONG.get(target, 0)
+        elif mode in ['short', 'ShortSelling']:
+            return 1 - self.LEVERAGE_SHORT.get(target, 0)
         return 0
 
     def check_order_cond(self, target: str, mode='long'):
@@ -1197,18 +1080,18 @@ class StrategyExecutor(
             market='Stocks'
         )
 
+    def is_all_zero(self):
+        return all(x == 0 for x in [
+            TradeData.Stocks.N_Long,
+            TradeData.Stocks.N_Short,
+            self.N_LIMIT_LS,
+            self.N_LIMIT_SS,
+            self.N_FUTURES_LIMIT,
+            TradeData.Futures.Info.shape[0]
+        ])
+
     def is_break_loop(self, now: datetime):
-        return (
-            not self.is_trading_time_(now) or
-            all(x == 0 for x in [
-                TradeData.Stocks.N_Long,
-                TradeData.Stocks.N_Short,
-                self.N_LIMIT_LS,
-                self.N_LIMIT_SS,
-                self.N_FUTURES_LIMIT,
-                TradeData.Futures.Info.shape[0]
-            ])
-        )
+        return not self.is_trading_time_(now) or self.is_all_zero()
 
     def check_remove_monitor(self, target: str, action_type: str, market='Stocks'):
 
@@ -1299,7 +1182,14 @@ class StrategyExecutor(
         text += f"\n【數據用量】{usage}MB"
         notifier.post(text, msgType='Monitor')
 
-        def periodic_updates():
+        # 開始監控
+        while True:
+            self.loop_pause()
+            now = datetime.now()
+
+            if self.is_break_loop(now):
+                break
+
             # 防止斷線用 TODO:待永豐更新後刪除
             if now.minute % 10 == 0 and now.second == 0:
                 balance = self.balance(mode='debug')
@@ -1312,16 +1202,6 @@ class StrategyExecutor(
                 for freq in [2, 5, 15, 30, 60]:
                     if now.minute % freq == 0:
                         self.updateKBars(f'{freq}T')
-
-        # 開始監控
-        while True:
-            self.loop_pause()
-            now = datetime.now()
-
-            if self.is_break_loop(now):
-                break
-
-            periodic_updates()
 
             # TODO: merge stocks_to_monitor & futures_to_monitor
             for target in list(TradeData.Stocks.Monitor):
@@ -1341,14 +1221,7 @@ class StrategyExecutor(
         for scale in ['2T', '5T', '15T', '30T', '60T']:
             self.updateKBars(scale)
 
-        if all(x == 0 for x in [
-            TradeData.Stocks.N_Long,
-            TradeData.Stocks.N_Short,
-            self.N_LIMIT_LS,
-            self.N_LIMIT_SS,
-            self.N_FUTURES_LIMIT,
-            TradeData.Futures.Info.shape[0]
-        ]):
+        if self.is_all_zero():
             self._log_and_notify(f"【停止監控】{self.ACCOUNT_NAME} 無可監控清單")
 
         time.sleep(3)
