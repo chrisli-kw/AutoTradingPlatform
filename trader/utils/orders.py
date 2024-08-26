@@ -89,8 +89,17 @@ class OrderTool(FuturesMargin):
         is_stock = market == 'Stocks'
         is_real_trade = isinstance(content, dict)
         action = content['action'] if is_real_trade else content.action
-        order_cond = content['order_cond'] if is_real_trade and is_stock else content.order_cond
-        op_type = content['oc_type'] if is_real_trade and not is_stock else content.octype
+
+        if is_real_trade and is_stock:
+            order_cond = content['order_cond']
+        else:
+            order_cond = content.order_cond
+
+        if is_real_trade and not is_stock:
+            op_type = content['oc_type']
+        else:
+            op_type = content.octype
+
         sign = self.sign_(action if is_stock else op_type)
 
         if is_stock:
