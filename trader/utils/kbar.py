@@ -18,7 +18,7 @@ from ..config import (
 from ..indicators.signals import TechnicalSignals
 from . import get_contract, concat_df
 from .time import TimeTool
-from .file import FileHandler
+from .. import file_handler
 try:
     from ..scripts.features import KBarFeatureTool
 except:
@@ -26,7 +26,7 @@ except:
     KBarFeatureTool = None
 
 
-class KBarTool(TechnicalSignals, TimeTool, FileHandler):
+class KBarTool(TechnicalSignals, TimeTool):
     def __init__(self, kbar_start_day=''):
         self.set_kbar_scripts(KBarFeatureTool)
         self.daysdata = self.__set_daysdata(kbar_start_day)
@@ -319,14 +319,45 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
                 self.is_kbar_1t_updated[f'{freq}T'] = True
 
 
-class TickDataProcesser(TimeTool, FileHandler):
+class TickDataProcesser(TimeTool):
     '''轉換期貨逐筆交易'''
+
+    def filter_file_dates(self, market: str, **kwargs):
+        '''
+        取得逐筆交易明細表的日期清單。以year為主，取得該年度的資料日期，可另外指定要合併的區間
+        '''
+
+        dir_path = f'{PATH}/ticks/{market.lower()}'
+        files = file_handler.Operate.list_files(dir_path, pattern='.csv')
+
+        # Filter files by time interval
+        start = kwargs.get('start')
+        if start:
+            if not isinstance(start, pd.Timestamp):
+                start = pd.to_datetime(start)
+        else:
+            start = pd.to_datetime('1970-01-01')
+
+        end = kwargs.get('end')
+        if end:
+            if not isinstance(end, pd.Timestamp):
+                end = pd.to_datetime(end)
+        else:
+            end = TODAY
+
+        dates = []
+        for f in files:
+            date = f.split('Daily_')[-1][:-4]
+            if start <= datetime(*(int(d) for d in date.split('_')[-3:])) <= end:
+                dates.append(date.replace('Daily_', '').replace('_', '-'))
+
+        return dates
 
     def convert_daily_tick(self, date: str, scale: str):
         ymd = date.split('-')
         m = f'Daily_{ymd[0]}_{ymd[1]}'
         folder = f'{PATH}/ticks/futures/{ymd[0]}/{m}'
-        df = self.read_table(f'{folder}/{m}_{ymd[2]}.csv')
+        df = file_handler.Process.read_table(f'{folder}/{m}_{ymd[2]}.csv')
         if df.shape[0]:
             df = self.preprocess_futures_tick(df)
             df = self.tick_2_kbar(df, scale, period='all')

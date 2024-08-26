@@ -1,6 +1,11 @@
 import pandas as pd
 
 
+class Leverage:
+    Long = {}
+    Short = {}
+
+
 class Stocks:
     InfoDefault = pd.DataFrame(
         columns=[
@@ -14,6 +19,7 @@ class Stocks:
     Monitor = {}
     N_Long = 0
     N_Short = 0
+    Leverage = Leverage()
     Bought = []
     Sold = []
 

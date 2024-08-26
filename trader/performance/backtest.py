@@ -9,7 +9,6 @@ from .base import (
     AccountingNumber,
     compute_profits,
     computeReturn,
-    computeWinLoss,
     convert_statement,
     getMDD
 )
@@ -17,13 +16,13 @@ from .. import file_handler
 from ..config import PATH, TODAY_STR
 from ..utils import progress_bar
 from ..utils.time import TimeTool
-from ..utils.file import FileHandler
+from ..utils.file import file_handler
 from ..utils.kbar import KBarTool
 from ..utils.crawler import readStockList
 from ..utils.database import db, KBarTables
 
 
-class BacktestPerformance(FileHandler):
+class BacktestPerformance:
     def __init__(self, config) -> None:
         self.Market = config.market
         self.scale = config.scale
@@ -159,7 +158,7 @@ class BacktestPerformance(FileHandler):
                     )
                 else:
                     dir_path = f'{PATH}/KBars/{self.scale}'
-                    table = self.read_tables_in_folder(dir_path)
+                    table = file_handler.read_tables_in_folder(dir_path)
                     table = table[
                         (table.Time >= df.OpenTime.min()) &
                         (table.Time <= df.CloseTime.max())
@@ -347,7 +346,7 @@ class BackTester(BacktestPerformance, TimeTool):
             end = TODAY_STR
 
         dir_path = f'{dataPath if dataPath else PATH}/Kbars/'
-        scales = file_handler.listdir(dir_path)
+        scales = file_handler.Operate.listdir(dir_path)
 
         Kbars = {scale: None for scale in self.Script.kbarScales}
         Kbars['1D'] = None

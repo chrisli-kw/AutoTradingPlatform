@@ -22,7 +22,7 @@ def _create_env(inputs):
 
     account_name = inputs['ACCOUNT_NAME']
 
-    users = file_handler.listdir('./lib/envs', account_name)
+    users = file_handler.Operate.listdir('./lib/envs', account_name)
     if users:
         nth_account = max(users) + 1
     else:

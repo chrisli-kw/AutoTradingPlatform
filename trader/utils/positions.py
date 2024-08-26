@@ -7,13 +7,13 @@ from collections import namedtuple
 from ..config import PATH, TODAY_STR, API
 from . import get_contract, concat_df
 from .time import TimeTool
-from .file import FileHandler
+from .file import file_handler
 from .objs import TradeData
 from .database import db
 from .database.tables import Watchlist
 
 
-class WatchListTool(TimeTool, FileHandler):
+class WatchListTool(TimeTool):
 
     def __init__(self, account_name: str):
         self.account_name = account_name
@@ -27,7 +27,7 @@ class WatchListTool(TimeTool, FileHandler):
             df = db.query(Watchlist, Watchlist.account == self.account_name)
             return df
 
-        df = self.read_table(
+        df = file_handler.Process.read_table(
             filename=f'{PATH}/stock_pool/{self.watchlist_file}.csv',
             df_default=pd.DataFrame(columns=[
                 'account', 'market', 'code', 'buyday',
@@ -151,7 +151,7 @@ class WatchListTool(TimeTool, FileHandler):
             tb = df[~df.code.isin(codes)]
             db.dataframe_to_DB(tb, Watchlist)
         else:
-            self.save_table(
+            file_handler.Process.save_table(
                 df=df,
                 filename=f'{PATH}/stock_pool/{self.watchlist_file}.csv',
                 saveEmpty=True
@@ -249,7 +249,7 @@ class WatchListTool(TimeTool, FileHandler):
             f'[Monitor List]{stage}|{target}|{action}|quantity: {quantity_}; position: {position_}|')
 
 
-class FuturesMargin(TimeTool, FileHandler):
+class FuturesMargin(TimeTool):
     def __init__(self) -> None:
         self.full_path_name = './lib/indexMarging.csv'
         self.margin_table = None
@@ -260,7 +260,7 @@ class FuturesMargin(TimeTool, FileHandler):
         if not os.path.exists(self.full_path_name):
             return None
 
-        df = self.read_table(self.full_path_name)
+        df = file_handler.Process.read_table(self.full_path_name)
 
         codes = [[f.code, f.symbol, f.name]
                  for m in API.Contracts.Futures for f in m]

@@ -5,11 +5,11 @@ import pandas as pd
 from .. import PATH
 from .database import db
 from .database.tables import SecurityInfoStocks, SecurityInfoFutures
-from .file import FileHandler
+from .file import file_handler
 from .objs import TradeData
 
 
-class Simulator(FileHandler):
+class Simulator:
     simulate_amount = np.iinfo(np.int64).max
 
     def get_table(self, market='Stocks'):
@@ -22,7 +22,7 @@ class Simulator(FileHandler):
                 table = self.get_table(market)
                 df = db.query(table, table.account == account)
             else:
-                df = self.read_table(
+                df = file_handler.Process.read_table(
                     f'{PATH}/stock_pool/simulation_{market.lower()}_{account}.pkl',
                     df_default=TradeData[market].InfoDefault
                 )
@@ -96,7 +96,7 @@ class Simulator(FileHandler):
                 condition = table.code == target, match_account
                 db.update(table, values, *condition)
         else:
-            self.save_table(
+            file_handler.Process.save_table(
                 df=df,
                 filename=f'{PATH}/stock_pool/simulation_{market.lower()}_{account}.pkl'
             )

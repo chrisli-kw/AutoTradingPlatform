@@ -10,7 +10,7 @@ from .. import tdp
 from ..config import PATH, TODAY, TODAY_STR, SelectMethods, StrategyNameList
 from ..utils import progress_bar
 from ..utils.time import TimeTool
-from ..utils.file import FileHandler
+from ..utils.file import file_handler
 from ..utils.orders import OrderTool
 from ..utils.database import db, KBarTables
 from ..utils.database.tables import SelectedStocks
@@ -28,7 +28,7 @@ class FiguresSet:
     pass
 
 
-class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
+class PerformanceReport(SuplotHandler, OrderTool, TimeTool):
     def __init__(self, account: str, market: str):
         self.account = account
         self.market = market
@@ -143,7 +143,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
             )
         else:
             dir_path = f'{PATH}/selections/history'
-            df = self.read_tables_in_folder(dir_path)
+            df = file_handler.read_tables_in_folder(dir_path)
         df = df[
             df.Strategy.isin(statement.Strategy) &
             (df.Time >= start)
@@ -167,7 +167,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
             )
         else:
             dir_path = f'{PATH}/KBars/1D'
-            df = self.read_tables_in_folder(dir_path)
+            df = file_handler.read_tables_in_folder(dir_path)
             df = df[
                 (df.Time >= start) &
                 (df.Time <= end) &
@@ -391,7 +391,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
         return fig
 
 
-class BacktestReport(SuplotHandler, FileHandler):
+class BacktestReport(SuplotHandler):
     def __init__(self, backtestScript) -> None:
         self.Figures = FiguresSet
         self.Script = backtestScript
@@ -640,13 +640,13 @@ class BacktestReport(SuplotHandler, FileHandler):
         '''輸出回測圖表'''
 
         folder_path = f'{self.DATAPATH}/回測報告/{TODAY_STR}-{filename}'
-        self.create_folder(folder_path)
+        file_handler.Operate.create_folder(folder_path)
         export_figure(fig.BacktestResult, f'{folder_path}/回測結果.html')
 
         figures = [f for f in fig.__dict__ if 'fig' in f]
         for f in figures:
             export_figure(fig.__dict__[f], f'{folder_path}/{f}.html')
 
-        files = self.listdir(folder_path, pattern='.html')
+        files = file_handler.Operate.listdir(folder_path, pattern='.html')
         for file in files:
             convert_encodings(f'{folder_path}/{file}')

@@ -15,7 +15,6 @@ from .config import (
     TODAY,
     TODAY_STR,
     MonitorFreq,
-    FEE_RATE,
     TTry,
     TimeEndStock,
     TimeTransferFutures
@@ -23,6 +22,7 @@ from .config import (
 from .utils import get_contract
 from .utils.objs import TradeData
 from .utils.orders import OrderTool
+from .utils.file import file_handler
 from .utils.cipher import CipherTool
 from .utils.objects.env import UserEnv
 from .utils.accounts import AccountInfo
@@ -49,8 +49,6 @@ class StrategyExecutor(
     def __init__(self, account_name: str):
         self.env = UserEnv(account_name)
 
-        self.LEVERAGE_LONG = {}
-        self.LEVERAGE_SHORT = {}
         self.day_trade_cond = {
             'MarginTrading': 'ShortSelling',
             'ShortSelling': 'MarginTrading',
@@ -154,17 +152,20 @@ class StrategyExecutor(
             df.融券成數 /= 100
 
             if self.env.ORDER_COND1 != 'Cash':
-                self.LEVERAGE_LONG = df.set_index('代號').融資成數.to_dict()
+                TradeData.Stocks.Leverage.Long = df.set_index(
+                    '代號').融資成數.to_dict()
             else:
-                self.LEVERAGE_LONG = {code: 0 for code in stockids}
+                TradeData.Stocks.Leverage.Long = {code: 0 for code in stockids}
 
             if self.env.ORDER_COND2 != 'Cash':
-                self.LEVERAGE_SHORT = df.set_index('代號').融券成數.to_dict()
+                TradeData.Stocks.Leverage.Short = df.set_index(
+                    '代號').融券成數.to_dict()
             else:
-                self.LEVERAGE_SHORT = {code: 1 for code in stockids}
+                TradeData.Stocks.Leverage.Short = {
+                    code: 1 for code in stockids}
 
-        logging.info(f'Long leverages: {self.LEVERAGE_LONG}')
-        logging.info(f'Short leverages: {self.LEVERAGE_SHORT}')
+        logging.info(f'Long leverages: {TradeData.Stocks.Leverage.Long}')
+        logging.info(f'Short leverages: {TradeData.Stocks.Leverage.Short}')
 
     def _set_futures_code_list(self):
         '''期貨商品代號與代碼對照表'''
@@ -917,24 +918,16 @@ class StrategyExecutor(
             return 100*round(dj[0]/dj[1] - 1, 4)
         return 0
 
-    def check_leverage(self, target: str, mode='long'):
-        '''取得個股的融資/融券成數'''
-        if mode in ['long', 'MarginTrading']:
-            return self.LEVERAGE_LONG.get(target, 0)
-        elif mode in ['short', 'ShortSelling']:
-            return 1 - self.LEVERAGE_SHORT.get(target, 0)
-        return 0
-
     def check_order_cond(self, target: str, mode='long'):
         '''檢查個股可否融資'''
         # TODO: move to OrderTool
         contract = get_contract(target)
         if mode == 'long':
-            if self.env.ORDER_COND1 != 'Cash' and (self.LEVERAGE_LONG[target] == 0 or contract.margin_trading_balance == 0):
+            if self.env.ORDER_COND1 != 'Cash' and (TradeData.Stocks.Leverage.Long[target] == 0 or contract.margin_trading_balance == 0):
                 return 'Cash'
             return self.env.ORDER_COND1
         else:
-            if self.env.ORDER_COND2 != 'Cash' and (self.LEVERAGE_SHORT[target] == 1 or contract.short_selling_balance == 0):
+            if self.env.ORDER_COND2 != 'Cash' and (TradeData.Stocks.Leverage.Short[target] == 1 or contract.short_selling_balance == 0):
                 return 'Cash'
             return self.env.ORDER_COND2
 
@@ -1206,7 +1199,7 @@ class StrategyExecutor(
         for freq, df in self.KBars.items():
             if freq != '1D':
                 filename = f'{PATH}/Kbars/k{freq[:-1]}min_{self.env.ACCOUNT_NAME}.csv'
-                self.save_table(df, filename)
+                file_handler.Process.save_table(df, filename)
 
         self.__save_simulate_securityInfo('Stocks')
         self.__save_simulate_securityInfo('Futures')

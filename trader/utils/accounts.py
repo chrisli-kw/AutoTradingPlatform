@@ -9,11 +9,11 @@ from .. import crawler2
 from ..config import API, PATH, TODAY, TODAY_STR
 from . import concat_df
 from .time import TimeTool
-from .file import FileHandler
+from .file import file_handler
 from .objs import TradeData
 
 
-class AccountInfo(TimeTool, FileHandler):
+class AccountInfo(TimeTool):
     def __init__(self):
         self.filename = f'{TODAY.year}_股票帳務資訊.xlsx'
         self.DEFAULT_TABLE = pd.DataFrame(
@@ -95,7 +95,7 @@ class AccountInfo(TimeTool, FileHandler):
             return pd.DataFrame([{o[0]: o[1] for o in objects}])
 
     def create_info_table(self):
-        if self.is_in_dir(self.filename, f'{PATH}/daily_info/'):
+        if file_handler.Operate.is_in_dir(self.filename, f'{PATH}/daily_info/'):
             return pd.ExcelFile(f'{PATH}/daily_info/{self.filename}')
         else:
             return self.DEFAULT_TABLE

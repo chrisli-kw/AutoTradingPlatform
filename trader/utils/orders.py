@@ -7,6 +7,7 @@ from collections import namedtuple
 from ..config import API, PATH, FEE_RATE
 from . import concat_df
 from .objs import TradeData
+from .file import file_handler
 from .positions import FuturesMargin
 from .database import db
 from .database.tables import TradingStatement
@@ -80,7 +81,7 @@ class OrderTool(FuturesMargin):
 
     def _order_lot(self, content):
         if isinstance(content, dict):
-            return content['order_lot']
+            return content.get('order_lot', '')
         elif content.quantity < 1000:
             return 'IntradayOdd'
         return 'Common'
@@ -91,12 +92,12 @@ class OrderTool(FuturesMargin):
         action = content['action'] if is_real_trade else content.action
 
         if is_real_trade and is_stock:
-            order_cond = content['order_cond']
+            order_cond = content.get('order_cond', '')
         else:
             order_cond = content.order_cond
 
         if is_real_trade and not is_stock:
-            op_type = content['oc_type']
+            op_type = content.get('oc_type', '')
         else:
             op_type = content.octype
 
@@ -128,6 +129,14 @@ class OrderTool(FuturesMargin):
             'msg': content.reason
         }
         return order_data
+
+    def check_leverage(self, target: str, mode='long'):
+        '''取得個股的融資/融券成數'''
+        if mode in ['long', 'MarginTrading']:
+            return TradeData.Stocks.Leverage.Long.get(target, 0)
+        elif mode in ['short', 'ShortSelling']:
+            return 1 - TradeData.Stocks.Leverage.Short.get(target, 0)
+        return 0
 
     def get_stock_amount(self, target: str, price: float, quantity: int, mode='long'):
         '''Calculate the amount of stock orders.'''
@@ -213,8 +222,9 @@ class OrderTool(FuturesMargin):
                 self.OrderTable.op_type.fillna('', inplace=True)
             db.dataframe_to_DB(self.OrderTable, TradingStatement)
         else:
-            statement = self.read_and_concat(filename, self.OrderTable)
-            self.save_table(statement, filename)
+            statement = file_handler.Process.read_and_concat(
+                filename, self.OrderTable)
+            file_handler.Process.save_table(statement, filename)
 
     def read_statement(self, account: str = ''):
         '''Import trading statement'''
@@ -226,7 +236,8 @@ class OrderTool(FuturesMargin):
             )
         else:
             filename = f"{PATH}/stock_pool/statement_{account.split('-')[-1]}.csv"
-            df = self.read_table(filename, df_default=self.OrderTable)
+            df = file_handler.Process.read_table(
+                filename, df_default=self.OrderTable)
             df = df[df.account_id == account]
             df = df.astype({
                 'price': float,

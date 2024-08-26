@@ -4,9 +4,10 @@ import pandas as pd
 from datetime import datetime
 from concurrent.futures import as_completed
 
-from . import exec, notifier, picker, crawler1, crawler2, tdp, file_handler
+from . import exec, notifier, picker, crawler1, crawler2, tdp
 from .config import API, PATH, TODAY_STR, ACCOUNTS, TEnd, ConvertScales
 from .create_env import app
+from .utils.file import file_handler
 from .utils.database import redis_tick
 from .utils.objects.env import UserEnv
 from .utils.subscribe import Subscriber
@@ -20,9 +21,9 @@ except:
 
 
 def runCreateENV():
-    file_handler.create_folder('./lib')
-    file_handler.create_folder('./lib/envs')
-    file_handler.create_folder('./lib/schedules')
+    file_handler.Operate.create_folder('./lib')
+    file_handler.Operate.create_folder('./lib/envs')
+    file_handler.Operate.create_folder('./lib/schedules')
     app.run()
 
 
@@ -158,7 +159,7 @@ def runCrawlStockData(account: str, start=None, end=None):
         if len(crawler1.StockData):
             df = pd.concat(crawler1.StockData)
             filename = f'{crawler1.folder_path}/stock_data_1T.pkl'
-            file_handler.save_table(df, filename)
+            file_handler.Process.save_table(df, filename)
     finally:
         logging.info(f'API log out: {API.logout()}')
 
@@ -219,7 +220,7 @@ def runCrawlFuturesTickData(date=TODAY_STR):
 def runCrawlIndexMargin():
     try:
         df = crawler2.get_IndexMargin()
-        file_handler.save_table(df, './lib/indexMarging.csv')
+        file_handler.Process.save_table(df, './lib/indexMarging.csv')
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
     except:
@@ -278,7 +279,7 @@ def thread_subscribe(user: str, targets: list):
 
 def runShioajiSubscriber():
     # TODO: 讀取要盤中選股的股票池
-    df = file_handler.read_table(f'{PATH}/selections/stock_list.xlsx')
+    df = file_handler.Process.read_table(f'{PATH}/selections/stock_list.xlsx')
     codes = df[df.exchange.isin(['TSE', 'OTC'])].code.astype(str).values
 
     N = 200
@@ -298,7 +299,7 @@ def runSimulationChecker():
             config = UserEnv(account)
 
             if config.MODE == 'Simulation':
-                se = StrategyExecutor(config=config)
+                se = StrategyExecutor(account)
 
                 # check stock pool size
                 watchlist = se.watchlist[se.watchlist.market == 'Stocks']

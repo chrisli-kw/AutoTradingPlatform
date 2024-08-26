@@ -8,13 +8,13 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, scoped_session, load_only
 
 from ...config import HAS_DB, DB_NAME, DB_URL
-from ..file import FileHandler
+from ..file import file_handler
 
 
 Base = declarative_base()
 
 
-class SQLDatabase(FileHandler):
+class SQLDatabase:
     def __init__(self):
         self.HAS_DB = HAS_DB
         if self.HAS_DB:
@@ -133,4 +133,4 @@ class SQLDatabase(FileHandler):
         '''Export DB data'''
 
         df = self.query(table, *filterBy, **conditions)
-        self.save_table(df, filename)
+        file_handler.Process.save_table(df, filename)
