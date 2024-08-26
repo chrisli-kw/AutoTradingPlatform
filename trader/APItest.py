@@ -1,8 +1,9 @@
 import time
 import shioaji as sj
 
-from .config import TODAY, get_env
+from .config import TODAY
 from .utils.time import TimeTool
+from .utils.objects.env import UserEnv
 
 
 class APITester(TimeTool):
@@ -11,9 +12,9 @@ class APITester(TimeTool):
     def __init__(self):
         self.api = sj.Shioaji(simulation=True)
 
-    def simulation_test(self, API_KEY, SECRET_KEY, acct):
-
-        self.api.login(API_KEY, SECRET_KEY)
+    def simulation_test(self, env):
+        acct = env.ACCOUNT_NAME
+        self.api.login(env.api_key(), env.secret_key())
 
         is_simulate = self.api.simulation
         if is_simulate:
@@ -63,10 +64,10 @@ class APITester(TimeTool):
 
         print(f'\nLog out {acct}: {self.api.logout()}\n')
 
-    def verify_test(self, API_KEY, SECRET_KEY, acct):
+    def verify_test(self, env):
         self.api = sj.Shioaji(simulation=False)
-        self.api.login(API_KEY, SECRET_KEY)
-        print(f"Log in to {acct} with real mode")
+        self.api.login(env.api_key(), env.secret_key())
+        print(f"Log in to {env.ACCOUNT_NAME} with real mode")
         time.sleep(10)
 
         accounts = self.api.list_accounts()
@@ -95,15 +96,12 @@ class APITester(TimeTool):
         '''Shioaji 帳號測試'''
 
         for i in range(2):
-            config = get_env(account)
-            API_KEY = config['API_KEY']
-            SECRET_KEY = config['SECRET_KEY']
-
+            config = UserEnv(account)
             if i == 0:
-                self.simulation_test(API_KEY, SECRET_KEY, account)
+                self.simulation_test(config)
                 self.CountDown(720)
             else:
-                self.verify_test(API_KEY, SECRET_KEY, account)
+                self.verify_test(config)
 
 
 if __name__ == "__main__":

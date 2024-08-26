@@ -5,9 +5,10 @@ from datetime import datetime
 from concurrent.futures import as_completed
 
 from . import exec, notifier, picker, crawler1, crawler2, tdp, file_handler
-from .config import API, PATH, TODAY_STR, ACCOUNTS, TEnd, ConvertScales, get_env
+from .config import API, PATH, TODAY_STR, ACCOUNTS, TEnd, ConvertScales
 from .create_env import app
 from .utils.database import redis_tick
+from .utils.objects.env import UserEnv
 from .utils.subscribe import Subscriber
 from .utils.accounts import AccountInfo
 from .executor import StrategyExecutor
@@ -34,12 +35,10 @@ def runAccountInfo():
         logging.debug(f'ACCOUNTS: {ACCOUNTS}')
         for env in ACCOUNTS:
             logging.debug(f'Load 【{env}】 config')
-            config = get_env(env)
+            config = UserEnv(env)
 
-            API_KEY = config['API_KEY']
-            SECRET_KEY = config['SECRET_KEY']
-            acct = config['ACCOUNT_NAME']
-            account._login(API_KEY, SECRET_KEY, acct)
+            acct = config.ACCOUNT_NAME
+            account.login_(config)
             time.sleep(1)
 
             row = account.query_all()
@@ -89,34 +88,33 @@ def runAccountInfo():
 
 def runAutoTrader(account: str):
     try:
-        config = get_env(account)
-        se = StrategyExecutor(config=config)
+        se = StrategyExecutor(account)
         se.login_and_activate()
         se.run()
     except KeyboardInterrupt:
         notifier.post(
-            f"\n【Interrupt】【下單機監控】{se.ACCOUNT_NAME}已手動關閉", msgType='Tasker')
+            f"\n【Interrupt】【下單機監控】{se.account_name}已手動關閉", msgType='Tasker')
     except:
         logging.exception('Catch an exception:')
         notifier.post(
-            f"\n【Error】【下單機監控】{se.ACCOUNT_NAME}發生異常", msgType='Tasker')
+            f"\n【Error】【下單機監控】{se.account_name}發生異常", msgType='Tasker')
     finally:
         try:
             se.output_files()
         except:
             logging.exception('Catch an exception (output_files):')
             notifier.post(
-                f"\n【Error】【下單機監控】{se.ACCOUNT_NAME}資料儲存失敗", msgType='Tasker')
+                f"\n【Error】【下單機監控】{se.account_name}資料儲存失敗", msgType='Tasker')
 
         logging.info(f'API log out: {API.logout()}')
-        notifier.post(f"\n【停止監控】{se.ACCOUNT_NAME}關閉程式並登出", msgType='Tasker')
+        notifier.post(f"\n【停止監控】{se.account_name}關閉程式並登出", msgType='Tasker')
 
     del se
 
 
 def runCrawlStockData(account: str, start=None, end=None):
     target = pd.to_datetime('15:05:00')
-    config = get_env(account)
+    config = UserEnv(account)
     aInfo = AccountInfo()
 
     try:
@@ -129,10 +127,7 @@ def runCrawlStockData(account: str, start=None, end=None):
         logging.info('Start the crawler')
 
         # Log-in account
-        API_KEY = config['API_KEY']
-        SECRET_KEY = config['SECRET_KEY']
-        acct = config['ACCOUNT_NAME']
-        aInfo._login(API_KEY, SECRET_KEY, acct)
+        aInfo.login_(config)
         time.sleep(30)
 
         # Update stock list
@@ -252,10 +247,8 @@ def thread_subscribe(user: str, targets: list):
             tick_data = subscriber.update_quote_v1(tick)
             redis_tick.to_redis({tick.code: tick_data})
 
-    config = get_env(user)
-    API_KEY = config['API_KEY']
-    SECRET_KEY = config['SECRET_KEY']
-    api.login(API_KEY, SECRET_KEY)
+    config = UserEnv(user)
+    api.login(config.api_key(), config.secret_key())
     time.sleep(2)
 
     try:
@@ -302,9 +295,9 @@ def runShioajiSubscriber():
 def runSimulationChecker():
     try:
         for account in ACCOUNTS:
-            config = get_env(account)
+            config = UserEnv(account)
 
-            if config['MODE'] == 'Simulation':
+            if config.MODE == 'Simulation':
                 se = StrategyExecutor(config=config)
 
                 # check stock pool size

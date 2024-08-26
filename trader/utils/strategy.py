@@ -10,8 +10,8 @@ from ..utils.database.tables import PutCallRatioList, ExDividendTable
 
 
 class StrategyTool:
-    def __init__(self, **kwargs):
-        self.set_config(**kwargs)
+    def __init__(self, env, simulation=False):
+        self.set_config(env, simulation)
         self.Action = namedtuple(
             typename="Action",
             field_names=['position', 'reason', 'msg', 'price', 'action'],
@@ -39,20 +39,19 @@ class StrategyTool:
         self.revert_action = {}
         self.n_categories = None
 
-    def set_config(self, **kwargs):
-        self.account_name = kwargs.get('account_name', 'unknown')
-        self.hold_day = kwargs.get('hold_day', 20)
-        self.is_simulation = kwargs.get('is_simulation', True)
+    def set_config(self, env, simulation):
+        self.account_name = env.ACCOUNT_NAME
 
-        self.stock_limit_type = kwargs.get('stock_limit_type', 'Constant')
-        self.stock_limit_long = kwargs.get('stock_limit_long', 0)
-        self.stock_limit_short = kwargs.get('stock_limit_short', 0)
-        self.stock_model_version = kwargs.get('stock_model_version', '1.0.0')
+        self.stock_limit_type = env.N_STOCK_LIMIT_TYPE
+        self.stock_limit_long = env.N_LIMIT_LS
+        self.stock_limit_short = env.N_LIMIT_SS
+        self.stock_model_version = env.STOCK_MODEL_VERSION
 
-        self.futures_limit_type = kwargs.get('futures_limit_type', 'Constant')
-        self.futures_limit = kwargs.get('futures_limit', 0)
-        self.futures_model_version = kwargs.get(
-            'futures_model_version', '1.0.0')
+        self.futures_limit_type = env.N_FUTURES_LIMIT_TYPE
+        self.futures_limit = env.N_FUTURES_LIMIT
+        self.futures_model_version = env.FUTURES_MODEL_VERSION
+
+        self.is_simulation = simulation
 
     def mapFunction(self, action: str, tradeType: str, strategy: str):
         has_action = action in self.Funcs
@@ -88,10 +87,13 @@ class StrategyTool:
         '''
 
         if self.is_simulation:
-            return 3000
+            limit = 3000
         elif self.stock_limit_type != 'constant':
-            return self.stock_limit_long
-        return self.stock_limit_long
+            limit = self.stock_limit_long
+        else:
+            limit = self.stock_limit_long
+        self.stock_limit_long = limit
+        return limit
 
     def setNStockLimitShort(self, KBars: dict = None):
         '''
@@ -100,13 +102,17 @@ class StrategyTool:
         '''
 
         if self.is_simulation:
-            return 3000
+            limit = 3000
         elif self.stock_limit_type != 'constant':
-            return self.stock_limit_short
-        return self.stock_limit_short
+            limit = self.stock_limit_short
+        else:
+            limit = self.stock_limit_short
+        self.stock_limit_short = limit
+        return limit
 
     def setNFuturesLimit(self, KBars: dict = None):
         '''Set the number limit of securities of a portfolio can hold'''
+        self.futures_limit = 0
         return 0
 
     def _get_value(self, data: pd.DataFrame, stockid: str, col: str):

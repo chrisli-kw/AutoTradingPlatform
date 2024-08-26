@@ -24,6 +24,7 @@ from .utils import get_contract
 from .utils.objs import TradeData
 from .utils.orders import OrderTool
 from .utils.cipher import CipherTool
+from .utils.objects.env import UserEnv
 from .utils.accounts import AccountInfo
 from .utils.subscribe import Subscriber
 from .utils.simulation import Simulator
@@ -45,34 +46,9 @@ class StrategyExecutor(
     OrderTool,
     Subscriber
 ):
-    def __init__(self, config=None):
-        self.CONFIG = config
+    def __init__(self, account_name: str):
+        self.env = UserEnv(account_name)
 
-        # 交易帳戶設定
-        self.ACCOUNT_NAME = self.getENV('ACCOUNT_NAME')
-        self.__API_KEY__ = self.getENV('API_KEY')
-        self.__SECRET_KEY__ = self.getENV('SECRET_KEY')
-        self.__ACCOUNT_ID__ = self.getENV('ACCOUNT_ID', 'decrypt')
-        self.__CA_PASSWD__ = self.getENV('CA_PASSWD', 'decrypt')
-
-        # 股票使用者設定
-        self.KBAR_START_DAYay = self.getENV('KBAR_START_DAYay', 'date')
-        self.MODE = self.getENV('MODE')
-        self.MARKET = self.getENV('MARKET')
-        self.FILTER_IN = self.getENV('FILTER_IN', 'dict')
-        self.FILTER_OUT = self.getENV('FILTER_OUT', 'list')
-        self.STRATEGY_STOCK = self.getENV('STRATEGY_STOCK', 'list')
-        self.PRICE_THRESHOLD = self.getENV('PRICE_THRESHOLD', 'int')
-        self.INIT_POSITION = self.getENV('INIT_POSITION', 'int')
-        self.POSITION_LIMIT_LONG = self.getENV('POSITION_LIMIT_LONG', 'int')
-        self.POSITION_LIMIT_SHORT = self.getENV('POSITION_LIMIT_SHORT', 'int')
-        self.N_STOCK_LIMIT_TYPE = self.getENV('N_STOCK_LIMIT_TYPE')
-        self.N_LIMIT_LS = self.getENV('N_LIMIT_LS', 'int')
-        self.N_LIMIT_SS = self.getENV('N_LIMIT_SS', 'int')
-        self.BUY_UNIT = self.getENV('BUY_UNIT', 'int')
-        self.BUY_UNIT_TYPE = self.getENV('BUY_UNIT_TYPE')
-        self.ORDER_COND1 = self.getENV('ORDER_COND1')
-        self.ORDER_COND2 = self.getENV('ORDER_COND2')
         self.LEVERAGE_LONG = {}
         self.LEVERAGE_SHORT = {}
         self.day_trade_cond = {
@@ -80,24 +56,13 @@ class StrategyExecutor(
             'ShortSelling': 'MarginTrading',
             'Cash': 'Cash'
         }
-        self.STOCK_MODEL_VERSION = self.getENV('STOCK_MODEL_VERSION')
-        self.simulation = self.MODE == 'Simulation'
+        self.simulation = self.env.MODE == 'Simulation'
         self.simulator = Simulator()
 
-        # 期貨使用者設定
-        self.TRADING_PERIOD = self.getENV('TRADING_PERIOD')
-        self.STRATEGY_FUTURES = self.getENV('STRATEGY_FUTURES', 'list')
-        self.MARGIN_LIMIT = self.getENV('MARGIN_LIMIT', 'int')
-        self.N_FUTURES_LIMIT_TYPE = self.getENV('N_FUTURES_LIMIT_TYPE')
-        self.N_FUTURES_LIMIT = self.getENV('N_FUTURES_LIMIT', 'int')
-        self.N_SLOT = self.getENV('N_SLOT', 'int')
-        self.N_SLOT_TYPE = self.getENV('N_SLOT_TYPE')
-        self.FUTURES_MODEL_VERSION = self.getENV('FUTURES_MODEL_VERSION')
-
         super().__init__()
-        Subscriber.__init__(self, self.KBAR_START_DAYay)
-        OrderTool.__init__(self, self.ACCOUNT_NAME)
-        WatchListTool.__init__(self, self.ACCOUNT_NAME)
+        Subscriber.__init__(self, self.env.KBAR_START_DAYay)
+        OrderTool.__init__(self, self.env.ACCOUNT_NAME)
+        WatchListTool.__init__(self, self.env.ACCOUNT_NAME)
 
         # 股票可進場籌碼 (進場時判斷用)
         self.desposal_money = 0
@@ -105,28 +70,7 @@ class StrategyExecutor(
         self.punish_list = []
         self.pct_chg_DowJones = self.get_pct_chg_DowJones()
 
-        # 交易相關
-        self.can_stock = 'stock' in self.MARKET
-        self.can_sell = self.MODE not in ['LongBuy', 'ShortBuy']
-        self.can_buy = self.MODE not in ['LongSell', 'ShortSell']
-        self.can_futures = 'futures' in self.MARKET
-
-        # 載入指標模組
-        self.set_scripts(StrategySets)
-
-    def set_scripts(self, strategySet: object):
-        self.StrategySet = strategySet(
-            account_name=self.ACCOUNT_NAME,
-            hold_day=self.getENV('HOLD_DAY', 'int'),
-            is_simulation=self.simulation,
-            stock_limit_type=self.N_STOCK_LIMIT_TYPE,
-            stock_limit_long=self.N_LIMIT_LS,
-            stock_limit_short=self.N_LIMIT_SS,
-            stock_model_version=self.STOCK_MODEL_VERSION,
-            futures_limit_type=self.N_FUTURES_LIMIT_TYPE,
-            futures_limit=self.N_FUTURES_LIMIT,
-            futures_model_version=self.FUTURES_MODEL_VERSION
-        )
+        self.StrategySet = StrategySets(self.env, simulation=self.simulation)
 
     def getENV(self, key: str, type_: str = 'text'):
         if self.CONFIG and key in self.CONFIG:
@@ -167,18 +111,18 @@ class StrategyExecutor(
         cost_value = (df.quantity*df.cost_price).sum()
         pnl = df.pnl.sum()
         if self.simulation:
-            account_balance = self.INIT_POSITION
+            account_balance = self.env.INIT_POSITION
             settle_info = pnl
         else:
             account_balance = self.balance()
             settle_info = self.settle_info(mode='info').iloc[1:, 1].sum()
 
         self.desposal_money = min(
-            account_balance+settle_info, self.POSITION_LIMIT_LONG)
+            account_balance+settle_info, self.env.POSITION_LIMIT_LONG)
         self.total_market_value = self.desposal_money + cost_value + pnl
 
         logging.info(
-            f'Desposal amount = {self.desposal_money} (limit: {self.POSITION_LIMIT_LONG})')
+            f'Desposal amount = {self.desposal_money} (limit: {self.env.POSITION_LIMIT_LONG})')
 
     def _set_margin_limit(self):
         '''計算可交割的保證金額，不可超過帳戶可下單的保證金額上限'''
@@ -190,11 +134,12 @@ class StrategyExecutor(
             account_balance = self.balance()
             self.get_account_margin()
         self.desposal_margin = min(
-            account_balance+self.desposal_margin, self.MARGIN_LIMIT)
+            account_balance+self.desposal_margin, self.env.MARGIN_LIMIT)
         logging.info(
-            f'[AccountInfo] Margin: total={self.ProfitAccCount}; available={self.desposal_margin}; limit={self.MARGIN_LIMIT}')
+            f'[AccountInfo] Margin: total={self.ProfitAccCount}; available={self.desposal_margin}; limit={self.env.MARGIN_LIMIT}')
 
     def _set_leverage(self, stockids: list):
+        # TODO: move to OrderTool
         '''
         取得個股融資成數資料，
         若帳戶設定為不可融資，則全部融資成數為0
@@ -208,12 +153,12 @@ class StrategyExecutor(
             df.融資成數 /= 100
             df.融券成數 /= 100
 
-            if self.ORDER_COND1 != 'Cash':
+            if self.env.ORDER_COND1 != 'Cash':
                 self.LEVERAGE_LONG = df.set_index('代號').融資成數.to_dict()
             else:
                 self.LEVERAGE_LONG = {code: 0 for code in stockids}
 
-            if self.ORDER_COND2 != 'Cash':
+            if self.env.ORDER_COND2 != 'Cash':
                 self.LEVERAGE_SHORT = df.set_index('代號').融券成數.to_dict()
             else:
                 self.LEVERAGE_SHORT = {code: 1 for code in stockids}
@@ -223,10 +168,11 @@ class StrategyExecutor(
 
     def _set_futures_code_list(self):
         '''期貨商品代號與代碼對照表'''
-        if self.can_futures and TradeData.Futures.CodeList == {}:
+        if self.env.can_futures:
             logging.debug('Set Futures_Code_List')
-            TradeData.Futures.CodeList = {
-                f.code: f.symbol for m in API.Contracts.Futures for f in m}
+            TradeData.Futures.CodeList.update({
+                f.code: f.symbol for m in API.Contracts.Futures for f in m
+            })
 
     def _order_callback(self, stat, msg):
         '''處理委託/成交回報'''
@@ -345,28 +291,25 @@ class StrategyExecutor(
 
     def login_and_activate(self):
         # 登入
-        self._login(self.__API_KEY__, self.__SECRET_KEY__, self.ACCOUNT_NAME)
+        self.login_(self.env)
         self.account_id_stock = API.stock_account.account_id
         logging.info(
             f'[AccountInfo] Stock account ID: {self.account_id_stock}')
 
         if self.HAS_FUTOPT_ACCOUNT:
-            self.can_futures = 'futures' in self.MARKET
+            self.can_futures = 'futures' in self.env.MARKET
             self.account_id_futopt = API.futopt_account.account_id
             self._set_futures_code_list()
             logging.info(
                 f'[AccountInfo] Futures account ID: {self.account_id_futopt}')
 
         # 啟動憑證 (Mac 不需啟動)
-        logging.info(f'[AccountInfo] Activate {self.ACCOUNT_NAME} CA')
-        if self.__CA_PASSWD__:
-            ca_passwd = self.__CA_PASSWD__
-        else:
-            ca_passwd = self.__ACCOUNT_ID__
+        logging.info(f'[AccountInfo] Activate {self.env.ACCOUNT_NAME} CA')
+        id = self.env.account_id()
         API.activate_ca(
-            ca_path=f"./lib/ekey/551/{self.__ACCOUNT_ID__}/S/Sinopac.pfx",
-            ca_passwd=ca_passwd,
-            person_id=self.__ACCOUNT_ID__,
+            ca_path=f"./lib/ekey/551/{id}/S/Sinopac.pfx",
+            ca_passwd=self.env.ca_passwd() if self.env.ca_passwd() else id,
+            person_id=id,
         )
 
         # 系統 callback 設定
@@ -417,8 +360,7 @@ class StrategyExecutor(
                     logging.warning('Re-login')
 
                     time.sleep(5)
-                    self._login(self.__API_KEY__,
-                                self.__SECRET_KEY__, self.ACCOUNT_NAME)
+                    self.login_(self.env)
 
         # 訂閱下單回報
         API.set_order_callback(self._order_callback)
@@ -441,7 +383,7 @@ class StrategyExecutor(
     def init_stocks(self):
         '''初始化股票資訊'''
 
-        if not self.can_stock or datetime.now() > TimeEndStock:
+        if not self.env.can_stock or datetime.now() > TimeEndStock:
             return []
 
         # 讀取選股清單
@@ -459,7 +401,7 @@ class StrategyExecutor(
             info.set_index('code').strategy.to_dict())
 
         # 剔除不堅控的股票
-        info = info[~info.code.isin(self.FILTER_OUT)]
+        info = info[~info.code.isin(self.env.FILTER_OUT)]
 
         # 新增歷史K棒資料
         self.update_stocks_to_monitor()
@@ -471,8 +413,9 @@ class StrategyExecutor(
         TradeData.Stocks.N_Long = info[buy_condition].shape[0]
         TradeData.Stocks.N_Short = info[~buy_condition].shape[0]
         TradeData.Stocks.Info = info
-        self.N_LIMIT_LS = self.StrategySet.setNStockLimitLong(KBars=self.KBars)
-        self.N_LIMIT_SS = self.StrategySet.setNStockLimitShort(
+        self.env.N_LIMIT_LS = self.StrategySet.setNStockLimitLong(
+            KBars=self.KBars)
+        self.env.N_LIMIT_SS = self.StrategySet.setNStockLimitShort(
             KBars=self.KBars)
         self.punish_list = crawler2.get_punish_list().證券代號.to_list()
         self._set_leverage(all_targets)
@@ -507,7 +450,7 @@ class StrategyExecutor(
         info.index = info.code
 
         # 剔除不堅控的股票
-        info = info[~info.code.isin(self.FILTER_OUT)]
+        info = info[~info.code.isin(self.env.FILTER_OUT)]
         TradeData.Futures.Strategy.update(info.strategy.to_dict())
 
         # update_futures_to_monitor
@@ -522,7 +465,7 @@ class StrategyExecutor(
         self.history_kbars(all_futures)
 
         # 交易風險控制
-        self.N_FUTURES_LIMIT = self.StrategySet.setNFuturesLimit(
+        self.env.N_FUTURES_LIMIT = self.StrategySet.setNFuturesLimit(
             KBars=self.KBars)
         self._set_margin_limit()
         self.margin_table = self.get_margin_table()
@@ -584,8 +527,8 @@ class StrategyExecutor(
 
         for stock, stra in TradeData.Stocks.Strategy.items():
             if (
-                (self.can_buy and self.StrategySet.isLong(stra)) or
-                (self.can_sell and self.StrategySet.isShort(stra))
+                (self.env.can_buy and self.StrategySet.isLong(stra)) or
+                (self.env.can_sell and self.StrategySet.isShort(stra))
             ) and (stock not in TradeData.Stocks.Monitor):
                 TradeData.Stocks.Monitor.update({stock: None})
 
@@ -630,7 +573,7 @@ class StrategyExecutor(
                 # long selling
                 (data and 'action' in data and data['action'] == 'Buy') or
                 # short selling
-                (not data and self.can_sell and not isLongStrategy)
+                (not data and self.env.can_sell and not isLongStrategy)
             )
 
             # new position
@@ -698,7 +641,7 @@ class StrategyExecutor(
     def monitor_futures(self, target: str):
         '''檢查期貨是否符合賣出條件，回傳賣出部位(%)'''
 
-        if target in self.Quotes.NowTargets and self.N_FUTURES_LIMIT != 0:
+        if target in self.Quotes.NowTargets and self.env.N_FUTURES_LIMIT != 0:
             inputs = self.getQuotesNow(target).copy()
             data = TradeData.Futures.Monitor[target]
             strategy = TradeData.Futures.Strategy[target]
@@ -881,7 +824,7 @@ class StrategyExecutor(
         '''取得證券庫存清單'''
 
         if self.simulation:
-            return self.simulator.securityInfo(self.ACCOUNT_NAME, market)
+            return self.simulator.securityInfo(self.env.ACCOUNT_NAME, market)
         return self.securityInfo(market)
 
     def get_securityPool(self, market='Stocks'):
@@ -892,11 +835,12 @@ class StrategyExecutor(
 
         pools = {}
         if market == 'Stocks':
-            pools.update(self.FILTER_IN)
+            pools.update(self.env.FILTER_IN)
         else:
             due_year_month = self.GetDueMonth()
             pools.update({
-                f'{code}{due_year_month}': st for code, st in self.FILTER_IN.items()})
+                f'{code}{due_year_month}': st for code, st in self.env.FILTER_IN.items()
+            })
 
         df = picker.get_selection_files()
         if df.shape[0]:
@@ -907,13 +851,13 @@ class StrategyExecutor(
                 df = df[~df.code.isin(day_filter_out.股票代碼.values)]
 
                 # 排除高價股
-                df = df[df.Close <= self.PRICE_THRESHOLD]
+                df = df[df.Close <= self.env.PRICE_THRESHOLD]
 
-                strategies = self.STRATEGY_STOCK
+                strategies = self.env.STRATEGY_STOCK
             else:
-                strategies = self.STRATEGY_FUTURES
+                strategies = self.env.STRATEGY_FUTURES
 
-            df = df[~df.code.isin(self.FILTER_OUT)]
+            df = df[~df.code.isin(self.env.FILTER_OUT)]
             df = df.sort_values('Close')
 
             strategies_ordered = self.StrategySet.get_strategy_list(market)
@@ -928,8 +872,8 @@ class StrategyExecutor(
     def get_quantity(self, target: str, strategy: str, order_cond: str):
         '''計算進場股數'''
 
-        if self.BUY_UNIT_TYPE == 'constant':
-            return 1000*self.BUY_UNIT
+        if self.env.BUY_UNIT_TYPE == 'constant':
+            return 1000*self.env.BUY_UNIT
 
         quantityFunc = self.StrategySet.mapQuantities(strategy)
 
@@ -952,8 +896,8 @@ class StrategyExecutor(
     def get_open_slot(self, target: str, strategy: str):
         '''計算買進口數'''
 
-        if self.N_SLOT_TYPE == 'constant':
-            return self.N_SLOT
+        if self.env.N_SLOT_TYPE == 'constant':
+            return self.env.N_SLOT
 
         quantityFunc = self.StrategySet.mapQuantities(strategy)
 
@@ -983,16 +927,16 @@ class StrategyExecutor(
 
     def check_order_cond(self, target: str, mode='long'):
         '''檢查個股可否融資'''
-
+        # TODO: move to OrderTool
         contract = get_contract(target)
         if mode == 'long':
-            if self.ORDER_COND1 != 'Cash' and (self.LEVERAGE_LONG[target] == 0 or contract.margin_trading_balance == 0):
+            if self.env.ORDER_COND1 != 'Cash' and (self.LEVERAGE_LONG[target] == 0 or contract.margin_trading_balance == 0):
                 return 'Cash'
-            return self.ORDER_COND1
+            return self.env.ORDER_COND1
         else:
-            if self.ORDER_COND2 != 'Cash' and (self.LEVERAGE_SHORT[target] == 1 or contract.short_selling_balance == 0):
+            if self.env.ORDER_COND2 != 'Cash' and (self.LEVERAGE_SHORT[target] == 1 or contract.short_selling_balance == 0):
                 return 'Cash'
-            return self.ORDER_COND2
+            return self.env.ORDER_COND2
 
     def check_enough(self, target: str, quantity: int, mode='long'):
         '''計算可買進的股票數量 & 金額'''
@@ -1003,9 +947,9 @@ class StrategyExecutor(
         # 更新可買進的股票額度 TODO: buy_deals, sell_deals會合計多空股票數，使quota1, quota2無法精準
         buy_deals = len([s for s in TradeData.Stocks.Bought if len(s) == 4])
         sell_deals = len([s for s in TradeData.Stocks.Sold if len(s) == 4])
-        quota1 = abs(self.N_LIMIT_LS) - TradeData.Stocks.N_Long - \
+        quota1 = abs(self.env.N_LIMIT_LS) - TradeData.Stocks.N_Long - \
             buy_deals + sell_deals
-        quota2 = abs(self.N_LIMIT_SS) - TradeData.Stocks.N_Short + \
+        quota2 = abs(self.env.N_LIMIT_SS) - TradeData.Stocks.N_Short + \
             buy_deals - sell_deals
 
         # 更新已委託金額
@@ -1026,15 +970,15 @@ class StrategyExecutor(
         if mode == 'long':
             return (
                 (amount1 + target_amount <= self.desposal_money) &
-                (amount2 + target_amount <= self.POSITION_LIMIT_LONG) &
+                (amount2 + target_amount <= self.env.POSITION_LIMIT_LONG) &
                 (quota1 > 0)
             )
 
         return (
             (amount1 + target_amount <= self.desposal_money) &
-            (amount2 + target_amount <= self.POSITION_LIMIT_LONG) &
+            (amount2 + target_amount <= self.env.POSITION_LIMIT_LONG) &
             # 4. 不可超過可信用交易額度上限
-            (amount3 + target_amount <= self.POSITION_LIMIT_SHORT) &
+            (amount3 + target_amount <= self.env.POSITION_LIMIT_SHORT) &
             (quota2 > 0)
         )
 
@@ -1044,7 +988,7 @@ class StrategyExecutor(
         # 更新可開倉的期貨標的數
         open_deals = len(TradeData.Futures.Opened)
         close_deals = len(TradeData.Futures.Closed)
-        quota = abs(self.N_FUTURES_LIMIT) - \
+        quota = abs(self.env.N_FUTURES_LIMIT) - \
             TradeData.Futures.Info.shape[0] - open_deals + close_deals
 
         # 更新已委託金額
@@ -1059,7 +1003,7 @@ class StrategyExecutor(
         target_amount = self.get_open_margin(target, quantity)
         return (
             (amount1 + target_amount <= self.desposal_margin) &
-            (amount2 + target_amount <= self.MARGIN_LIMIT) &
+            (amount2 + target_amount <= self.env.MARGIN_LIMIT) &
             (quota > 0)
         )
 
@@ -1071,7 +1015,7 @@ class StrategyExecutor(
                 now,
                 td=timedelta(minutes=-6),
                 market='Futures',
-                period=self.TRADING_PERIOD
+                period=self.env.TRADING_PERIOD
             )
 
         return self.is_trading_time(
@@ -1084,9 +1028,9 @@ class StrategyExecutor(
         return all(x == 0 for x in [
             TradeData.Stocks.N_Long,
             TradeData.Stocks.N_Short,
-            self.N_LIMIT_LS,
-            self.N_LIMIT_SS,
-            self.N_FUTURES_LIMIT,
+            self.env.N_LIMIT_LS,
+            self.env.N_LIMIT_SS,
+            self.env.N_FUTURES_LIMIT,
             TradeData.Futures.Info.shape[0]
         ])
 
@@ -1124,7 +1068,7 @@ class StrategyExecutor(
             db.delete(
                 table,
                 table.code == target,
-                table.account == self.ACCOUNT_NAME
+                table.account == self.env.ACCOUNT_NAME
             )
 
         return is_empty
@@ -1156,27 +1100,29 @@ class StrategyExecutor(
         logging.info(f"Stocks Ex-dividend: {self.StrategySet.dividends}")
         logging.info(f"Previous Put/Call ratio: {self.StrategySet.pc_ratio}")
         logging.info(f'Start to monitor, basic settings:')
-        logging.info(f'Mode:{self.MODE}, Strategy: {self.STRATEGY_STOCK}')
+        logging.info(
+            f'Mode:{self.env.MODE}, Strategy: {self.env.STRATEGY_STOCK}')
         logging.info(f'[Stock Strategy] {TradeData.Stocks.Strategy}')
         logging.info(f'[Stock Position] Long: {TradeData.Stocks.N_Long}')
         logging.info(f'[Stock Position] Short: {TradeData.Stocks.N_Short}')
-        logging.info(f'[Stock Portfolio Limit] Long: {self.N_LIMIT_LS}')
-        logging.info(f'[Stock Portfolio Limit] Short: {self.N_LIMIT_SS}')
+        logging.info(f'[Stock Portfolio Limit] Long: {self.env.N_LIMIT_LS}')
+        logging.info(f'[Stock Portfolio Limit] Short: {self.env.N_LIMIT_SS}')
         logging.info(
-            f'[Stock Position Limit] Long: {self.POSITION_LIMIT_LONG}')
+            f'[Stock Position Limit] Long: {self.env.POSITION_LIMIT_LONG}')
         logging.info(
-            f'[Stock Position Limit] Short: {self.POSITION_LIMIT_SHORT}')
-        logging.info(f'[Stock Model Version] {self.STOCK_MODEL_VERSION}')
+            f'[Stock Position Limit] Short: {self.env.POSITION_LIMIT_SHORT}')
+        logging.info(f'[Stock Model Version] {self.env.STOCK_MODEL_VERSION}')
         logging.info(f'[Futures Strategy] {TradeData.Futures.Strategy}')
         logging.info(f'[Futures position] {TradeData.Futures.Info.shape[0]}')
-        logging.info(f'[Futures portfolio Limit] {self.N_FUTURES_LIMIT}')
-        logging.info(f'[Futures Model Version] {self.FUTURES_MODEL_VERSION}')
+        logging.info(f'[Futures portfolio Limit] {self.env.N_FUTURES_LIMIT}')
+        logging.info(
+            f'[Futures Model Version] {self.env.FUTURES_MODEL_VERSION}')
 
-        text = f"\n【開始監控】{self.ACCOUNT_NAME} 啟動完成({__version__})"
-        text += f"\n【操盤模式】{self.MODE}"
-        text += f"\n【股票策略】{self.STRATEGY_STOCK}"
-        text += f"\n【期貨策略】{self.STRATEGY_FUTURES}"
-        text += f"\n【AI版本】Stock-{self.STOCK_MODEL_VERSION}; Futures:{self.FUTURES_MODEL_VERSION}"
+        text = f"\n【開始監控】{self.env.ACCOUNT_NAME} 啟動完成({__version__})"
+        text += f"\n【操盤模式】{self.env.MODE}"
+        text += f"\n【股票策略】{self.env.STRATEGY_STOCK}"
+        text += f"\n【期貨策略】{self.env.STRATEGY_FUTURES}"
+        text += f"\n【AI版本】Stock-{self.env.STOCK_MODEL_VERSION}; Futures:{self.env.FUTURES_MODEL_VERSION}"
         text += f"\n【前日行情】Put/Call: {self.StrategySet.pc_ratio}"
         text += f"\n【美股行情】道瓊({self.pct_chg_DowJones}%)"
         text += f"\n【數據用量】{usage}MB"
@@ -1195,7 +1141,7 @@ class StrategyExecutor(
                 balance = self.balance(mode='debug')
                 if balance == -1:
                     self._log_and_notify(
-                        f"【連線異常】{self.ACCOUNT_NAME} 無法查詢餘額")
+                        f"【連線異常】{self.env.ACCOUNT_NAME} 無法查詢餘額")
 
             # update K-bar data
             if MonitorFreq <= now.second:
@@ -1222,7 +1168,7 @@ class StrategyExecutor(
             self.updateKBars(scale)
 
         if self.is_all_zero():
-            self._log_and_notify(f"【停止監控】{self.ACCOUNT_NAME} 無可監控清單")
+            self._log_and_notify(f"【停止監控】{self.env.ACCOUNT_NAME} 無可監控清單")
 
         time.sleep(3)
         self.unsubscribe_all(all_stocks+all_futures)
@@ -1232,19 +1178,19 @@ class StrategyExecutor(
 
         if (
             not self.simulation or
-            (market == 'Stocks' and not self.can_stock) or
+            (market == 'Stocks' and not self.env.can_stock) or
             (market == 'Futures' and not self.can_futures)
         ):
             return
 
         df = self.simulator.monitor_list_to_df(
-            self.ACCOUNT_NAME,
+            self.env.ACCOUNT_NAME,
             data=TradeData.Stocks.Monitor if market == 'Stocks' else TradeData.Futures.Monitor,
             quotes=self.Quotes,
             market=market,
             is_trading_time=self.is_trading_time_(datetime.now())
         )
-        self.simulator.update_securityInfo(self.ACCOUNT_NAME, df, market)
+        self.simulator.update_securityInfo(self.env.ACCOUNT_NAME, df, market)
 
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''
@@ -1254,12 +1200,12 @@ class StrategyExecutor(
 
         self.save_watchlist(self.watchlist)
         self.output_statement(
-            f'{PATH}/stock_pool/statement_{self.ACCOUNT_NAME}.csv')
+            f'{PATH}/stock_pool/statement_{self.env.ACCOUNT_NAME}.csv')
         self.StrategySet.export_strategy_data()
 
         for freq, df in self.KBars.items():
             if freq != '1D':
-                filename = f'{PATH}/Kbars/k{freq[:-1]}min_{self.ACCOUNT_NAME}.csv'
+                filename = f'{PATH}/Kbars/k{freq[:-1]}min_{self.env.ACCOUNT_NAME}.csv'
                 self.save_table(df, filename)
 
         self.__save_simulate_securityInfo('Stocks')

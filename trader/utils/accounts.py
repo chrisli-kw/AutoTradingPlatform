@@ -40,13 +40,15 @@ class AccountInfo(TimeTool, FileHandler):
         self.desposal_margin = 0
         self.ProfitAccCount = 0  # 權益總值
 
-    def _login(self, API_KEY, SECRET_KEY, account_name):
+    def login_(self, env):
+        self.account_name = env.ACCOUNT_NAME
+
         n = 0
         while n < 5:
             try:
                 API.login(
-                    api_key=API_KEY,
-                    secret_key=SECRET_KEY,
+                    api_key=env.api_key(),
+                    secret_key=env.secret_key(),
                     contracts_timeout=10000
                 )
                 break
@@ -55,7 +57,7 @@ class AccountInfo(TimeTool, FileHandler):
                 n += 1
                 time.sleep(5)
 
-        nth_account = int(account_name[-1])
+        nth_account = int(self.account_name[-1])
         if nth_account > 1:
             accounts = API.list_accounts()
             accounts = [a for a in accounts if isinstance(a, StockAccount)]
@@ -64,13 +66,11 @@ class AccountInfo(TimeTool, FileHandler):
             else:
                 logging.warning('The number of accounts of this ID is 1')
 
-        self.account_name = account_name
-
         if API.futopt_account:
             self.HAS_FUTOPT_ACCOUNT = True
 
         time.sleep(0.05)
-        logging.info(f'【{account_name}】log-in successful!')
+        logging.info(f'【{self.account_name}】log-in successful!')
 
     def _list_settlements(self):
         '''取得交割資訊'''
