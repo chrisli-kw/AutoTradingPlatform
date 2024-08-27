@@ -5,10 +5,10 @@ import shioaji as sj
 from datetime import datetime
 from shioaji.account import StockAccount
 
-from .. import crawler2
 from ..config import API, PATH, TODAY, TODAY_STR
 from . import concat_df
 from .time import time_tool
+from .crawler import crawler
 from .file import file_handler
 from .objs import TradeData
 
@@ -254,7 +254,7 @@ class AccountInfo:
             is_leverage = (
                 'MarginTrading' == stocks.order_cond.apply(lambda x: x._value_))
             leverages = [
-                crawler2.get_leverage(s)['融資成數']/100 for s in stocks.code]
+                crawler.FromHTML.Leverage(s)['融資成數']/100 for s in stocks.code]
             return sum(is_leverage*stocks.cost_price*stocks.quantity*leverages)
         return 0
 

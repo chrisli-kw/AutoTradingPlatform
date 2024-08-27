@@ -1,18 +1,15 @@
 import ssl
 import time
 import logging
-import numpy as np
 import pandas as pd
-from typing import Dict
 from shioaji import constant
 from collections import namedtuple
 from datetime import datetime, timedelta
 
-from . import __version__, notifier, picker, crawler2
+from . import __version__, notifier, picker
 from .config import (
     API,
     PATH,
-    TODAY,
     TODAY_STR,
     MonitorFreq,
     TTry,
@@ -23,8 +20,8 @@ from .utils import get_contract
 from .utils.objs import TradeData
 from .utils.orders import OrderTool
 from .utils.time import time_tool
+from .utils.crawler import crawler
 from .utils.file import file_handler
-from .utils.cipher import CipherTool
 from .utils.objects.env import UserEnv
 from .utils.accounts import AccountInfo
 from .utils.subscribe import Subscriber
@@ -67,41 +64,9 @@ class StrategyExecutor(
         self.desposal_money = 0
         self.total_market_value = 0
         self.punish_list = []
-        self.pct_chg_DowJones = crawler2.get_pct_chg_DowJones()
+        self.pct_chg_DowJones = crawler.FromHTML.DowJones_pct_chg()
 
         self.StrategySet = StrategySets(self.env, simulation=self.simulation)
-
-    def getENV(self, key: str, type_: str = 'text'):
-        if self.CONFIG and key in self.CONFIG:
-            env = self.CONFIG[key]
-
-            if type_ == 'int':
-                return int(env)
-            elif type_ == 'list':
-                if 'none' in env.lower():
-                    return []
-                return env.replace(' ', '').split(',')
-            elif type_ == 'dict':
-                envs = {}
-                for e in env.split(','):
-                    e = e.split(':')
-                    envs.update({e[0]: e[1]})
-                return envs
-            elif type_ == 'date' and env:
-                return pd.to_datetime(env)
-            elif type_ == 'decrypt':
-                if not env or (not env[0].isdigit() and env[1:].isdigit()):
-                    return env
-                ct = CipherTool(decrypt=True, encrypt=False)
-                return ct.decrypt(env)
-            return env
-        elif type_ == 'int':
-            return 0
-        elif type_ == 'list':
-            return []
-        elif type_ == 'dict':
-            return {}
-        return None
 
     def _set_trade_risks(self):
         '''設定交易風險值: 可交割金額、總市值'''
@@ -144,7 +109,7 @@ class StrategyExecutor(
         若帳戶設定為不可融資，則全部融資成數為0
         '''
 
-        df = pd.DataFrame([crawler2.get_leverage(s) for s in stockids])
+        df = pd.DataFrame([crawler.FromHTML.Leverage(s) for s in stockids])
         if df.shape[0]:
             df.columns = df.columns.str.replace(' ', '')
             df.loc[df.個股融券信用資格 == 'N', '融券成數'] = 100
@@ -349,20 +314,8 @@ class StrategyExecutor(
 
         @API.quote.on_event
         def event_callback(resp_code: int, event_code: int, info: str, event: str):
-            if 'Subscription Not Found' in info:
-                logging.warning(info)
-
-            else:
-                logging.info(
-                    f'Response code: {resp_code} | Event code: {event_code} | info: {info} | Event: {event}')
-
-                if info == 'Session connect timeout' or event_code == 1:
-                    time.sleep(5)
-                    logging.warning(f'API log out: {API.logout()}')
-                    logging.warning('Re-login')
-
-                    time.sleep(5)
-                    self.login_(self.env)
+            CallbackHandler.events(
+                resp_code, event_code, info, event, self.env)
 
         # 訂閱下單回報
         API.set_order_callback(self._order_callback)
@@ -419,7 +372,7 @@ class StrategyExecutor(
             KBars=self.KBars)
         self.env.N_LIMIT_SS = self.StrategySet.setNStockLimitShort(
             KBars=self.KBars)
-        self.punish_list = crawler2.get_punish_list().證券代號.to_list()
+        self.punish_list = crawler.FromHTML.PunishList()
         self._set_leverage(all_targets)
         self._set_trade_risks()
         logging.debug(f'Stocks to monitor: {TradeData.Stocks.Monitor}')
@@ -547,22 +500,22 @@ class StrategyExecutor(
         self.check_remove_monitor(target, action_type, market)
         self.update_watchlist_position(order, self.Quotes)
 
-    def merge_buy_sell_lists(self, stocks_pool: Dict[str, str], market='Stocks'):
-        # TODO remove
-        '''合併進出場清單: 將庫存與選股清單，合併'''
+    # def merge_buy_sell_lists(self, stocks_pool: Dict[str, str], market='Stocks'):
+    #     # TODO remove
+    #     '''合併進出場清單: 將庫存與選股清單，合併'''
 
-        if market == 'Stocks' and TradeData.Stocks.Info.shape[0]:
-            sells = TradeData.Stocks.Info.code.values
-        elif market == 'Futures' and TradeData.Futures.Info.shape[0]:
-            sells = TradeData.Futures.Info.code.values
-        else:
-            sells = []
+    #     if market == 'Stocks' and TradeData.Stocks.Info.shape[0]:
+    #         sells = TradeData.Stocks.Info.code.values
+    #     elif market == 'Futures' and TradeData.Futures.Info.shape[0]:
+    #         sells = TradeData.Futures.Info.code.values
+    #     else:
+    #         sells = []
 
-        all = sells.copy()
-        for ids in stocks_pool.values():
-            all = np.append(all, ids)
+    #     all = sells.copy()
+    #     for ids in stocks_pool.values():
+    #         all = np.append(all, ids)
 
-        return np.unique(all)
+    #     return np.unique(all)
 
     def monitor_stocks(self, target: str):
         if target in self.Quotes.NowTargets:
@@ -849,7 +802,7 @@ class StrategyExecutor(
             # 排除不交易的股票
             if market == 'Stocks':
                 # 全額交割股不買
-                day_filter_out = crawler2.get_CashSettle()
+                day_filter_out = crawler.FromHTML.get_CashSettle()
                 df = df[~df.code.isin(day_filter_out.股票代碼.values)]
 
                 # 排除高價股

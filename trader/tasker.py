@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 from concurrent.futures import as_completed
 
-from . import exec, notifier, picker, crawler1, crawler2, tdp
+from . import exec, notifier, picker, tdp
 from .config import (
     create_api,
     API,
@@ -16,6 +16,7 @@ from .config import (
 )
 from .create_env import app
 from .utils.time import time_tool
+from .utils.crawler import crawler
 from .utils.file import file_handler
 from .utils.database import redis_tick
 from .utils.objects.env import UserEnv
@@ -142,32 +143,27 @@ def runCrawlStockData(account: str, start=None, end=None):
 
         # Update stock list
         logging.info('Updating stock list')
-        stock_list = crawler1.get_security_list(stock_only=True)
-        crawler1.export_security_list(stock_list)
+        stock_list = crawler.FromSJ.get_security_list(stock_only=True)
+        crawler.FromSJ.export_security_list(stock_list)
 
         # Crawler daily stock data from Sinopac
-        crawler1.crawl_from_sinopac(
-            stockids='all',
-            update=True,
-            start=start,
-            end=end
-        )
-        crawler1.merge_stockinfo()
+        crawler.FromSJ.run(stockids='all', update=True, start=start, end=end)
+        crawler.FromSJ.merge_stockinfo()
 
         # Update historical data
         for scale in ConvertScales:
-            crawler1.add_new_data(scale, save=True, start=TODAY_STR)
-            crawler1.merge_daily_data(TODAY_STR, scale, save=True)
-        crawler1.merge_daily_data(TODAY_STR, '1T', save=True)
+            crawler.FromSJ.add_new_data(scale, save=True, start=TODAY_STR)
+            crawler.FromSJ.merge_daily_data(TODAY_STR, scale, save=True)
+        crawler.FromSJ.merge_daily_data(TODAY_STR, '1T', save=True)
 
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
     except:
         logging.exception('Catch an exception:')
         notifier.post(f"\n【Error】【爬蟲程式】股價爬蟲發生異常", msgType='Tasker')
-        if len(crawler1.StockData):
-            df = pd.concat(crawler1.StockData)
-            filename = f'{crawler1.folder_path}/stock_data_1T.pkl'
+        if len(crawler.FromSJ.StockData):
+            df = pd.concat(crawler.FromSJ.StockData)
+            filename = f'{crawler.FromSJ.folder_path}/stock_data_1T.pkl'
             file_handler.Process.save_table(df, filename)
     finally:
         logging.info(f'API log out: {API.logout()}')
@@ -192,8 +188,8 @@ def runSelectStock():
 
 def runCrawlPutCallRatio():
     try:
-        df_pcr_new = crawler2.put_call_ratio()
-        crawler2.export_put_call_ratio(df_pcr_new)
+        df_pcr_new = crawler.FromHTML.PutCallRatio()
+        crawler.FromHTML.export_put_call_ratio(df_pcr_new)
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
     except:
@@ -203,8 +199,8 @@ def runCrawlPutCallRatio():
 
 def runCrawlExDividendList():
     try:
-        dividends = crawler2.ex_dividend_list()
-        crawler2.export_ex_dividend_list(dividends)
+        dividends = crawler.FromHTML.ex_dividend_list()
+        crawler.FromHTML.export_ex_dividend_list(dividends)
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
     except:
@@ -214,11 +210,11 @@ def runCrawlExDividendList():
 
 def runCrawlFuturesTickData(date=TODAY_STR):
     try:
-        crawler2.get_FuturesTickData(date)
+        crawler.FromHTML.get_FuturesTickData(date)
 
         # 轉換&更新期貨逐筆成交資料
         df = tdp.convert_daily_tick(date, '1T')
-        crawler2.export_futures_kbar(df)
+        crawler.FromHTML.export_futures_kbar(df)
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
     except:
@@ -228,7 +224,7 @@ def runCrawlFuturesTickData(date=TODAY_STR):
 
 def runCrawlIndexMargin():
     try:
-        df = crawler2.get_IndexMargin()
+        df = crawler.FromHTML.get_IndexMargin()
         file_handler.Process.save_table(df, './lib/indexMarging.csv')
     except KeyboardInterrupt:
         notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')

@@ -5,7 +5,6 @@ from .utils.file import file_handler
 from .utils.select import SelectStock
 from .utils.kbar import TickDataProcesser
 from .utils.notify import Notification
-from .utils.crawler import CrawlStockData, CrawlFromHTML
 
 
 __version__ = '1.15.0'
@@ -13,8 +12,6 @@ __version__ = '1.15.0'
 exec = ThreadPoolExecutor(max_workers=5)
 notifier = Notification()
 picker = SelectStock()
-crawler1 = CrawlStockData()
-crawler2 = CrawlFromHTML()
 tdp = TickDataProcesser()
 
 

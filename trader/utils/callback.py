@@ -1,5 +1,8 @@
+import time
+import logging
 from datetime import datetime
 
+from ..config import API
 from .objs import TradeData
 
 
@@ -29,3 +32,24 @@ class CallbackHandler:
     @staticmethod
     def fut_symbol(msg: dict):
         return msg['contract']['code'] + msg['contract']['delivery_month']
+
+    @staticmethod
+    def events(resp_code: int, event_code: int, info: str, event: str, env):
+        if 'Subscription Not Found' in info:
+            logging.warning(info)
+
+        else:
+            logging.info(
+                f'Response code: {resp_code} | Event code: {event_code} | info: {info} | Event: {event}')
+
+            if info == 'Session connect timeout' or event_code == 1:
+                time.sleep(5)
+                logging.warning(f'API log out: {API.logout()}')
+                logging.warning('Re-login')
+
+                time.sleep(5)
+                API.login(
+                    api_key=env.api_key(),
+                    secret_key=env.secret_key(),
+                    contracts_timeout=10000
+                )

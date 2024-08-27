@@ -39,7 +39,7 @@ def readStockList(markets=['OTC', 'TSE']):
     return df
 
 
-class CrawlStockData:
+class CrawlFromSJ:
     def __init__(self, folder_path: str = f'{PATH}/Kbars/1T/{TODAY_STR}', scale='1D'):
         self.folder_path = folder_path
         self.kbartool = KBarTool()
@@ -119,7 +119,7 @@ class CrawlStockData:
 
         return create_queue(stockids, self.crawled_list.stockid.values)
 
-    def crawl_from_sinopac(self, stockids: Union[str, list] = 'all', update=False, start=None, end=None):
+    def run(self, stockids: Union[str, list] = 'all', update=False, start=None, end=None):
         file_handler.Operate.create_folder(self.folder_path)
         q = self._load_data_into_queue(stockids)
         if isinstance(stockids, str) and stockids == 'all':
@@ -345,7 +345,7 @@ class CrawlFromHTML:
         }
         return URLs[pageName]
 
-    def get_leverage(self, stockid: str):
+    def Leverage(self, stockid: str):
         '''取得個股融資成數'''
 
         url = f'https://www.sinotrade.com.tw/Stock/Stock_3_8_6?code={stockid}'
@@ -355,7 +355,7 @@ class CrawlFromHTML:
             return {'融資成數': 0, '融券成數': 100}
         return tb.to_dict('records')[0]
 
-    def get_punish_list(self):
+    def PunishList(self, format='List'):
         '''取得上市櫃處置股票清單(證券代號、名稱、處置起訖日)'''
 
         def get(url, period):
@@ -370,7 +370,7 @@ class CrawlFromHTML:
                         columns={period: 'period'}).iloc[:-1, :]
                     return df
                 except:
-                    logging.exception('Catch an exception (get_punish_list):')
+                    logging.exception('Catch an exception (PunishList):')
                     n += 1
                     time.sleep(1)
             return df_default
@@ -402,9 +402,11 @@ class CrawlFromHTML:
         df = df.drop_duplicates('證券代號', keep='last').drop('period', axis=1)
         df = df[df.endDate >= TODAY_STR]
 
+        if format == 'List':
+            return df.證券代號.to_list()
         return df
 
-    def put_call_ratio(self, start: str = '', end: str = ''):
+    def PutCallRatio(self, start: str = '', end: str = ''):
         if not start:
             start = TODAY_STR.replace('-', '/')
 
@@ -534,7 +536,7 @@ class CrawlFromHTML:
 
         return result['data']
 
-    def get_pct_chg_DowJones(self):
+    def DowJones_pct_chg(self):
         '''取得道瓊指數前一天的漲跌幅'''
 
         start = time_tool._strf_timedelta(TODAY, 30)
@@ -632,3 +634,12 @@ class CrawlFromHTML:
         except:
             logging.exception('查詢失敗：')
             return pd.DataFrame(columns=['商品別', '結算保證金', '維持保證金', '原始保證金'])
+
+
+class Crawler:
+    def __init__(self) -> None:
+        self.FromSJ = CrawlFromSJ()
+        self.FromHTML = CrawlFromHTML()
+
+
+crawler = Crawler()
