@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from ..config import API, PATH, TODAY_STR, TODAY
 from . import progress_bar, create_queue, concat_df
 from .kbar import KBarTool
-from .time import TimeTool
+from .time import time_tool
 from .file import file_handler
 from .database import db, KBarTables
 from .database.tables import KBarData1T, SecurityList, PutCallRatioList, ExDividendTable
@@ -42,7 +42,6 @@ def readStockList(markets=['OTC', 'TSE']):
 class CrawlStockData:
     def __init__(self, folder_path: str = f'{PATH}/Kbars/1T/{TODAY_STR}', scale='1D'):
         self.folder_path = folder_path
-        self.timetool = TimeTool()
         self.kbartool = KBarTool()
         self.filename = 'company_stock_data'
         self.tempFile = f'{self.folder_path}/crawled_list.pkl'
@@ -254,10 +253,10 @@ class CrawlStockData:
         if not isinstance(day, datetime):
             day = pd.to_datetime(day)
 
-        last_day = self.timetool.last_business_day(day)
+        last_day = time_tool.last_business_day(day)
         if last_day.month != day.month:
             dir_path = f'{PATH}/Kbars/{scale}'
-            year_month = self.timetool.datetime_to_str(last_day)[:-3]
+            year_month = time_tool.datetime_to_str(last_day)[:-3]
             df = file_handler.read_tables_in_folder(
                 dir_path, pattern=year_month)
             df = df.sort_values(['name', 'Time'])
@@ -269,7 +268,7 @@ class CrawlStockData:
                 file_handler.Process.save_table(df, filename)
 
 
-class CrawlFromHTML(TimeTool):
+class CrawlFromHTML:
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -377,13 +376,13 @@ class CrawlFromHTML(TimeTool):
             return df_default
 
         # 上市處置公告
-        start = self._strf_timedelta(TODAY, 30).replace('-', '')
+        start = time_tool._strf_timedelta(TODAY, 30).replace('-', '')
         url = f'https://www.twse.com.tw/announcement/punish?response=html&startDate={start}&endDate='
         df1 = get(url, '處置起迄時間')
         df1 = df1[['證券代號', '證券名稱', 'period']]
 
         # 上櫃處置公告
-        start = self._strf_timedelta(TODAY, 30).replace('-', '/')
+        start = time_tool._strf_timedelta(TODAY, 30).replace('-', '/')
         start = start.replace(start[:4], str(int(start[:4])-1911))
         url = f'https://www.tpex.org.tw/web/bulletin/disposal_information/disposal_information_print.php?l=zh-tw&sd={start}'
         df2 = get(url, '處置起訖時間')
@@ -507,7 +506,7 @@ class CrawlFromHTML(TimeTool):
         df = df.iloc[1:, :-1]
         df = df[df.Code.notnull()]
         df = df[(df.Code.apply(len) == 4)]
-        df.Date = df.Date.apply(self.convert_date_format)
+        df.Date = df.Date.apply(time_tool.convert_date_format)
         df.Date = pd.to_datetime(df.Date)
         df.CashDividend = df.CashDividend.replace('尚未公告', -1).astype(float)
         df.CashCapitalPrice = df.CashCapitalPrice.replace('尚未公告', -1)
@@ -517,8 +516,8 @@ class CrawlFromHTML(TimeTool):
         '''鉅亨網道瓊報價'''
 
         url_dow_jones = 'https://ws.api.cnyes.com/ws/api/v1/charting/history'
-        start = self.date_2_mktime(start)
-        end = self.date_2_mktime(end)
+        start = time_tool.date_2_mktime(start)
+        end = time_tool.date_2_mktime(end)
         params = f'?resolution=D&symbol=GI:DJI:INDEX&from={end}&to={start}'
 
         try:
@@ -534,6 +533,16 @@ class CrawlFromHTML(TimeTool):
             result = {'data': {}}
 
         return result['data']
+
+    def get_pct_chg_DowJones(self):
+        '''取得道瓊指數前一天的漲跌幅'''
+
+        start = time_tool._strf_timedelta(TODAY, 30)
+        dj = self.DowJones(start, TODAY_STR)
+        if 'c' in dj and len(dj['c']):
+            dj = dj['c']
+            return 100*round(dj[0]/dj[1] - 1, 4)
+        return 0
 
     def get_SymbolWinBroker_InputRadio(self, date: str, stockid: str):
         '''股懂券商'''

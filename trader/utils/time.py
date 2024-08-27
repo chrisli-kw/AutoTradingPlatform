@@ -34,9 +34,6 @@ class TimeTool:
         '''取得當下時間戳的字串格式'''
         return datetime.now().strftime(format)
 
-    def now_for_log(self):
-        return f"【{self.now_str()}】"
-
     def _strf_timedelta(self, date: Union[str, datetime], delta: int):
         '''計算前N日的日期(str)'''
 
@@ -122,10 +119,6 @@ class TimeTool:
         date = date.replace(' ', '').replace(':', '')
         date = datetime(int(date[:4]), int(date[4:6]), int(date[6:8]), 8)
         return int(time.mktime(date.timetuple()))
-
-    def utcfromtimestamp_(self, timestamp):
-        '''將浮點格式時間戳轉為datetime格式'''
-        return datetime.utcfromtimestamp(timestamp)
 
     def last_business_day(self, date: datetime = None):
         '''取得最近一個交易日，遇假日, 連假, or補班日則往前推算'''
@@ -227,3 +220,6 @@ class TimeTool:
             return (is_day_time or is_after_hour)
 
         return TimeStartStock+td < dt <= TimeEndStock
+
+
+time_tool = TimeTool()

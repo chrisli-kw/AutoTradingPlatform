@@ -8,12 +8,12 @@ from shioaji.account import StockAccount
 from .. import crawler2
 from ..config import API, PATH, TODAY, TODAY_STR
 from . import concat_df
-from .time import TimeTool
+from .time import time_tool
 from .file import file_handler
 from .objs import TradeData
 
 
-class AccountInfo(TimeTool):
+class AccountInfo:
     def __init__(self):
         self.filename = f'{TODAY.year}_股票帳務資訊.xlsx'
         self.DEFAULT_TABLE = pd.DataFrame(
@@ -188,7 +188,7 @@ class AccountInfo(TimeTool):
         i = 0
         while i < 5:
             try:
-                day = self._strf_timedelta(TODAY, i)
+                day = time_tool._strf_timedelta(TODAY, i)
                 if not start:
                     start_ = day
                 if not end:

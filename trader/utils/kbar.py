@@ -17,7 +17,7 @@ from ..config import (
 )
 from ..indicators.signals import TechnicalSignals
 from . import get_contract, concat_df
-from .time import TimeTool
+from .time import time_tool
 from .. import file_handler
 try:
     from ..scripts.features import KBarFeatureTool
@@ -26,7 +26,7 @@ except:
     KBarFeatureTool = None
 
 
-class KBarTool(TechnicalSignals, TimeTool):
+class KBarTool(TechnicalSignals):
     def __init__(self, kbar_start_day=''):
         self.set_kbar_scripts(KBarFeatureTool)
         self.daysdata = self.__set_daysdata(kbar_start_day)
@@ -169,14 +169,15 @@ class KBarTool(TechnicalSignals, TimeTool):
         now = datetime.now()
         ndays = daysdata if daysdata else self.daysdata
         for stockid in stockids:
-            tb = self.tbKBar(stockid, self._strf_timedelta(TODAY, ndays))
+            td = time_tool._strf_timedelta(TODAY, ndays)
+            tb = self.tbKBar(stockid, td)
             for scale in self.featureFuncs:
                 kbar = self.convert_kbar(tb, scale)
                 if scale == '1D':
                     kbar = kbar[kbar.Time.dt.date.astype(str) != TODAY_STR]
                 else:
                     scale_ = self._scale_converter(scale)
-                    n = self.count_n_kbars(TimeStartStock, now, scale_)
+                    n = time_tool.count_n_kbars(TimeStartStock, now, scale_)
                     time_ = TimeStartStock + timedelta(minutes=scale_*n)
                     kbar = kbar[kbar.Time < time_]
 
@@ -271,7 +272,7 @@ class KBarTool(TechnicalSignals, TimeTool):
         '''檢查並更新K棒資料表'''
 
         _scale = self._scale_converter(scale)
-        now = self.round_time(datetime.now())
+        now = time_tool.round_time(datetime.now())
         t1 = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
         t2 = now - timedelta(minutes=_scale - .5)
         tb = self.KBars['1T'].tail(_scale)[self.kbar_columns].copy()
@@ -284,7 +285,7 @@ class KBarTool(TechnicalSignals, TimeTool):
             return
 
         tb = tb[(tb.Time >= t2) & (tb.Time < t1)]
-        tb.Time = tb.Time.astype(str).apply(self.round_time)
+        tb.Time = tb.Time.astype(str).apply(time_tool.round_time)
         if tb.shape[0]:
             logging.debug(
                 f'Update {scale} kbar data| from {tb.Time.min()} to {tb.Time.max()}')
@@ -313,13 +314,13 @@ class KBarTool(TechnicalSignals, TimeTool):
 
         self.KBars['1T'] = self.featureFuncs['1T'](self.KBars['1T'])
 
-        now = self.round_time(now)
+        now = time_tool.round_time(now)
         for freq in [2, 5, 15, 30, 60]:
             if now.minute % freq == 0:
                 self.is_kbar_1t_updated[f'{freq}T'] = True
 
 
-class TickDataProcesser(TimeTool):
+class TickDataProcesser:
     '''轉換期貨逐筆交易'''
 
     def filter_file_dates(self, market: str, **kwargs):
@@ -445,7 +446,7 @@ class TickDataProcesser(TimeTool):
 
         # 留下近月交割 & 非時間價差交易
         df['due'] = df.Time.apply(
-            lambda x: self.GetDueMonth(x, is_backtest=True))
+            lambda x: time_tool.GetDueMonth(x, is_backtest=True))
         df = df[
             (df.Simtrade == False) &
             (df.DueMonthOld == df.DueMonthNew) &

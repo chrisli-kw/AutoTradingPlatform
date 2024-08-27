@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import timedelta
 
 from ..config import PATH, TODAY_STR, TODAY, SelectMethods
-from .time import TimeTool
+from .time import time_tool
 from .file import file_handler
 from .crawler import readStockList
 from .database import db, KBarTables
@@ -21,7 +21,7 @@ except:
     FeaturesSelect = None
 
 
-class SelectStock(TimeTool):
+class SelectStock:
     def __init__(self, scale='1D'):
         self.set_select_scripts(SelectConditions, FeaturesSelect)
         self.scale = scale
@@ -169,7 +169,7 @@ class SelectStock(TimeTool):
     def get_selection_files(self):
         '''取得選股清單'''
 
-        day = self.last_business_day()
+        day = time_tool.last_business_day()
 
         if db.HAS_DB:
             df = db.query(SelectedStocks, SelectedStocks.Time == day)

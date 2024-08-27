@@ -15,7 +15,7 @@ from .base import (
 from .. import file_handler
 from ..config import PATH, TODAY_STR
 from ..utils import progress_bar
-from ..utils.time import TimeTool
+from ..utils.time import time_tool
 from ..utils.file import file_handler
 from ..utils.kbar import KBarTool
 from ..utils.crawler import readStockList
@@ -303,7 +303,7 @@ class BacktestPerformance:
         writer.close()
 
 
-class BackTester(BacktestPerformance, TimeTool):
+class BackTester(BacktestPerformance):
     def __init__(self, script=None):
         self.set_scripts(script)
 
@@ -639,7 +639,7 @@ class BackTester(BacktestPerformance, TimeTool):
         if self.leverage == 1:
             return 0
 
-        d = self.date_diff(day1, day2)
+        d = time_tool.date_diff(day1, day2)
         return amount*(1 - self.leverage)*self.LEVERAGE_INTEREST*d/365
 
     def checkOpenUnitLimit(self, unit: float, volume_ma: float):

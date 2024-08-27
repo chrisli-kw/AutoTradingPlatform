@@ -5,8 +5,17 @@ from datetime import datetime
 from concurrent.futures import as_completed
 
 from . import exec, notifier, picker, crawler1, crawler2, tdp
-from .config import API, PATH, TODAY_STR, ACCOUNTS, TEnd, ConvertScales
+from .config import (
+    create_api,
+    API,
+    PATH,
+    TODAY_STR,
+    ACCOUNTS,
+    TEnd,
+    ConvertScales
+)
 from .create_env import app
+from .utils.time import time_tool
 from .utils.file import file_handler
 from .utils.database import redis_tick
 from .utils.objects.env import UserEnv
@@ -123,7 +132,7 @@ def runCrawlStockData(account: str, start=None, end=None):
         if now < target and not start:
             logging.info(
                 f'Current time is still early, will start to crawl after {target}')
-            aInfo.CountDown(target)
+            time_tool.CountDown(target)
 
         logging.info('Start the crawler')
 
@@ -229,10 +238,8 @@ def runCrawlIndexMargin():
 
 
 def thread_subscribe(user: str, targets: list):
-    import shioaji as sj
-
     subscriber = Subscriber()
-    api = sj.Shioaji()
+    api = create_api()
 
     @api.quote.on_event
     def event_callback(resp_code: int, event_code: int, info: str, event: str):

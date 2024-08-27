@@ -22,6 +22,7 @@ from .config import (
 from .utils import get_contract
 from .utils.objs import TradeData
 from .utils.orders import OrderTool
+from .utils.time import time_tool
 from .utils.file import file_handler
 from .utils.cipher import CipherTool
 from .utils.objects.env import UserEnv
@@ -66,7 +67,7 @@ class StrategyExecutor(
         self.desposal_money = 0
         self.total_market_value = 0
         self.punish_list = []
-        self.pct_chg_DowJones = self.get_pct_chg_DowJones()
+        self.pct_chg_DowJones = crawler2.get_pct_chg_DowJones()
 
         self.StrategySet = StrategySets(self.env, simulation=self.simulation)
 
@@ -709,7 +710,7 @@ class StrategyExecutor(
                 )
                 if actionInfo.position:
                     if isTransfer:
-                        new_contract = f'{target[:3]}{self.GetDueMonth()}'
+                        new_contract = f'{target[:3]}{time_tool.GetDueMonth()}'
                         self.transfer_margin(target, new_contract)
                         TradeData.Futures.Monitor.update({new_contract: None})
                         TradeData.Futures.Monitor.pop(target, None)
@@ -838,7 +839,7 @@ class StrategyExecutor(
         if market == 'Stocks':
             pools.update(self.env.FILTER_IN)
         else:
-            due_year_month = self.GetDueMonth()
+            due_year_month = time_tool.GetDueMonth()
             pools.update({
                 f'{code}{due_year_month}': st for code, st in self.env.FILTER_IN.items()
             })
@@ -907,16 +908,6 @@ class StrategyExecutor(
         slot = int(min(slot, quantity_limit))
         slot = min(slot, 499)
         return slot
-
-    def get_pct_chg_DowJones(self):
-        '''取得道瓊指數前一天的漲跌幅'''
-
-        start = self._strf_timedelta(TODAY, 30)
-        dj = crawler2.DowJones(start, TODAY_STR)
-        if 'c' in dj and len(dj['c']):
-            dj = dj['c']
-            return 100*round(dj[0]/dj[1] - 1, 4)
-        return 0
 
     def check_order_cond(self, target: str, mode='long'):
         '''檢查個股可否融資'''
@@ -1004,14 +995,14 @@ class StrategyExecutor(
         '''檢查是否為交易時段'''
 
         if self.can_futures:
-            return self.is_trading_time(
+            return time_tool.is_trading_time(
                 now,
                 td=timedelta(minutes=-6),
                 market='Futures',
                 period=self.env.TRADING_PERIOD
             )
 
-        return self.is_trading_time(
+        return time_tool.is_trading_time(
             now,
             td=timedelta(minutes=-20),
             market='Stocks'

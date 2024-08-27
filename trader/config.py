@@ -5,10 +5,12 @@ import shioaji as sj
 from datetime import datetime, timedelta
 
 
-API = sj.Shioaji()
-TODAY = datetime.today()
 SystemConfig = configparser.ConfigParser()
 SystemConfig.read('./lib/config.ini', encoding='utf8')
+
+
+def create_api(simulation=False):
+    return sj.Shioaji(simulation=simulation)
 
 
 def getList(section, option):
@@ -57,6 +59,9 @@ def get_holidays():
         logging.warning('Run trader without holiday data.')
         return {}
 
+
+API = create_api()
+TODAY = datetime.today()
 
 # 使用者相關
 ACCOUNTS = get_settings("ACCOUNT", "USERS", dataType='list')

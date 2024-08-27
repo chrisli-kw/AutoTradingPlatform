@@ -6,14 +6,14 @@ from collections import namedtuple
 
 from ..config import PATH, TODAY_STR, API
 from . import get_contract, concat_df
-from .time import TimeTool
+from .time import time_tool
 from .file import file_handler
 from .objs import TradeData
 from .database import db
 from .database.tables import Watchlist
 
 
-class WatchListTool(TimeTool):
+class WatchListTool:
 
     def __init__(self, account_name: str):
         self.account_name = account_name
@@ -249,7 +249,7 @@ class WatchListTool(TimeTool):
             f'[Monitor List]{stage}|{target}|{action}|quantity: {quantity_}; position: {position_}|')
 
 
-class FuturesMargin(TimeTool):
+class FuturesMargin:
     def __init__(self) -> None:
         self.full_path_name = './lib/indexMarging.csv'
         self.margin_table = None
@@ -267,7 +267,7 @@ class FuturesMargin(TimeTool):
         codes = pd.DataFrame(codes, columns=['code', 'symbol', 'name'])
         codes = codes.set_index('name').symbol.to_dict()
 
-        month = self.GetDueMonth()[-2:]
+        month = time_tool.GetDueMonth()[-2:]
         df['code'] = (df.商品別 + month).map(codes)
         df = df.dropna().set_index('code')
 

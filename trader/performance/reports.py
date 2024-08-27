@@ -9,7 +9,7 @@ from plotly.subplots import make_subplots
 from .. import tdp
 from ..config import PATH, TODAY, TODAY_STR, SelectMethods, StrategyNameList
 from ..utils import progress_bar
-from ..utils.time import TimeTool
+from ..utils.time import time_tool
 from ..utils.file import file_handler
 from ..utils.orders import OrderTool
 from ..utils.database import db, KBarTables
@@ -28,7 +28,7 @@ class FiguresSet:
     pass
 
 
-class PerformanceReport(SuplotHandler, OrderTool, TimeTool):
+class PerformanceReport(SuplotHandler, OrderTool):
     def __init__(self, account: str, market: str):
         self.account = account
         self.market = market
@@ -135,7 +135,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool):
         writer.close()
 
     def getSelections(self, statement):
-        start = self.last_business_day(statement.OpenTime.values[0])
+        start = time_tool.last_business_day(statement.OpenTime.values[0])
         if db.HAS_DB:
             df = db.query(
                 SelectedStocks,
