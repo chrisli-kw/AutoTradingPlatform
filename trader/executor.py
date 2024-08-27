@@ -216,8 +216,8 @@ class StrategyExecutor(
 
             symbol = CallbackHandler.fut_symbol(msg)
             market = 'Futures' if msg['contract']['option_right'] == 'Future' else 'Options'
-            if symbol not in self.Quotes.NowTargets:
-                for k in self.Quotes.NowTargets:
+            if symbol not in TradeData.Quotes.NowTargets:
+                for k in TradeData.Quotes.NowTargets:
                     if symbol in k:
                         symbol = k
             order = msg['order']
@@ -288,7 +288,7 @@ class StrategyExecutor(
         def stk_quote_callback_v1(exchange, tick):
             if tick.intraday_odd == 0 and tick.simtrade == 0:
 
-                if tick.code not in self.Quotes.NowTargets:
+                if tick.code not in TradeData.Quotes.NowTargets:
                     logging.debug(f'[Quotes]First|{tick.code}|')
 
                 tick_data = self.update_quote_v1(tick)
@@ -300,7 +300,7 @@ class StrategyExecutor(
                 if tick.simtrade == 0:
                     symbol = TradeData.Futures.CodeList[tick.code]
 
-                    if symbol not in self.Quotes.NowTargets:
+                    if symbol not in TradeData.Quotes.NowTargets:
                         logging.debug(f'[Quotes]First|{symbol}|')
 
                     tick_data = self.update_quote_v1(tick, code=symbol)
@@ -323,12 +323,12 @@ class StrategyExecutor(
         # 訂閱五檔回報
         @API.on_bidask_stk_v1()
         def stk_quote_callback(exchange, bidask):
-            self.BidAsk[bidask.code] = bidask
+            TradeData.BidAsk[bidask.code] = bidask
 
         @API.on_bidask_fop_v1()
         def fop_quote_callback(exchange, bidask):
             symbol = TradeData.Futures.CodeList[bidask.code]
-            self.BidAsk[symbol] = bidask
+            TradeData.BidAsk[symbol] = bidask
 
     def _log_and_notify(self, msg: str):
         '''將訊息加入log並推播'''
@@ -469,7 +469,7 @@ class StrategyExecutor(
         order = self.update_pos_target(order, is_empty)
 
         # append watchlist or udpate watchlist position
-        self.update_watchlist_position(order, self.Quotes)
+        self.update_watchlist_position(order)
 
     def update_stocks_to_monitor(self):
         '''更新買進/賣出股票監控清單'''
@@ -498,7 +498,7 @@ class StrategyExecutor(
         )
         order = self.OrderInfo(**infos)
         self.check_remove_monitor(target, action_type, market)
-        self.update_watchlist_position(order, self.Quotes)
+        self.update_watchlist_position(order)
 
     # def merge_buy_sell_lists(self, stocks_pool: Dict[str, str], market='Stocks'):
     #     # TODO remove
@@ -518,7 +518,7 @@ class StrategyExecutor(
     #     return np.unique(all)
 
     def monitor_stocks(self, target: str):
-        if target in self.Quotes.NowTargets:
+        if target in TradeData.Quotes.NowTargets:
             inputs = self.getQuotesNow(target).copy()
             data = TradeData.Stocks.Monitor[target]
             strategy = TradeData.Stocks.Strategy[target]
@@ -571,7 +571,6 @@ class StrategyExecutor(
                 actionInfo = func(
                     inputs=inputs,
                     kbars=self.KBars,
-                    Quotes=self.Quotes,
                     pct_chg_DowJones=self.pct_chg_DowJones
                 )
                 if actionInfo.position:
@@ -596,7 +595,7 @@ class StrategyExecutor(
     def monitor_futures(self, target: str):
         '''檢查期貨是否符合賣出條件，回傳賣出部位(%)'''
 
-        if target in self.Quotes.NowTargets and self.env.N_FUTURES_LIMIT != 0:
+        if target in TradeData.Quotes.NowTargets and self.env.N_FUTURES_LIMIT != 0:
             inputs = self.getQuotesNow(target).copy()
             data = TradeData.Futures.Monitor[target]
             strategy = TradeData.Futures.Strategy[target]
@@ -658,7 +657,6 @@ class StrategyExecutor(
                 actionInfo = func(
                     inputs=inputs,
                     kbars=self.KBars,
-                    Quotes=self.Quotes,
                     pct_chg_DowJones=self.pct_chg_DowJones
                 )
                 if actionInfo.position:
@@ -700,7 +698,7 @@ class StrategyExecutor(
 
         target = content.target
 
-        if target not in self.BidAsk:
+        if target not in TradeData.BidAsk:
             return
 
         is_stock = market == 'Stocks'
@@ -711,7 +709,7 @@ class StrategyExecutor(
         order_lot = 'IntradayOdd' if content.quantity < 1000 and is_stock else 'Common'
 
         if is_stock:
-            bid_ask = self.BidAsk[target]
+            bid_ask = TradeData.BidAsk[target]
             bid_ask = bid_ask.bid_price if content.action == 'Sell' else bid_ask.ask_price
 
             # 零股交易
@@ -878,7 +876,7 @@ class StrategyExecutor(
     def check_enough(self, target: str, quantity: int, mode='long'):
         '''計算可買進的股票數量 & 金額'''
 
-        if target not in self.Quotes.NowTargets:
+        if target not in TradeData.Quotes.NowTargets:
             return False
 
         # 更新可買進的股票額度 TODO: buy_deals, sell_deals會合計多空股票數，使quota1, quota2無法精準
@@ -1123,7 +1121,6 @@ class StrategyExecutor(
         df = self.simulator.monitor_list_to_df(
             self.env.ACCOUNT_NAME,
             data=TradeData.Stocks.Monitor if market == 'Stocks' else TradeData.Futures.Monitor,
-            quotes=self.Quotes,
             market=market,
             is_trading_time=self.is_trading_time_(datetime.now())
         )

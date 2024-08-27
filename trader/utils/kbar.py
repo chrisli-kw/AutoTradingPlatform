@@ -18,6 +18,7 @@ from ..config import (
 from ..indicators.signals import TechnicalSignals
 from . import get_contract, concat_df
 from .time import time_tool
+from .objs import TradeData
 from .. import file_handler
 try:
     from ..scripts.features import KBarFeatureTool
@@ -212,39 +213,37 @@ class KBarTool(TechnicalSignals):
                     df.loc[has_dividend, col] += _dividends
         return df
 
-    def tick_to_df_targets(self, quotes):
+    def tick_to_df_targets(self, target: str):
         '''將個股tick資料轉為K棒'''
 
-        q_all = quotes.AllTargets
-        q_now = quotes.NowTargets
+        q_all = TradeData.Quotes.AllTargets[target]
+        q_now = TradeData.Quotes.NowTargets
 
         if not q_all:
             return pd.DataFrame()
 
-        for target, values in q_all.items():
-            if None in values:
-                q_all[target].update({
-                    'Open': q_now[target]['price'],
-                    'High': q_now[target]['price'],
-                    'Low': q_now[target]['price'],
-                    'Close': q_now[target]['price']
-                })
+        if None in q_all.values():
+            q_all[target].update({
+                'Open': q_now[target]['price'],
+                'High': q_now[target]['price'],
+                'Low': q_now[target]['price'],
+                'Close': q_now[target]['price']
+            })
 
-        tb = pd.DataFrame(q_all).T.reset_index()
-        tb = tb.rename(columns={'index': 'name'}).dropna()
-
-        now = datetime.now()
-        now = now.replace(microsecond=0)
+        now = datetime.now().replace(microsecond=0)
+        tb = pd.DataFrame([q_all])
         tb['Time'] = pd.to_datetime(now)
+        tb['name'] = target
 
         if not tb.shape[0] or tb.shape[1] == 1:
             return pd.DataFrame()
 
         return tb[self.kbar_columns]
 
-    def tick_to_df_index(self, quotes: list):
+    def tick_to_df_index(self, target: str):
         '''將指數tick資料轉為K棒'''
 
+        quotes = TradeData.Quotes.AllIndex[target]
         if not quotes:
             return pd.DataFrame()
 
@@ -298,19 +297,17 @@ class KBarTool(TechnicalSignals):
             self.KBars[scale] = self.featureFuncs[scale](kbar)
             self.is_kbar_1t_updated[scale] = False
 
-    def _update_K1(self, quotes, quote_type='Securities'):
+    def _update_K1(self, target, quote_type='Securities'):
         '''每隔1分鐘更新1分K'''
 
         now = datetime.now()
         if quote_type == 'Index':
-            if TimeStartStock <= now <= TimeEndStock:
-                for i in quotes.AllIndex:
-                    tb = self.tick_to_df_index(quotes.AllIndex[i])
-                    self.KBars['1T'] = self.concatKBars(self.KBars['1T'], tb)
+            # if TimeStartStock <= now <= TimeEndStock:
+            df = self.tick_to_df_index(target)
         else:
-            df = self.tick_to_df_targets(quotes)
+            df = self.tick_to_df_targets(target)
             # df = self.revert_dividend_price(df, dividends) # TODO
-            self.KBars['1T'] = self.concatKBars(self.KBars['1T'], df)
+        self.KBars['1T'] = self.concatKBars(self.KBars['1T'], df)
 
         self.KBars['1T'] = self.featureFuncs['1T'](self.KBars['1T'])
 

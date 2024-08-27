@@ -40,7 +40,7 @@ class WatchListTool:
         df.strategy = df.strategy.fillna('Unknown')
         return df
 
-    def _append_watchlist(self, market: str, orderinfo: namedtuple, quotes: dict):
+    def _append_watchlist(self, market: str, orderinfo: namedtuple, quotes: dict = 0):
         '''Add new stock data to watchlist'''
         if isinstance(orderinfo, str):
             # Manual trading
@@ -52,7 +52,7 @@ class WatchListTool:
             # Auto trading
             target = orderinfo.target
             position = abs(orderinfo.pos_target)
-            cost_price = quotes.NowTargets[target]['price']
+            cost_price = TradeData.Quotes.NowTargets[target]['price']
             check_quantity = orderinfo.quantity != 0
 
         if target not in self.watchlist.code.values and check_quantity:
@@ -120,7 +120,7 @@ class WatchListTool:
         if db.HAS_DB:
             db.delete(Watchlist, Watchlist.position <= 0, self.MatchAccount)
 
-    def update_watchlist_position(self, order: namedtuple, quotes: dict):
+    def update_watchlist_position(self, order: namedtuple):
         # if order.action_type == 'Close':
         #     if order.pos_target == 100 or order.pos_target >= order.pos_balance:
         #         order = order._replace(pos_target=100)
@@ -143,7 +143,7 @@ class WatchListTool:
             self.remove_from_watchlist()
         elif order.action_type == 'Open':
             market = 'Stocks' if not order.octype else 'Futures'
-            self._append_watchlist(market, order, quotes)
+            self._append_watchlist(market, order)
 
     def save_watchlist(self, df: pd.DataFrame):
         if db.HAS_DB:

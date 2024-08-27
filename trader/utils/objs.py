@@ -41,10 +41,20 @@ class Futures:
     CodeList = {}
 
 
+class Quotes:
+    AllIndex = {'TSE001': [], 'OTC101': []}
+    NowIndex = {}
+    AllTargets = {}
+    NowTargets = {}
+    TempKbars = {}
+
+
 class DefaultTableMeta(type):
     _data = {
         'Stocks': Stocks,
-        'Futures': Futures
+        'Futures': Futures,
+        'BidAsk': {},
+        'Quotes': Quotes()
     }
 
     def __getitem__(cls, key):

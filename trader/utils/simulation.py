@@ -36,7 +36,6 @@ class Simulator:
             self,
             account: str,
             data: dict,
-            quotes: dict,
             market='Stocks',
             is_trading_time=True
     ):
@@ -65,7 +64,7 @@ class Simulator:
 
             if is_trading_time:
                 df['last_price'] = df.code.map(
-                    {s: quotes.NowTargets[s]['price'] for s in df.code})
+                    {s: TradeData.Quotes.NowTargets[s]['price'] for s in df.code})
             else:
                 df['last_price'] = 0
 
