@@ -32,14 +32,13 @@ class Simulator:
         df['account_id'] = 'simulate'
         return df
 
-    def monitor_list_to_df(
-            self,
-            account: str,
-            data: dict,
-            market='Stocks',
-            is_trading_time=True
-    ):
+    def monitor_list_to_df(self, account: str, data: dict, market='Stocks'):
         '''Convert stocks/futures monitor list to dataframe'''
+
+        if market == 'Stocks':
+            data = TradeData.Stocks.Monitor
+        else:
+            data = TradeData.Futures.Monitor
         logging.debug(f'{market.lower()}_to_monitor: {data}')
 
         df = {k: v for k, v in data.items() if v}
@@ -62,11 +61,9 @@ class Simulator:
                 df['pnl'] = df.direction.apply(
                     lambda x: 1 if x == 'Buy' else -1)
 
-            if is_trading_time:
-                df['last_price'] = df.code.map(
-                    {s: TradeData.Quotes.NowTargets[s]['price'] for s in df.code})
-            else:
-                df['last_price'] = 0
+            now_targets = TradeData.Quotes.NowTargets.copy()
+            df['last_price'] = df.code.map(
+                {s: now_targets.get(s, {}).get('price', 0) for s in df.code})
 
             df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
             df = df[TradeData[market].InfoDefault.columns]
@@ -99,3 +96,15 @@ class Simulator:
                 df=df,
                 filename=f'{PATH}/stock_pool/simulation_{market.lower()}_{account}.pkl'
             )
+
+    def save_securityInfo(self, env, market='Stocks'):
+        '''Save the security info table if running under simulation mode.'''
+
+        if (
+            (market == 'Stocks' and not env.can_stock) or
+            (market == 'Futures' and not env.can_futures)
+        ):
+            return
+
+        df = self.monitor_list_to_df(env.ACCOUNT_NAME, market=market)
+        self.update_securityInfo(env.ACCOUNT_NAME, df, market)

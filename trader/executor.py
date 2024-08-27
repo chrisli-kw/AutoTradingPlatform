@@ -38,12 +38,7 @@ except:
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
-class StrategyExecutor(
-    AccountInfo,
-    WatchListTool,
-    OrderTool,
-    Subscriber
-):
+class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
     def __init__(self, account_name: str):
         self.env = UserEnv(account_name)
 
@@ -103,7 +98,6 @@ class StrategyExecutor(
             f'[AccountInfo] Margin: total={self.ProfitAccCount}; available={self.desposal_margin}; limit={self.env.MARGIN_LIMIT}')
 
     def _set_leverage(self, stockids: list):
-        # TODO: move to OrderTool
         '''
         取得個股融資成數資料，
         若帳戶設定為不可融資，則全部融資成數為0
@@ -264,7 +258,7 @@ class StrategyExecutor(
             f'[AccountInfo] Stock account ID: {self.account_id_stock}')
 
         if self.HAS_FUTOPT_ACCOUNT:
-            self.can_futures = 'futures' in self.env.MARKET
+            self.env.can_futures = 'futures' in self.env.MARKET
             self.account_id_futopt = API.futopt_account.account_id
             self._set_futures_code_list()
             logging.info(
@@ -388,7 +382,7 @@ class StrategyExecutor(
                 df['order'] = df[['quantity', 'action']].to_dict('records')
             return df
 
-        if not self.can_futures:
+        if not self.env.can_futures:
             return []
 
         # 讀取選股清單
@@ -856,7 +850,6 @@ class StrategyExecutor(
 
     def check_order_cond(self, target: str, mode='long'):
         '''檢查個股可否融資'''
-        # TODO: move to OrderTool
         contract = get_contract(target)
         if mode == 'long':
             if self.env.ORDER_COND1 != 'Cash' and (TradeData.Stocks.Leverage.Long[target] == 0 or contract.margin_trading_balance == 0):
@@ -939,7 +932,7 @@ class StrategyExecutor(
     def is_trading_time_(self, now: datetime):
         '''檢查是否為交易時段'''
 
-        if self.can_futures:
+        if self.env.can_futures:
             return time_tool.is_trading_time(
                 now,
                 td=timedelta(minutes=-6),
@@ -1102,40 +1095,23 @@ class StrategyExecutor(
         time.sleep(3)
         self.unsubscribe_all(all_stocks+all_futures)
 
-    def __save_simulate_securityInfo(self, market='Stocks'):
-        '''儲存模擬交易模式下的庫存表'''
-
-        if (
-            not self.simulation or
-            (market == 'Stocks' and not self.env.can_stock) or
-            (market == 'Futures' and not self.can_futures)
-        ):
-            return
-
-        df = self.simulator.monitor_list_to_df(
-            self.env.ACCOUNT_NAME,
-            data=TradeData.Stocks.Monitor if market == 'Stocks' else TradeData.Futures.Monitor,
-            market=market,
-            is_trading_time=self.is_trading_time_(datetime.now())
-        )
-        self.simulator.update_securityInfo(self.env.ACCOUNT_NAME, df, market)
-
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''
         if 'position' in TradeData.Stocks.Info.columns and not self.simulation:
             codeList = self.get_securityInfo('Stocks').code.to_list()
             self.update_watchlist(codeList)
 
+        account = self.env.ACCOUNT_NAME
         self.save_watchlist(self.watchlist)
-        self.output_statement(
-            f'{PATH}/stock_pool/statement_{self.env.ACCOUNT_NAME}.csv')
+        self.output_statement(f'{PATH}/stock_pool/statement_{account}.csv')
         self.StrategySet.export_strategy_data()
 
         for freq, df in TradeData.KBars.Freq.items():
             if freq != '1D':
-                filename = f'{PATH}/Kbars/k{freq[:-1]}min_{self.env.ACCOUNT_NAME}.csv'
+                filename = f'{PATH}/Kbars/k{freq[:-1]}min_{account}.csv'
                 file_handler.Process.save_table(df, filename)
 
-        self.__save_simulate_securityInfo('Stocks')
-        self.__save_simulate_securityInfo('Futures')
+        if self.simulation:
+            self.simulator.save_securityInfo('Stocks')
+            self.simulator.save_securityInfo('Futures')
         time.sleep(1)
