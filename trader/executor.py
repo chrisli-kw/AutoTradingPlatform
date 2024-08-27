@@ -1112,6 +1112,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
                 file_handler.Process.save_table(df, filename)
 
         if self.simulation:
-            self.simulator.save_securityInfo('Stocks')
-            self.simulator.save_securityInfo('Futures')
+            self.simulator.save_securityInfo(self.env, 'Stocks')
+            self.simulator.save_securityInfo(self.env, 'Futures')
         time.sleep(1)
