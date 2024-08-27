@@ -4,11 +4,11 @@ from sqlalchemy import create_engine
 from .sql import SQLDatabase
 from .redis import RedisTools
 from .tables import *
-from ...config import DB_NAME, DB_URL
+from ...config import DBConfig
 
 
 def create_schema(schemaName):
-    engine = create_engine(f'mysql+pymysql://{DB_URL}')
+    engine = create_engine(f'mysql+pymysql://{DBConfig.URL}')
 
     conn = engine.connect()
     if schemaName.lower() not in conn.dialect.get_schema_names(conn):
@@ -25,7 +25,7 @@ db = SQLDatabase()
 redis_tick = RedisTools(redisKey='TickData')
 
 if db.HAS_DB:
-    create_schema(DB_NAME)
+    create_schema(DBConfig.NAME)
     Base.metadata.create_all(db.engine)
 
     KBarTables = {

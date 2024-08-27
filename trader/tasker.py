@@ -11,7 +11,7 @@ from .config import (
     PATH,
     TODAY_STR,
     ACCOUNTS,
-    TEnd,
+    TimeEndStock,
     ConvertScales
 )
 from .create_env import app
@@ -271,7 +271,7 @@ def thread_subscribe(user: str, targets: list):
         logging.info(f'Done subscribe {len(targets)} targets')
 
         now = datetime.now()
-        time.sleep(max((TEnd - now).total_seconds(), 0))
+        time.sleep(max((TimeEndStock - now).total_seconds(), 0))
     except:
         logging.exception('Catch an exception:')
     finally:

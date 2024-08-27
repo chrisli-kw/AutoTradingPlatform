@@ -4,13 +4,12 @@ import pickle
 import logging
 from typing import Iterable
 
-from ...config import HAS_REDIS, REDIS_HOST, REDIS_PORT, REDIS_PWD
+from ...config import RedisConfig
 from .. import progress_bar
 
 
 class RedisTools:
     def __init__(self, redisKey='Trader', ttl=86400):
-        self.HAS_REDIS = HAS_REDIS
         self.REDIS_KEY = redisKey
         self.ttl = ttl
         self.redis_client = self.init_client()
@@ -18,11 +17,11 @@ class RedisTools:
     def init_client(self):
         '''Initialize Redis by config settings'''
 
-        if self.HAS_REDIS:
+        if RedisConfig.HAS_REDIS:
             return redis.Redis(
-                host=REDIS_HOST,
-                port=REDIS_PORT,
-                password=REDIS_PWD,
+                host=RedisConfig.HOST,
+                port=RedisConfig.PORT,
+                password=RedisConfig.PWD,
                 decode_responses=False
             )
         return None
@@ -33,7 +32,7 @@ class RedisTools:
     def to_redis(self, data: dict):
         '''insert data to Redis at a time'''
 
-        if not self.HAS_REDIS:
+        if not RedisConfig.HAS_REDIS:
             return
 
         N = len(data)
@@ -57,7 +56,7 @@ class RedisTools:
     def query(self, key: str):
         '''query data from redis'''
 
-        if not self.HAS_REDIS:
+        if not RedisConfig.HAS_REDIS:
             return
 
         n = 0
@@ -68,7 +67,7 @@ class RedisTools:
             except:
                 n += 1
                 logging.error(
-                    f"Cannot connect to {REDIS_HOST}, reconnect ({n}/5).")
+                    f"Cannot connect to {RedisConfig.HOST}, reconnect ({n}/5).")
                 self.redis_client = self.init_client()
                 time.sleep(1)
 
@@ -82,7 +81,7 @@ class RedisTools:
 
     def query_keys(self, keys: str = None, match: str = None):
 
-        if not self.HAS_REDIS:
+        if not RedisConfig.HAS_REDIS:
             return
 
         if not keys and not match:
@@ -96,7 +95,7 @@ class RedisTools:
     def delete_keys(self, keys: list):
         '''delete data stored in Redis by key'''
 
-        if not self.HAS_REDIS:
+        if not RedisConfig.HAS_REDIS:
             return
 
         for k in keys:
@@ -105,7 +104,7 @@ class RedisTools:
     def clear_all(self):
         '''delete all data stored in Redis'''
 
-        if not self.HAS_REDIS:
+        if not RedisConfig.HAS_REDIS:
             return
 
         self.redis_client.delete(*self.redis_client.keys())
@@ -113,10 +112,11 @@ class RedisTools:
     def memory_usage(self):
         '''check Redis memory usage'''
 
-        if not self.HAS_REDIS:
+        if not RedisConfig.HAS_REDIS:
             return
 
         used_memory = self.redis_client.info()['total_system_memory_human']
 
         print(f'Total keys = {len(self.redis_client.keys())}')
-        print(f"Used_memory of {REDIS_HOST}:{REDIS_PORT} = {used_memory}")
+        print(
+            f"Used_memory of {RedisConfig.HOST}:{RedisConfig.PORT} = {used_memory}")

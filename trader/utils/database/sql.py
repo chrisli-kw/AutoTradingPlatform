@@ -7,7 +7,7 @@ from sqlalchemy import asc, desc, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, scoped_session, load_only
 
-from ...config import HAS_DB, DB_NAME, DB_URL
+from ...config import DBConfig
 from ..file import file_handler
 
 
@@ -16,9 +16,9 @@ Base = declarative_base()
 
 class SQLDatabase:
     def __init__(self):
-        self.HAS_DB = HAS_DB
+        self.HAS_DB = DBConfig.HAS_DB
         if self.HAS_DB:
-            self.sql_connect = f"mysql+pymysql://{DB_URL}/{DB_NAME}?charset=utf8mb4&binary_prefix=true"
+            self.sql_connect = f"mysql+pymysql://{DBConfig.URL}/{DBConfig.NAME}?charset=utf8mb4&binary_prefix=true"
             self.engine = create_engine(
                 self.sql_connect,
                 pool_size=50,

@@ -2,7 +2,7 @@ import logging
 import requests
 import pandas as pd
 
-from ..config import API, TOKEN_INFO, TOKEN_MONITOR
+from ..config import API, Tokens
 
 
 class Notification:
@@ -24,8 +24,8 @@ class Notification:
     def headers(self, msgType: str):
         '''LINE notify推播header設定'''
         if msgType in ['Order', 'Deal', 'AccountInfo', 'Monitor', 'Tasker', 'Crawler']:
-            return {"Authorization": f"Bearer {TOKEN_MONITOR}"} if TOKEN_MONITOR else {}
-        return {"Authorization": f"Bearer {TOKEN_INFO}"} if TOKEN_INFO else {}
+            return {"Authorization": f"Bearer {Tokens.MONITOR}"} if Tokens.MONITOR else {}
+        return {"Authorization": f"Bearer {Tokens.INFO}"} if Tokens.INFO else {}
 
     def post(self, message: str, image_name=None, msgType: str = 'price'):
         '''Line Notify 推播，可傳送文字或圖片訊息'''

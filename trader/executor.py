@@ -12,7 +12,7 @@ from .config import (
     PATH,
     TODAY_STR,
     MonitorFreq,
-    TTry,
+    TimeSimTradeStockEnd,
     TimeEndStock,
     TimeTransferFutures
 )
@@ -708,7 +708,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
 
             # 整股交易
             else:
-                if datetime.now() >= TTry:
+                if datetime.now() >= TimeSimTradeStockEnd:
                     price_type = 'LMT'
                     price = bid_ask[1]
                 elif target in self.punish_list:

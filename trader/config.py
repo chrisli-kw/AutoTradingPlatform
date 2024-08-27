@@ -66,26 +66,30 @@ TODAY = datetime.today()
 # 使用者相關
 ACCOUNTS = get_settings("ACCOUNT", "USERS", dataType='list')
 LOG_LEVEL = get_settings("ACCOUNT", "LOG_LEVEL")
-
-# 資料庫相關
-REDIS_HOST = get_settings('DB', 'REDIS_HOST')
-REDIS_PORT = get_settings('DB', 'REDIS_PORT', dataType='int')
-REDIS_PWD = get_settings('DB', 'REDIS_PWD')
-HAS_REDIS = all(x for x in [REDIS_HOST, REDIS_PORT, REDIS_PWD])
-
-DB_HOST = get_settings('DB', 'DB_HOST')
-DB_PORT = get_settings('DB', 'DB_PORT', dataType='int')
-DB_USER = get_settings('DB', 'DB_USER')
-DB_PWD = get_settings('DB', 'DB_PWD')
-DB_NAME = get_settings('DB', 'DB_NAME')
-HAS_DB = all(x for x in [DB_HOST, DB_NAME, DB_PORT, DB_PWD, DB_USER])
-DB_URL = f'{DB_USER}:{DB_PWD}@{DB_HOST}:{DB_PORT}' if HAS_DB else ''
-
 PATH = get_settings('DATA', 'DATA_PATH')
 
-# LINE notify
-TOKEN_MONITOR = get_settings('LINENOTIFY', 'TOKEN_MONITOR')
-TOKEN_INFO = get_settings('LINENOTIFY', 'TOKEN_INFO')
+
+class RedisConfig:
+    HOST = get_settings('DB', 'REDIS_HOST')
+    PORT = get_settings('DB', 'REDIS_PORT', dataType='int')
+    PWD = get_settings('DB', 'REDIS_PWD')
+    HAS_REDIS = all(x for x in [HOST, PORT, PWD])
+
+
+class DBConfig:
+    HOST = get_settings('DB', 'DB_HOST')
+    PORT = get_settings('DB', 'DB_PORT', dataType='int')
+    USER = get_settings('DB', 'DB_USER')
+    PWD = get_settings('DB', 'DB_PWD')
+    NAME = get_settings('DB', 'DB_NAME')
+    HAS_DB = all(x for x in [HOST, NAME, PORT, PWD, USER])
+    URL = f'{USER}:{PWD}@{HOST}:{PORT}' if HAS_DB else ''
+
+
+class Tokens:
+    '''LINE notify tokens'''
+    MONITOR = get_settings('LINENOTIFY', 'TOKEN_MONITOR')
+    INFO = get_settings('LINENOTIFY', 'TOKEN_INFO')
 
 
 class StrategyNameList:
@@ -109,14 +113,7 @@ MonitorFreq = get_settings('STRATEGY', 'MonitorFreq', 'int')
 FEE_RATE = .01
 
 # 時間相關
-T15K = pd.to_datetime('09:15:00')
-T30K = pd.to_datetime('09:30:00')
-TStart = pd.to_datetime('09:05:00')
-TEnd = pd.to_datetime('13:30:05')
-TCheck1 = pd.to_datetime('09:03:00')
-TBuy1 = pd.to_datetime('09:00:00')
-TBuy2 = pd.to_datetime('13:15:00')
-TTry = pd.to_datetime('13:25:00')
+TimeSimTradeStockEnd = pd.to_datetime('13:25:00')
 TimeStartStock = pd.to_datetime('09:00:00')
 TimeEndStock = pd.to_datetime('13:30:00')
 
