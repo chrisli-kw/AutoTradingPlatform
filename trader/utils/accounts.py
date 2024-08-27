@@ -10,7 +10,7 @@ from . import concat_df
 from .time import time_tool
 from .crawler import crawler
 from .file import file_handler
-from .objs import TradeData
+from .objects.data import TradeData
 
 
 class AccountInfo:

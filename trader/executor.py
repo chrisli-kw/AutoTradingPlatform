@@ -17,7 +17,7 @@ from .config import (
     TimeTransferFutures
 )
 from .utils import get_contract
-from .utils.objs import TradeData
+from .utils.objects.data import TradeData
 from .utils.orders import OrderTool
 from .utils.time import time_tool
 from .utils.crawler import crawler

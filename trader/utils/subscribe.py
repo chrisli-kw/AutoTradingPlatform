@@ -6,7 +6,7 @@ from threading import Lock
 from ..config import API
 from . import get_contract
 from .kbar import KBarTool
-from .objs import TradeData
+from .objects.data import TradeData
 
 
 class Subscriber(KBarTool):

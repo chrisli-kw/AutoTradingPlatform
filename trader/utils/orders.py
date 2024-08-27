@@ -6,7 +6,7 @@ from collections import namedtuple
 
 from ..config import API, PATH, FEE_RATE
 from . import concat_df
-from .objs import TradeData
+from .objects.data import TradeData
 from .file import file_handler
 from .positions import FuturesMargin
 from .database import db

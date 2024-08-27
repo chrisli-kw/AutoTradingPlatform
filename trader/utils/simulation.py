@@ -6,7 +6,7 @@ from .. import PATH
 from .database import db
 from .database.tables import SecurityInfoStocks, SecurityInfoFutures
 from .file import file_handler
-from .objs import TradeData
+from .objects.data import TradeData
 
 
 class Simulator:

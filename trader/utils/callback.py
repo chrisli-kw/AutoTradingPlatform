@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 
 from ..config import API
-from .objs import TradeData
+from .objects.data import TradeData
 
 
 class CallbackHandler:

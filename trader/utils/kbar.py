@@ -18,7 +18,7 @@ from ..config import (
 from ..indicators.signals import TechnicalSignals
 from . import get_contract, concat_df
 from .time import time_tool
-from .objs import TradeData
+from .objects.data import TradeData
 from .. import file_handler
 try:
     from ..scripts.features import KBarFeatureTool

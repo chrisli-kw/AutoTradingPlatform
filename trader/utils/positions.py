@@ -8,7 +8,7 @@ from ..config import PATH, TODAY_STR, API
 from . import get_contract, concat_df
 from .time import time_tool
 from .file import file_handler
-from .objs import TradeData
+from .objects.data import TradeData
 from .database import db
 from .database.tables import Watchlist
 
