@@ -123,7 +123,7 @@ class FileHandler:
         N = len(files)
         if N:
             df = np.array([None]*N)
-            iterator = files
+            iterator = tqdm(files)
             for i, f in enumerate(iterator):
                 df[i] = self.Process.read_table(f'{dir_path}/{f}')
                 iterator.set_description(f'[{f}]')

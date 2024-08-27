@@ -368,10 +368,8 @@ class StrategyExecutor(
         TradeData.Stocks.N_Long = info[buy_condition].shape[0]
         TradeData.Stocks.N_Short = info[~buy_condition].shape[0]
         TradeData.Stocks.Info = info
-        self.env.N_LIMIT_LS = self.StrategySet.setNStockLimitLong(
-            KBars=self.KBars)
-        self.env.N_LIMIT_SS = self.StrategySet.setNStockLimitShort(
-            KBars=self.KBars)
+        self.env.N_LIMIT_LS = self.StrategySet.setNStockLimitLong()
+        self.env.N_LIMIT_SS = self.StrategySet.setNStockLimitShort()
         self.punish_list = crawler.FromHTML.PunishList()
         self._set_leverage(all_targets)
         self._set_trade_risks()
@@ -420,8 +418,7 @@ class StrategyExecutor(
         self.history_kbars(all_futures)
 
         # 交易風險控制
-        self.env.N_FUTURES_LIMIT = self.StrategySet.setNFuturesLimit(
-            KBars=self.KBars)
+        self.env.N_FUTURES_LIMIT = self.StrategySet.setNFuturesLimit()
         self._set_margin_limit()
         self.margin_table = self.get_margin_table()
         logging.debug(f'Futures to monitor: {TradeData.Futures.Monitor}')
@@ -570,7 +567,6 @@ class StrategyExecutor(
 
                 actionInfo = func(
                     inputs=inputs,
-                    kbars=self.KBars,
                     pct_chg_DowJones=self.pct_chg_DowJones
                 )
                 if actionInfo.position:
@@ -656,7 +652,6 @@ class StrategyExecutor(
 
                 actionInfo = func(
                     inputs=inputs,
-                    kbars=self.KBars,
                     pct_chg_DowJones=self.pct_chg_DowJones
                 )
                 if actionInfo.position:
@@ -831,8 +826,7 @@ class StrategyExecutor(
         quantityFunc = self.StrategySet.mapQuantities(strategy)
 
         inputs = self.getQuotesNow(target)
-        quantity, quantity_limit = quantityFunc(
-            inputs=inputs, kbars=self.KBars)
+        quantity, quantity_limit = quantityFunc(inputs=inputs)
         leverage = self.check_leverage(target, order_cond)
 
         quantity = int(min(quantity, quantity_limit)/(1 - leverage))
@@ -855,7 +849,7 @@ class StrategyExecutor(
         quantityFunc = self.StrategySet.mapQuantities(strategy)
 
         inputs = self.getQuotesNow(target)
-        slot, quantity_limit = quantityFunc(inputs=inputs, kbars=self.KBars)
+        slot, quantity_limit = quantityFunc(inputs=inputs)
         slot = int(min(slot, quantity_limit))
         slot = min(slot, 499)
         return slot
@@ -1137,7 +1131,7 @@ class StrategyExecutor(
             f'{PATH}/stock_pool/statement_{self.env.ACCOUNT_NAME}.csv')
         self.StrategySet.export_strategy_data()
 
-        for freq, df in self.KBars.items():
+        for freq, df in TradeData.KBars.Freq.items():
             if freq != '1D':
                 filename = f'{PATH}/Kbars/k{freq[:-1]}min_{self.env.ACCOUNT_NAME}.csv'
                 file_handler.Process.save_table(df, filename)

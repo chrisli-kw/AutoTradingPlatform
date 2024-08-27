@@ -49,12 +49,29 @@ class Quotes:
     TempKbars = {}
 
 
+class KBars:
+    kbar_columns = [
+        'name', 'Time',
+        'Open', 'High', 'Low', 'Close', 'Volume', 'Amount'
+    ]
+    Freq = {
+        '1T': pd.DataFrame(columns=kbar_columns),
+        '2T': pd.DataFrame(columns=kbar_columns),
+        '5T': pd.DataFrame(columns=kbar_columns),
+        '15T': pd.DataFrame(columns=kbar_columns),
+        '30T': pd.DataFrame(columns=kbar_columns),
+        '60T': pd.DataFrame(columns=kbar_columns),
+        '1D': pd.DataFrame(columns=kbar_columns)
+    }
+
+
 class DefaultTableMeta(type):
     _data = {
         'Stocks': Stocks,
         'Futures': Futures,
         'BidAsk': {},
-        'Quotes': Quotes()
+        'Quotes': Quotes(),
+        'KBars': KBars(),
     }
 
     def __getitem__(cls, key):

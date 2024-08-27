@@ -74,13 +74,13 @@ class StrategyTool:
     def __DoNothing__(self, **kwargs):
         return self.Action()
 
-    def update_indicators(self, now: datetime, kbars: dict):
+    def update_indicators(self, now: datetime, KBars: dict):
         pass
 
     def update_StrategySet_data(self, target: str):
         pass
 
-    def setNStockLimitLong(self, KBars: dict = None):
+    def setNStockLimitLong(self, **kwargs):
         '''
         Set the number limit of securities of a portfolio can hold
         for a long strategy
@@ -95,7 +95,7 @@ class StrategyTool:
         self.stock_limit_long = limit
         return limit
 
-    def setNStockLimitShort(self, KBars: dict = None):
+    def setNStockLimitShort(self, **kwargs):
         '''
         Set the number limit of securities of a portfolio can hold
         for a short strategy
@@ -110,7 +110,7 @@ class StrategyTool:
         self.stock_limit_short = limit
         return limit
 
-    def setNFuturesLimit(self, KBars: dict = None):
+    def setNFuturesLimit(self, **kwargs):
         '''Set the number limit of securities of a portfolio can hold'''
         self.futures_limit = 0
         return 0
@@ -124,7 +124,7 @@ class StrategyTool:
 
             # Check if there's any missing value
             if data.tail(1).isnull().values.any():
-                logging.warningv(
+                logging.warning(
                     f"Dataframe contains NaN values for stockid: {stockid} when getting {col} value --> ")
                 logging.warning(f'{data.tail().to_string()}')
                 data = data.fillna(0)
@@ -135,7 +135,7 @@ class StrategyTool:
                 return tb[col].values[-1]
             return 0
 
-        return data[stockid].get(col)
+        return data.get(stockid, {}).get(col, 0)
 
     def get_ex_dividends_list(self):
         '''取得當日除權息股票清單'''
@@ -177,7 +177,7 @@ class StrategyTool:
                 '==========put_call_ratio.csv does not exist, the trader will run without Put/Call Ratio==========')
             return 100
 
-    def transfer_position(self, inputs: dict, kbars: dict, **kwargs):
+    def transfer_position(self, inputs: dict, **kwargs):
         target = inputs['symbol']
         return self.Action(100, '轉倉', f'{target} 轉倉-Cover')
 

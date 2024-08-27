@@ -139,14 +139,14 @@ class BacktestPerformance:
             # win_loss = computeWinLoss(df)
 
             if 'daily_info' in result:
-                Kbars = result.get('Kbars')
+                KBars = result.get('KBars')
                 result['daily_info'] = self.process_daily_info(df, **result)
 
                 # TSE 漲跌幅
-                tse_return = computeReturn(Kbars['1D'], 'TSEopen', 'TSEclose')
+                tse_return = computeReturn(KBars['1D'], 'TSEopen', 'TSEclose')
 
                 # OTC 漲跌幅
-                otc_return = computeReturn(Kbars['1D'], 'OTCopen', 'OTCclose')
+                otc_return = computeReturn(KBars['1D'], 'OTCopen', 'OTCclose')
             elif self.Market == 'Stocks':
                 result['daily_info'] = None
                 if db.HAS_DB:
@@ -348,9 +348,9 @@ class BackTester(BacktestPerformance):
         dir_path = f'{dataPath if dataPath else PATH}/Kbars/'
         scales = file_handler.Operate.listdir(dir_path)
 
-        Kbars = {scale: None for scale in self.Script.kbarScales}
-        Kbars['1D'] = None
-        for scale in Kbars:
+        KBars = {scale: None for scale in self.Script.kbarScales}
+        KBars['1D'] = None
+        for scale in KBars:
             scale_ = scale if market == 'Stocks' and scale in scales else '1T'
 
             if db.HAS_DB:
@@ -378,37 +378,37 @@ class BackTester(BacktestPerformance):
                 df = KBarTool().convert_kbar(df, scale=scale)
 
             df['date'] = df.Time.dt.date.astype(str)
-            Kbars[scale] = df
+            KBars[scale] = df.drop_duplicates()
 
         if hasattr(self.Script, 'extraData'):
             for dataname, func in self.Script.extraData.items():
-                Kbars[dataname] = func(start=start, end=end, dataPath=dataPath)
+                KBars[dataname] = func(start=start, end=end, dataPath=dataPath)
 
-        return Kbars
+        return KBars
 
-    def addFeatures(self, Kbars: dict):
-        return Kbars
+    def addFeatures(self, KBars: dict):
+        return KBars
 
-    def selectStocks(self, Kbars: dict):
+    def selectStocks(self, KBars: dict):
         '''依照策略選股條件挑出可進場的股票，必須新增一個"isIn"欄位'''
-        return Kbars
+        return KBars
 
-    def examineOpen(self, inputs: dict, kbars: dict, **kwargs):
+    def examineOpen(self, inputs: dict, KBars: dict, **kwargs):
         '''檢查進場條件'''
-        return self.Action(100, '進場', 'msg', kbars['1D']['Open'])
+        return self.Action(100, '進場', 'msg', KBars['1D']['Open'])
 
-    def examineClose(self, inputs: dict, kbars: dict, **kwargs):
+    def examineClose(self, inputs: dict, KBars: dict, **kwargs):
         '''檢查出場條件'''
         if inputs['low'] < inputs['open']:
             closePrice = inputs['open']
             return self.Action(100, '出場', 'msg', closePrice)
         return self.Action()
 
-    def computeOpenLimit(self, Kbars: dict, **kwargs):
+    def computeOpenLimit(self, KBars: dict, **kwargs):
         '''計算每日買進股票上限(可做幾支)'''
         return 2000
 
-    def computeOpenUnit(self, Kbars: dict):
+    def computeOpenUnit(self, KBars: dict):
         '''
         計算買進股數
         參數:
@@ -447,16 +447,16 @@ class BackTester(BacktestPerformance):
             return testScript.selectStocks(df)
 
         @self.on_set_script_function(testScript, 'examineOpen')
-        def func3(inputs, kbars, **kwargs):
-            return testScript.examineOpen(inputs, kbars, **kwargs)
+        def func3(inputs, KBars, **kwargs):
+            return testScript.examineOpen(inputs, KBars, **kwargs)
 
         @self.on_set_script_function(testScript, 'examineClose')
-        def func4(inputs, kbars, **kwargs):
-            return testScript.examineClose(inputs, kbars, **kwargs)
+        def func4(inputs, KBars, **kwargs):
+            return testScript.examineClose(inputs, KBars, **kwargs)
 
         @self.on_set_script_function(testScript, 'computeOpenLimit')
-        def func5(Kbars, **kwargs):
-            return testScript.computeOpenLimit(Kbars, **kwargs)
+        def func5(KBars, **kwargs):
+            return testScript.computeOpenLimit(KBars, **kwargs)
 
         @self.on_set_script_function(testScript, 'computeOpenUnit')
         def func6(inputs):
@@ -662,7 +662,7 @@ class BackTester(BacktestPerformance):
 
         openInfo = self.examineOpen(
             None,
-            kbars=inputs,
+            KBars=inputs,
             market_value=self.market_value,
             day_trades=self.day_trades
         )
@@ -716,7 +716,7 @@ class BackTester(BacktestPerformance):
 
         closeInfo = self.examineClose(
             inputs=self.stocks,
-            kbars=inputs,
+            KBars=inputs,
             stocksClosed=stocksClosed
         )
 
@@ -753,17 +753,17 @@ class BackTester(BacktestPerformance):
         init_position = params.get('init_position', 1000000)
         self.balance = self.init_balance = self.market_value = init_position
         self.buyOrder = params.get('buyOrder', None)
-        self.Kbars = {}
+        self.KBars = {}
         self.day_trades = []
         self.statements = []
         self.stocks = {}
         self.daily_info = {}
 
-    def run(self, Kbars: dict, **params):
+    def run(self, KBars: dict, **params):
         '''
         回測
         參數:
-        Kbars - 歷史資料表
+        KBars - 歷史資料表
         '''
 
         self.set_params(**params)
@@ -773,7 +773,7 @@ class BackTester(BacktestPerformance):
 
         t1 = time.time()
 
-        df = Kbars[self.Script.scale].sort_values('Time')
+        df = KBars[self.Script.scale].sort_values('Time')
         group = df.groupby('Time')
         N = len(group)
         for i, (time_, rows) in enumerate(group):
@@ -790,12 +790,12 @@ class BackTester(BacktestPerformance):
             chance = rows.isIn.sum()
             if rows.nth_bar.min() == 1:
                 day = str(pd.to_datetime(time_).date())
-                tb = Kbars['1D'][Kbars['1D'].date == day]
-                self.Kbars['1D'] = tb.set_index('name').to_dict('index')
+                tb = KBars['1D'][KBars['1D'].date == day]
+                self.KBars['1D'] = tb.set_index('name').to_dict('index')
                 del tb
 
                 self.nStocksLimit = self.computeOpenLimit(
-                    self.Kbars, day=time_)
+                    self.KBars, day=time_)
                 self.day_trades = []
 
             # 檢查進場 & 出場
@@ -805,13 +805,13 @@ class BackTester(BacktestPerformance):
                 if name in self.indexes:
                     continue
 
-                inputs = Kbars.copy()
+                inputs = KBars.copy()
                 temp = {name: row}
                 temp.update({k: rows[k] for k in self.indexes if k in rows})
                 inputs[self.Script.scale] = temp
                 inputs['name'] = name
-                if '1D' in Kbars:
-                    inputs['1D'] = self.Kbars['1D']
+                if '1D' in KBars:
+                    inputs['1D'] = self.KBars['1D']
 
                 if name in self.stocks:
                     self.checkClose(inputs, stocksClosed)
@@ -851,7 +851,7 @@ class BackTester(BacktestPerformance):
             endDate=df.Time.max(),
             daily_info=pd.DataFrame(self.daily_info).T,
             isLong=self.isLong,
-            Kbars=Kbars
+            KBars=KBars
         )
         del df, rows
         return result

@@ -436,7 +436,7 @@ class BacktestReport(SuplotHandler):
         df['losses'] = (df.profit*(df.profit <= 0)).cumsum()
         return df
 
-    def plot_backtest_result(self, TestResult: object, Kbars: dict, title="Backtest Report"):
+    def plot_backtest_result(self, TestResult: object, KBars: dict, title="Backtest Report"):
         '''將回測結果畫成圖表'''
 
         if TestResult.Statement is None:
@@ -468,7 +468,7 @@ class BacktestReport(SuplotHandler):
         # TSE/OTC candlesticks
         if self.Script.market == 'Stocks':
             for col, (a, b) in enumerate([('1', 'TWSE'), ('101', 'OTC')]):
-                temp = Kbars['1D'].copy()
+                temp = KBars['1D'].copy()
                 temp = temp[temp.name == a].sort_values('Time')
                 temp['name'] = b
                 fig = self.add_candlestick(
@@ -489,11 +489,11 @@ class BacktestReport(SuplotHandler):
                 )
         else:
             fig = self.add_candlestick(
-                fig, Kbars['1D'].copy(), row=4, col=1, plot_volume=True)
+                fig, KBars['1D'].copy(), row=4, col=1, plot_volume=True)
 
         # Put/Call Ratio
-        if 'put_call_ratio' in Kbars:
-            df_pcr = pd.DataFrame(Kbars['put_call_ratio']).T
+        if 'put_call_ratio' in KBars:
+            df_pcr = pd.DataFrame(KBars['put_call_ratio']).T
             df_pcr['pc115'] = 115
             for args in [
                 dict(y='PutCallRatio', name='Put/Call Ratio',

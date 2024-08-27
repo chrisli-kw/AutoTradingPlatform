@@ -40,10 +40,6 @@ class KBarTool(TechnicalSignals):
             'Volume': 'sum',
             'Amount': 'sum'
         }
-        self.kbar_columns = [
-            'name', 'Time',
-            'Open', 'High', 'Low', 'Close', 'Volume', 'Amount'
-        ]
         self.featureFuncs = {
             '1T': self.add_K1min_feature,
             '2T': self.add_K2min_feature,
@@ -53,9 +49,7 @@ class KBarTool(TechnicalSignals):
             '60T': self.add_K60min_feature,
             '1D': self.add_KDay_feature,
         }
-        self.KBars = {
-            freq: pd.DataFrame(columns=self.kbar_columns) for freq in self.featureFuncs
-        }
+
         self.is_kbar_1t_updated = {
             '2T': False,
             '5T': False,
@@ -182,11 +176,11 @@ class KBarTool(TechnicalSignals):
                     time_ = TimeStartStock + timedelta(minutes=scale_*n)
                     kbar = kbar[kbar.Time < time_]
 
-                self.KBars[scale] = self.concatKBars(self.KBars[scale], kbar)
+                TradeData.KBars.Freq[scale] = self.concatKBars(scale, kbar)
 
-        for scale, kbar in self.KBars.items():
+        for scale, kbar in TradeData.KBars.Freq.items():
             kbar = self.featureFuncs[scale](kbar)
-            self.KBars[scale] = kbar
+            TradeData.KBars.Freq[scale] = kbar
 
     def convert_kbar(self, tb: pd.DataFrame, scale='60T'):
         '''將1分K轉換成其他週期K線資料'''
@@ -238,7 +232,7 @@ class KBarTool(TechnicalSignals):
         if not tb.shape[0] or tb.shape[1] == 1:
             return pd.DataFrame()
 
-        return tb[self.kbar_columns]
+        return tb[TradeData.KBars.kbar_columns]
 
     def tick_to_df_index(self, target: str):
         '''將指數tick資料轉為K棒'''
@@ -258,13 +252,14 @@ class KBarTool(TechnicalSignals):
             tb['Close'] = tb.Close.values[-1]
             tb.Volume = tb.Volume.sum()
             tb['Amount'] = tb.Amount.sum()
-            tb = tb[self.kbar_columns]
+            tb = tb[TradeData.KBars.kbar_columns]
             return tb.drop_duplicates(['name', 'Time'])
         except:
             return pd.DataFrame()
 
-    def concatKBars(self, df1: pd.DataFrame, df2: pd.DataFrame):
+    def concatKBars(self, freq: str, df2: pd.DataFrame):
         '''合併K棒資料表'''
+        df1 = TradeData.KBars.Freq[freq]
         return concat_df(df1, df2, sort_by=['name', 'Time'], reset_index=True)
 
     def updateKBars(self, scale: str):
@@ -274,11 +269,12 @@ class KBarTool(TechnicalSignals):
         now = time_tool.round_time(datetime.now())
         t1 = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
         t2 = now - timedelta(minutes=_scale - .5)
-        tb = self.KBars['1T'].tail(_scale)[self.kbar_columns].copy()
+        tb = TradeData.KBars.Freq['1T'].tail(
+            _scale)[TradeData.KBars.kbar_columns].copy()
 
         if (
             not self.is_kbar_1t_updated[scale] or
-            not self.KBars[scale][self.KBars[scale].Time >= t2].empty or
+            not TradeData.KBars.Freq[scale][TradeData.KBars.Freq[scale].Time >= t2].empty or
             tb.isnull().values.any()
         ):
             return
@@ -293,8 +289,8 @@ class KBarTool(TechnicalSignals):
             for col in KbarFeatures[scale]:
                 tb[col] = None
 
-            kbar = self.concatKBars(self.KBars[scale], tb)
-            self.KBars[scale] = self.featureFuncs[scale](kbar)
+            kbar = self.concatKBars(scale, tb)
+            TradeData.KBars.Freq[scale] = self.featureFuncs[scale](kbar)
             self.is_kbar_1t_updated[scale] = False
 
     def _update_K1(self, target, quote_type='Securities'):
@@ -307,9 +303,10 @@ class KBarTool(TechnicalSignals):
         else:
             df = self.tick_to_df_targets(target)
             # df = self.revert_dividend_price(df, dividends) # TODO
-        self.KBars['1T'] = self.concatKBars(self.KBars['1T'], df)
+        TradeData.KBars.Freq['1T'] = self.concatKBars('1T', df)
 
-        self.KBars['1T'] = self.featureFuncs['1T'](self.KBars['1T'])
+        TradeData.KBars.Freq['1T'] = self.featureFuncs['1T'](
+            TradeData.KBars.Freq['1T'])
 
         now = time_tool.round_time(now)
         for freq in [2, 5, 15, 30, 60]:
