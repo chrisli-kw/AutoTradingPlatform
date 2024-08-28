@@ -125,8 +125,8 @@ class StrategyTool:
             # Check if there's any missing value
             if data.tail(1).isnull().values.any():
                 logging.warning(
-                    f"Dataframe contains NaN values for stockid: {stockid} when getting {col} value --> ")
-                logging.warning(f'{data.tail().to_string()}')
+                    f"Dataframe contains NaN values for stockid: {stockid} when getting {col} value")
+                # logging.warning(f'{data.tail().to_string()}')
                 data = data.fillna(0)
 
             tb = data[data.name == stockid].copy()

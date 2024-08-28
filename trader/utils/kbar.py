@@ -303,10 +303,8 @@ class KBarTool(TechnicalSignals):
         else:
             df = self.tick_to_df_targets(target)
             # df = self.revert_dividend_price(df, dividends) # TODO
-        TradeData.KBars.Freq['1T'] = self.concatKBars('1T', df)
-
-        TradeData.KBars.Freq['1T'] = self.featureFuncs['1T'](
-            TradeData.KBars.Freq['1T'])
+        df = self.concatKBars('1T', df)
+        TradeData.KBars.Freq['1T'] = self.featureFuncs['1T'](df)
 
         now = time_tool.round_time(now)
         for freq in [2, 5, 15, 30, 60]:
