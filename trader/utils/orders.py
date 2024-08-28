@@ -8,7 +8,7 @@ from ..config import API, PATH, FEE_RATE
 from . import concat_df
 from .objects.data import TradeData
 from .file import file_handler
-from .positions import FuturesMargin
+from .positions import FuturesMargin, TradeDataHandler
 from .database import db
 from .database.tables import TradingStatement
 
@@ -86,7 +86,7 @@ class OrderTool(FuturesMargin):
             return 'IntradayOdd'
         return 'Common'
 
-    def generate_data(self, target: str, price: float, content, market='Stocks', **kwargs):
+    def generate_data(self, target: str, content, market='Stocks'):
         is_stock = market == 'Stocks'
         is_real_trade = isinstance(content, dict)
         action = content['action'] if is_real_trade else content.action
@@ -94,9 +94,14 @@ class OrderTool(FuturesMargin):
         if is_real_trade:
             order_cond = content.get('order_cond', '')
             op_type = content.get('oc_type', '')
+            price = content.get('price', 0)
         else:
             order_cond = content.order_cond
             op_type = content.octype
+            price = 0
+
+        if price == 0:
+            price = TradeDataHandler.getQuotesNow(target)
 
         sign = self.sign_(action if is_stock else op_type)
 
@@ -185,12 +190,22 @@ class OrderTool(FuturesMargin):
             msg = order_result.status.msg
             logging.warning(f'Order not submitted/filled: {msg}')
 
-    def appendOrder(self, order_data: dict):
+    def appendOrder(self, target: str, content, market='Stocks'):
         '''Add new order data to OrderTable'''
+
+        if isinstance(content, dict):
+            order_cond = content.get('order_cond', '')
+        else:
+            order_cond = content.order_cond
+
+        order_data = self.generate_data(target, content, market)
+        order_data['leverage'] = self.check_leverage(target, order_cond)
+
         self.OrderTable = concat_df(
             self.OrderTable,
             pd.DataFrame([order_data])
         )
+        return order_data
 
     def deleteOrder(self, code: str):
         '''Delete order data from OrderTable'''

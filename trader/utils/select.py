@@ -163,8 +163,6 @@ class SelectStock:
             db.dataframe_to_DB(df, SelectedStocks)
         else:
             file_handler.Process.save_table(df, f'{PATH}/selections/all.csv')
-            file_handler.Process.save_table(
-                df, f'{PATH}/selections/history/{TODAY_STR}-all.csv')
 
     def get_selection_files(self):
         '''取得選股清單'''

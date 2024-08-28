@@ -10,8 +10,8 @@ from ..utils.database.tables import PutCallRatioList, ExDividendTable
 
 
 class StrategyTool:
-    def __init__(self, env, simulation=False):
-        self.set_config(env, simulation)
+    def __init__(self, env=None):
+        self.set_config(env)
         self.Action = namedtuple(
             typename="Action",
             field_names=['position', 'reason', 'msg', 'price', 'action'],
@@ -39,7 +39,7 @@ class StrategyTool:
         self.revert_action = {}
         self.n_categories = None
 
-    def set_config(self, env, simulation):
+    def set_config(self, env):
         self.account_name = env.ACCOUNT_NAME
 
         self.stock_limit_type = env.N_STOCK_LIMIT_TYPE
@@ -51,7 +51,7 @@ class StrategyTool:
         self.futures_limit = env.N_FUTURES_LIMIT
         self.futures_model_version = env.FUTURES_MODEL_VERSION
 
-        self.is_simulation = simulation
+        self.is_simulation = env.MODE == 'Simulation'
 
     def mapFunction(self, action: str, tradeType: str, strategy: str):
         has_action = action in self.Funcs

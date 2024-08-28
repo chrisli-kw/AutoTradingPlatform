@@ -1,16 +1,22 @@
 import logging
 import numpy as np
 import pandas as pd
+from datetime import datetime
+from collections import namedtuple
 
 from .. import PATH
 from .database import db
 from .database.tables import SecurityInfoStocks, SecurityInfoFutures
+from .orders import OrderTool
 from .file import file_handler
+from .positions import TradeDataHandler
 from .objects.data import TradeData
 
 
 class Simulator:
-    simulate_amount = np.iinfo(np.int64).max
+    def __init__(self, account_name: str) -> None:
+        self.order_tool = OrderTool(account_name)
+        self.simulate_amount = np.iinfo(np.int64).max
 
     def get_table(self, market='Stocks'):
         table = SecurityInfoStocks if market == 'Stocks' else SecurityInfoFutures
@@ -32,7 +38,7 @@ class Simulator:
         df['account_id'] = 'simulate'
         return df
 
-    def monitor_list_to_df(self, account: str, data: dict, market='Stocks'):
+    def monitor_list_to_df(self, account: str, market='Stocks'):
         '''Convert stocks/futures monitor list to dataframe'''
 
         if market == 'Stocks':
@@ -108,3 +114,41 @@ class Simulator:
 
         df = self.monitor_list_to_df(env.ACCOUNT_NAME, market=market)
         self.update_securityInfo(env.ACCOUNT_NAME, df, market)
+
+    def remove_from_info(self, target: str, account: str, market='Stocks'):
+        if db.HAS_DB:
+            table = self.get_table(market)
+            db.delete(
+                table,
+                table.code == target,
+                table.account == account
+            )
+
+    def update_position(self, order: namedtuple, market: str, order_data: dict):
+        target = order.target
+
+        # update monitor list position
+        if market == 'Stocks':
+            action = order.action
+            order_data.update({
+                'position': order.pos_target,
+                'bst': datetime.now(),
+                'cost_price': abs(order_data['price']),
+                'yd_quantity': 0,
+            })
+        else:
+            action = order.octype
+            order_data.update({
+                'position': order.pos_target,
+                'bst': datetime.now(),
+                'symbol': target,
+                'cost_price': abs(order_data['price']),
+                'order': {
+                    'quantity': self.order_tool.get_sell_quantity(order, market),
+                    'action': order.action
+                }
+            })
+
+        TradeDataHandler.update_monitor(
+            action, order_data, order.pos_target)
+        TradeDataHandler.update_deal_list(target, action, market)

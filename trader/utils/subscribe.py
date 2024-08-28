@@ -137,10 +137,3 @@ class Subscriber(KBarTool):
         self.unsubscribe_index()
         self.unsubscribe_targets(targetLists, 'tick')
         self.unsubscribe_targets(targetLists, 'bidask')
-
-    def getQuotesNow(self, target: str):
-        if target in TradeData.Quotes.NowIndex:
-            return TradeData.Quotes.NowIndex[target]
-        elif target in TradeData.Quotes.NowTargets:
-            return TradeData.Quotes.NowTargets[target]
-        return -1

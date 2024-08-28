@@ -157,7 +157,10 @@ class WatchListTool:
                 saveEmpty=True
             )
 
-    def check_is_empty(self, target, market='Stocks'):
+
+class TradeDataHandler:
+    @staticmethod
+    def check_is_empty(target, market='Stocks'):
         if market == 'Stocks':
             quantity = TradeData.Stocks.Monitor[target]['quantity']
             position = TradeData.Stocks.Monitor[target]['position']
@@ -170,7 +173,8 @@ class WatchListTool:
             f'[Monitor List]Check|{market}|{target}|{is_empty}|quantity: {quantity}; position: {position}|')
         return is_empty
 
-    def reset_monitor_list(self, target: str, market='Stocks', day_trade=False):
+    @staticmethod
+    def reset_monitor(target: str, market='Stocks', day_trade=False):
         if market == 'Stocks':
             TradeData.Stocks.Monitor.pop(target, None)
             if day_trade:
@@ -182,7 +186,8 @@ class WatchListTool:
                 logging.debug(f'[Monitor List]Reset|Futures|{target}|')
                 TradeData.Futures.Monitor[target] = None
 
-    def update_deal_list(self, target: str, action_type: str, market='Stocks'):
+    @staticmethod
+    def update_deal_list(target: str, action_type: str, market='Stocks'):
         '''更新下單暫存清單'''
 
         logging.debug(f'[Monitor List]{action_type}|{market}|{target}|')
@@ -205,7 +210,8 @@ class WatchListTool:
             if action_type == 'Cancel' and target in TradeData.Futures.Opened:
                 TradeData.Futures.Opened.remove(target)
 
-    def update_position_quantity(self, action: str, data: dict, position: float = 100):
+    @staticmethod
+    def update_monitor(action: str, data: dict, position: float = 100):
         '''更新監控庫存(成交回報)'''
         target = data['code']
         if action in ['Buy', 'Sell']:
@@ -247,6 +253,14 @@ class WatchListTool:
 
         logging.debug(
             f'[Monitor List]{stage}|{target}|{action}|quantity: {quantity_}; position: {position_}|')
+
+    @staticmethod
+    def getQuotesNow(target: str):
+        if target in TradeData.Quotes.NowIndex:
+            return TradeData.Quotes.NowIndex[target]
+        elif target in TradeData.Quotes.NowTargets:
+            return TradeData.Quotes.NowTargets[target]
+        return -1
 
 
 class FuturesMargin:
