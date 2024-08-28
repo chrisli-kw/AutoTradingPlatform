@@ -983,7 +983,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         text += f"\n【股票策略】{self.env.STRATEGY_STOCK}"
         text += f"\n【期貨策略】{self.env.STRATEGY_FUTURES}"
         text += f"\n【AI版本】Stock-{self.env.STOCK_MODEL_VERSION}; Futures:{self.env.FUTURES_MODEL_VERSION}"
-        text += f"\n【前日行情】Put/Call: {self.StrategySet.pc_ratio}"
         text += f"\n【數據用量】{usage}MB"
         notifier.post(text, msgType='Monitor')
 
