@@ -11,18 +11,19 @@ from trader.tasker import Tasks
 
 def parse_args():
     """
-    執行指令:$ python run.py -TASK auto_trader -ACCT account_name
+    Command: $ python run.py -TASK auto_trader -ACCT account_name
 
-    參數說明:
-    1. task(執行的目標程式): auto_trader, account_info, update_and_select_stock
-    2. account(代號): 若 task == 'auto_trader', 需指定要執行的帳戶代號
-
+    Parameters:
+    1. task: The name of tasks. 
+       EX: auto_trader, account_info, update_and_select_stock
+    2. account: An account name is required if task == 'auto_trader'
     """
+
     parser = ArgumentParser()
     parser.add_argument(
-        '--task', '-TASK', type=str, default='auto_trader', help='執行的目標程式')
+        '--task', '-TASK', type=str, default='auto_trader', help='Target task name')
     parser.add_argument(
-        '--account', '-ACCT', type=str, default='chrisli_1', help='代號')
+        '--account', '-ACCT', type=str, default='chrisli_1', help='account name')
     args = parser.parse_args()
     return (args)
 
@@ -40,9 +41,14 @@ logging.basicConfig(
     format='%(asctime)s.%(msecs)03d|%(levelname)s: %(message)s',
     datefmt='%Y-%m-%d %a %H:%M:%S',
     handlers=[
-            RotatingFileHandler(
-                f'./logs/{filename}.log', 'a', maxBytes=1*1024*1024, backupCount=5, encoding='utf-8'),
-            logging.StreamHandler()
+        RotatingFileHandler(
+            f'./logs/{filename}.log',
+            'a',
+            maxBytes=1*1024*1024,
+            backupCount=5,
+            encoding='utf-8'
+        ),
+        logging.StreamHandler()
     ]
 )
 logging.info('—'*100)
@@ -51,16 +57,19 @@ logging.info(f'Current trader version is {ver}')
 if __name__ == "__main__":
     date = pd.to_datetime(TODAY_STR)
     if task in [
-        'account_info', 'update_and_select_stock',
-        'select_stock', 'crawl_html',
-        'auto_trader', 'subscribe'
+        'account_info',
+        'auto_trader',
+        'crawl_html',
+        'select_stock',
+        'subscribe',
+        'update_and_select_stock'
     ] and date in holidays:
         logging.warning(f'{holidays[date]}不開盤')
     elif task in Tasks:
         functions = Tasks[task]
         for func in functions:
             if func.__name__ in ['runAutoTrader', 'runCrawlStockData']:
-                func(account)
+                func(account=account)
             else:
                 func()
     else:

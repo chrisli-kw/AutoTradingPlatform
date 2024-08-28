@@ -4,13 +4,11 @@ from .config import PATH
 from .utils.file import file_handler
 from .utils.select import SelectStock
 from .utils.kbar import TickDataProcesser
-from .utils.notify import Notification
 
 
 __version__ = '1.15.0'
 
 exec = ThreadPoolExecutor(max_workers=5)
-notifier = Notification()
 picker = SelectStock()
 tdp = TickDataProcesser()
 

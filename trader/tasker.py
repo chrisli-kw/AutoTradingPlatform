@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 from concurrent.futures import as_completed
 
-from . import exec, notifier, picker, tdp
+from . import exec, picker, tdp
 from .config import (
     create_api,
     API,
@@ -15,8 +15,10 @@ from .config import (
     ConvertScales
 )
 from .create_env import app
+from .utils import tasker
 from .utils.time import time_tool
 from .utils.crawler import crawler
+from .utils.notify import notifier
 from .utils.file import file_handler
 from .utils.database import redis_tick
 from .utils.objects.env import UserEnv
@@ -30,71 +32,144 @@ except:
     customTasks = {}
 
 
-def runCreateENV():
+@tasker
+def runCreateENV(**kwargs):
     file_handler.Operate.create_folder('./lib')
     file_handler.Operate.create_folder('./lib/envs')
     file_handler.Operate.create_folder('./lib/schedules')
     app.run()
 
 
-def runAccountInfo():
+@tasker
+def runAccountInfo(**kwargs):
     account = AccountInfo()
     df = account.create_info_table()
     tables = {}
 
-    try:
-        logging.debug(f'ACCOUNTS: {ACCOUNTS}')
-        for env in ACCOUNTS:
-            logging.debug(f'Load 【{env}】 config')
-            config = UserEnv(env)
+    logging.debug(f'ACCOUNTS: {ACCOUNTS}')
+    for env in ACCOUNTS:
+        logging.debug(f'Load 【{env}】 config')
+        config = UserEnv(env)
 
-            acct = config.ACCOUNT_NAME
-            account.login_(config)
-            time.sleep(1)
+        acct = config.ACCOUNT_NAME
+        account.login_(config)
+        time.sleep(1)
 
-            row = account.query_all()
-            if row:
-                for i, data in enumerate(row):
-                    if i < 3:
-                        logging.info(f"{data}： {row[data]}")
-                    else:
-                        logging.info(f"{data}： NT$ {'{:,}'.format(row[data])}")
-
-                if hasattr(df, 'sheet_names') and acct in df.sheet_names:
-                    tb = account.update_info(df, row)
+        row = account.query_all()
+        if row:
+            for i, data in enumerate(row):
+                if i < 3:
+                    logging.info(f"{data}： {row[data]}")
                 else:
-                    tb = pd.DataFrame([row])
+                    logging.info(f"{data}： NT$ {'{:,}'.format(row[data])}")
 
-                tables[acct] = tb
-
-                # 推播訊息
-                account_id = API.stock_account.account_id
-                notifier.post_account_info(account_id, row)
-            elif hasattr(df, 'sheet_names') and account.account_name in df.sheet_names:
-                tables[acct] = pd.read_excel(df, sheet_name=env)
+            if hasattr(df, 'sheet_names') and acct in df.sheet_names:
+                tb = account.update_info(df, row)
             else:
-                tables[acct] = account.DEFAULT_TABLE
+                tb = pd.DataFrame([row])
 
-            # 登出
-            time.sleep(5)
-            logging.info(f'API log out: {API.logout()}')
-            time.sleep(10)
+            tables[acct] = tb
 
-        logging.info('Export data')
-        writer = pd.ExcelWriter(
-            f'{PATH}/daily_info/{account.filename}', engine='xlsxwriter')
+            # 推播訊息
+            account_id = API.stock_account.account_id
+            notifier.post_account_info(account_id, row)
+        elif hasattr(df, 'sheet_names') and account.account_name in df.sheet_names:
+            tables[acct] = pd.read_excel(df, sheet_name=env)
+        else:
+            tables[acct] = account.DEFAULT_TABLE
 
-        for sheet in tables:
-            try:
-                tables[sheet].to_excel(writer, index=False, sheet_name=sheet)
-            except:
-                logging.exception('Catch an exception:')
-                tables[sheet].to_excel(sheet+'.csv', index=False)
-        writer.close()
-    except:
-        logging.exception('Catch an exception:')
-        notifier.post('\n【Error】【帳務資訊查詢】發生異常', msgType='Tasker')
-        API.logout()
+        # 登出
+        time.sleep(5)
+        logging.info(f'API log out: {API.logout()}')
+        time.sleep(10)
+
+    logging.info('Export data')
+    writer = pd.ExcelWriter(
+        f'{PATH}/daily_info/{account.filename}', engine='xlsxwriter')
+
+    for sheet in tables:
+        try:
+            tables[sheet].to_excel(writer, index=False, sheet_name=sheet)
+        except:
+            logging.exception('Catch an exception:')
+            tables[sheet].to_excel(sheet+'.csv', index=False)
+    writer.close()
+
+
+@tasker
+def runSelectStock(**kwargs):
+    df = picker.pick(3, 1.8, 3)
+    df = picker.melt_table(df)
+    tb = df[df.Time == TODAY_STR].reset_index(drop=True)
+    picker.export(tb)
+    notifier.post_stock_selection(tb)
+
+
+@tasker
+def runCrawlPutCallRatio(**kwargs):
+    df_pcr_new = crawler.FromHTML.PutCallRatio()
+    crawler.FromHTML.export_put_call_ratio(df_pcr_new)
+
+
+@tasker
+def runCrawlExDividendList(**kwargs):
+    dividends = crawler.FromHTML.ex_dividend_list()
+    crawler.FromHTML.export_ex_dividend_list(dividends)
+
+
+@tasker
+def runCrawlFuturesTickData(date=TODAY_STR, **kwargs):
+    crawler.FromHTML.get_FuturesTickData(date)
+
+    # 轉換&更新期貨逐筆成交資料
+    df = tdp.convert_daily_tick(date, '1T')
+    crawler.FromHTML.export_futures_kbar(df)
+
+
+@tasker
+def runCrawlIndexMargin(**kwargs):
+    df = crawler.FromHTML.get_IndexMargin()
+    file_handler.Process.save_table(df, './lib/indexMarging.csv')
+
+
+@tasker
+def runShioajiSubscriber(**kwargs):
+    # TODO: 讀取要盤中選股的股票池
+    df = file_handler.Process.read_table(f'{PATH}/selections/stock_list.xlsx')
+    codes = df[df.exchange.isin(['TSE', 'OTC'])].code.astype(str).values
+
+    N = 200
+    futures = []
+    for i, user in enumerate(ACCOUNTS):
+        targets = codes[N*i:N*(i+1)]
+        future = exec.submit(thread_subscribe, user, targets)
+        futures.append(future)
+
+    for future in as_completed(futures):
+        logging.info(future.result())
+
+
+@tasker
+def runSimulationChecker(**kwargs):
+    for account in ACCOUNTS:
+        config = UserEnv(account)
+
+        if config.MODE == 'Simulation':
+            se = StrategyExecutor(account)
+
+            # check stock pool size
+            watchlist = se.watchlist[se.watchlist.market == 'Stocks']
+            stocks = se.get_securityInfo('Stocks')
+            is_same_shape = watchlist.shape[0] == stocks.shape[0]
+            if not is_same_shape:
+                text = f'\n【{account} 庫存不一致】'
+                text += f'\nSize: watchlist {watchlist.shape[0]}; stocks: {stocks.shape[0]}'
+                text += f'\nwatchlist day start: {watchlist.buyday.min()}'
+                text += f'\nwatchlist day end: {watchlist.buyday.max()}'
+                text += f'\nwatchlist - stocks: {set(watchlist.code) - set(stocks.code)}'
+                text += f'\nstocks - watchlist: {set(stocks.code) - set(watchlist.code)}'
+
+                notifier.post(text, msgType='Monitor')
 
 
 def runAutoTrader(account: str):
@@ -169,70 +244,6 @@ def runCrawlStockData(account: str, start=None, end=None):
         logging.info(f'API log out: {API.logout()}')
 
 
-def runSelectStock():
-    try:
-        df = picker.pick(3, 1.8, 3)
-        df = picker.melt_table(df)
-        tb = df[df.Time == TODAY_STR].reset_index(drop=True)
-        picker.export(tb)
-        notifier.post_stock_selection(tb)
-
-    except FileNotFoundError as e:
-        logging.warning(f'{e} No stock is selected.')
-    except KeyboardInterrupt:
-        notifier.post(f"\n【Interrupt】【選股程式】已手動關閉", msgType='Tasker')
-    except:
-        logging.exception('Catch an exception:')
-        notifier.post(f"\n【Error】【選股程式】選股發生異常", msgType='Tasker')
-
-
-def runCrawlPutCallRatio():
-    try:
-        df_pcr_new = crawler.FromHTML.PutCallRatio()
-        crawler.FromHTML.export_put_call_ratio(df_pcr_new)
-    except KeyboardInterrupt:
-        notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
-    except:
-        logging.exception('Catch an exception:')
-        notifier.post(f"\n【Error】【爬蟲程式】PutCallRatio發生異常", msgType='Tasker')
-
-
-def runCrawlExDividendList():
-    try:
-        dividends = crawler.FromHTML.ex_dividend_list()
-        crawler.FromHTML.export_ex_dividend_list(dividends)
-    except KeyboardInterrupt:
-        notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
-    except:
-        logging.exception('Catch an exception:')
-        notifier.post(f"\n【Error】【爬蟲程式】爬除權息資料發生異常", msgType='Tasker')
-
-
-def runCrawlFuturesTickData(date=TODAY_STR):
-    try:
-        crawler.FromHTML.get_FuturesTickData(date)
-
-        # 轉換&更新期貨逐筆成交資料
-        df = tdp.convert_daily_tick(date, '1T')
-        crawler.FromHTML.export_futures_kbar(df)
-    except KeyboardInterrupt:
-        notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
-    except:
-        logging.exception('Catch an exception:')
-        notifier.post(f"\n【Error】【爬蟲程式】期貨逐筆成交資料發生異常", msgType='Tasker')
-
-
-def runCrawlIndexMargin():
-    try:
-        df = crawler.FromHTML.get_IndexMargin()
-        file_handler.Process.save_table(df, './lib/indexMarging.csv')
-    except KeyboardInterrupt:
-        notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
-    except:
-        logging.exception('Catch an exception:')
-        notifier.post(f"\n【Error】【爬蟲程式】期貨股價指數類保證金發生異常", msgType='Tasker')
-
-
 def thread_subscribe(user: str, targets: list):
     subscriber = Subscriber()
     api = create_api()
@@ -278,52 +289,6 @@ def thread_subscribe(user: str, targets: list):
         logging.info(f'{datetime.now()} is log-out: {api.logout()}')
         time.sleep(10)
     return "Task completed"
-
-
-def runShioajiSubscriber():
-    # TODO: 讀取要盤中選股的股票池
-    df = file_handler.Process.read_table(f'{PATH}/selections/stock_list.xlsx')
-    codes = df[df.exchange.isin(['TSE', 'OTC'])].code.astype(str).values
-
-    N = 200
-    futures = []
-    for i, user in enumerate(ACCOUNTS):
-        targets = codes[N*i:N*(i+1)]
-        future = exec.submit(thread_subscribe, user, targets)
-        futures.append(future)
-
-    for future in as_completed(futures):
-        logging.info(future.result())
-
-
-def runSimulationChecker():
-    try:
-        for account in ACCOUNTS:
-            config = UserEnv(account)
-
-            if config.MODE == 'Simulation':
-                se = StrategyExecutor(account)
-
-                # check stock pool size
-                watchlist = se.watchlist[se.watchlist.market == 'Stocks']
-                stocks = se.get_securityInfo('Stocks')
-                is_same_shape = watchlist.shape[0] == stocks.shape[0]
-                if not is_same_shape:
-                    text = f'\n【{account} 庫存不一致】'
-                    text += f'\nSize: watchlist {watchlist.shape[0]}; stocks: {stocks.shape[0]}'
-                    text += f'\nwatchlist day start: {watchlist.buyday.min()}'
-                    text += f'\nwatchlist day end: {watchlist.buyday.max()}'
-                    text += f'\nwatchlist - stocks: {set(watchlist.code) - set(stocks.code)}'
-                    text += f'\nstocks - watchlist: {set(stocks.code) - set(watchlist.code)}'
-
-                    notifier.post(text, msgType='Monitor')
-
-    except FileNotFoundError as e:
-        logging.warning(e)
-        notifier.post(f'\n{e}', msgType='Tasker')
-    except:
-        logging.exception('Catch an exception:')
-        notifier.post('\n【Error】【模擬帳戶檢查】發生異常', msgType='Tasker')
 
 
 Tasks = {

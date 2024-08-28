@@ -181,3 +181,6 @@ class Notification:
 
         text = f"\n【本日選股清單】{text}"
         self.post(text, msgType='StockSelect')
+
+
+notifier = Notification()

@@ -6,7 +6,7 @@ from shioaji import constant
 from collections import namedtuple
 from datetime import datetime, timedelta
 
-from . import __version__, notifier, picker
+from . import __version__, picker
 from .config import (
     API,
     PATH,
@@ -21,6 +21,7 @@ from .utils.objects.data import TradeData
 from .utils.orders import OrderTool
 from .utils.time import time_tool
 from .utils.crawler import crawler
+from .utils.notify import notifier
 from .utils.file import file_handler
 from .utils.objects.env import UserEnv
 from .utils.accounts import AccountInfo
@@ -28,7 +29,6 @@ from .utils.subscribe import Subscriber
 from .utils.simulation import Simulator
 from .utils.positions import WatchListTool, TradeDataHandler
 from .utils.callback import CallbackHandler
-from .utils.database import db
 try:
     from .scripts.StrategySet import StrategySet as StrategySets
 except:
