@@ -197,27 +197,14 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
 
         elif stat == constant.OrderState.FuturesOrder:
             notifier.post_fOrder(stat, msg)
+            msg = CallbackHandler().update_futures_msg(msg)
 
-            symbol = CallbackHandler.fut_symbol(msg)
-            market = 'Futures' if msg['contract']['option_right'] == 'Future' else 'Options'
-            if symbol not in TradeData.Quotes.NowTargets:
-                for k in TradeData.Quotes.NowTargets:
-                    if symbol in k:
-                        symbol = k
             order = msg['order']
-            price = order['price']
-            if price == 0:
-                price = TradeDataHandler.getQuotesNow(symbol)['price']
-            msg.update({
-                'symbol': symbol,
-                'code': symbol,
-                'cost_price': price,
-                'bst': datetime.now(),
-                'position': 100
-            })
-
             if order['account']['account_id'] == self.account_id_futopt:
+                symbol = CallbackHandler.fut_symbol(msg)
                 operation = msg['operation']
+                market = 'Futures' if msg['contract']['option_right'] == 'Future' else 'Options'
+
                 if self.is_new_order(operation):
                     TradeDataHandler.update_deal_list(
                         symbol, order['oc_type'], market)

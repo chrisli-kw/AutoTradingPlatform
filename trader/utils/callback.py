@@ -4,6 +4,7 @@ from datetime import datetime
 
 from ..config import API
 from .objects.data import TradeData
+from .positions import TradeDataHandler
 
 
 class CallbackHandler:
@@ -29,9 +30,28 @@ class CallbackHandler:
             msg['quantity'] *= 1000
         return msg
 
+    def update_futures_msg(self, msg: dict):
+        symbol = self.fut_symbol(msg)
+        price = msg['order']['price']
+        if price == 0:
+            price = TradeDataHandler.getQuotesNow(symbol)['price']
+        msg.update({
+            'symbol': symbol,
+            'code': symbol,
+            'cost_price': price,
+            'bst': datetime.now(),
+            'position': 100
+        })
+        return msg
+
     @staticmethod
     def fut_symbol(msg: dict):
-        return msg['contract']['code'] + msg['contract']['delivery_month']
+        symbol = msg['contract']['code'] + msg['contract']['delivery_month']
+        if symbol not in TradeData.Quotes.NowTargets:
+            for k in TradeData.Quotes.NowTargets:
+                if symbol in k:
+                    symbol = k
+        return symbol
 
     @staticmethod
     def events(resp_code: int, event_code: int, info: str, event: str, env):
