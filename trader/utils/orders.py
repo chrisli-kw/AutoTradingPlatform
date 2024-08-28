@@ -101,7 +101,7 @@ class OrderTool(FuturesMargin):
             price = 0
 
         if price == 0:
-            price = TradeDataHandler.getQuotesNow(target)
+            price = TradeDataHandler.getQuotesNow(target)['price']
 
         sign = self.sign_(action if is_stock else op_type)
 
