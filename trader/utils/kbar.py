@@ -17,8 +17,9 @@ from ..config import (
 )
 from ..indicators.signals import TechnicalSignals
 from . import get_contract, concat_df
-from .time import TimeTool
-from .file import FileHandler
+from .time import time_tool
+from .objects.data import TradeData
+from .. import file_handler
 try:
     from ..scripts.features import KBarFeatureTool
 except:
@@ -26,7 +27,7 @@ except:
     KBarFeatureTool = None
 
 
-class KBarTool(TechnicalSignals, TimeTool, FileHandler):
+class KBarTool(TechnicalSignals):
     def __init__(self, kbar_start_day=''):
         self.set_kbar_scripts(KBarFeatureTool)
         self.daysdata = self.__set_daysdata(kbar_start_day)
@@ -39,10 +40,6 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             'Volume': 'sum',
             'Amount': 'sum'
         }
-        self.kbar_columns = [
-            'name', 'Time',
-            'Open', 'High', 'Low', 'Close', 'Volume', 'Amount'
-        ]
         self.featureFuncs = {
             '1T': self.add_K1min_feature,
             '2T': self.add_K2min_feature,
@@ -52,9 +49,7 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             '60T': self.add_K60min_feature,
             '1D': self.add_KDay_feature,
         }
-        self.KBars = {
-            freq: pd.DataFrame(columns=self.kbar_columns) for freq in self.featureFuncs
-        }
+
         self.is_kbar_1t_updated = {
             '2T': False,
             '5T': False,
@@ -169,22 +164,23 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
         now = datetime.now()
         ndays = daysdata if daysdata else self.daysdata
         for stockid in stockids:
-            tb = self.tbKBar(stockid, self._strf_timedelta(TODAY, ndays))
+            td = time_tool._strf_timedelta(TODAY, ndays)
+            tb = self.tbKBar(stockid, td)
             for scale in self.featureFuncs:
                 kbar = self.convert_kbar(tb, scale)
                 if scale == '1D':
                     kbar = kbar[kbar.Time.dt.date.astype(str) != TODAY_STR]
                 else:
                     scale_ = self._scale_converter(scale)
-                    n = self.count_n_kbars(TimeStartStock, now, scale_)
+                    n = time_tool.count_n_kbars(TimeStartStock, now, scale_)
                     time_ = TimeStartStock + timedelta(minutes=scale_*n)
                     kbar = kbar[kbar.Time < time_]
 
-                self.KBars[scale] = self.concatKBars(self.KBars[scale], kbar)
+                TradeData.KBars.Freq[scale] = self.concatKBars(scale, kbar)
 
-        for scale, kbar in self.KBars.items():
+        for scale, kbar in TradeData.KBars.Freq.items():
             kbar = self.featureFuncs[scale](kbar)
-            self.KBars[scale] = kbar
+            TradeData.KBars.Freq[scale] = kbar
 
     def convert_kbar(self, tb: pd.DataFrame, scale='60T'):
         '''將1分K轉換成其他週期K線資料'''
@@ -211,39 +207,37 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
                     df.loc[has_dividend, col] += _dividends
         return df
 
-    def tick_to_df_targets(self, quotes):
+    def tick_to_df_targets(self, target: str):
         '''將個股tick資料轉為K棒'''
 
-        q_all = quotes.AllTargets
-        q_now = quotes.NowTargets
+        q_all = TradeData.Quotes.AllTargets[target]
+        q_now = TradeData.Quotes.NowTargets
 
         if not q_all:
             return pd.DataFrame()
 
-        for target, values in q_all.items():
-            if None in values:
-                q_all[target].update({
-                    'Open': q_now[target]['price'],
-                    'High': q_now[target]['price'],
-                    'Low': q_now[target]['price'],
-                    'Close': q_now[target]['price']
-                })
+        if None in q_all.values():
+            q_all[target].update({
+                'Open': q_now[target]['price'],
+                'High': q_now[target]['price'],
+                'Low': q_now[target]['price'],
+                'Close': q_now[target]['price']
+            })
 
-        tb = pd.DataFrame(q_all).T.reset_index()
-        tb = tb.rename(columns={'index': 'name'}).dropna()
-
-        now = datetime.now()
-        now = now.replace(microsecond=0)
+        now = datetime.now().replace(microsecond=0)
+        tb = pd.DataFrame([q_all])
         tb['Time'] = pd.to_datetime(now)
+        tb['name'] = target
 
         if not tb.shape[0] or tb.shape[1] == 1:
             return pd.DataFrame()
 
-        return tb[self.kbar_columns]
+        return tb[TradeData.KBars.kbar_columns]
 
-    def tick_to_df_index(self, quotes: list):
+    def tick_to_df_index(self, target: str):
         '''將指數tick資料轉為K棒'''
 
+        quotes = TradeData.Quotes.AllIndex[target]
         if not quotes:
             return pd.DataFrame()
 
@@ -258,33 +252,35 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             tb['Close'] = tb.Close.values[-1]
             tb.Volume = tb.Volume.sum()
             tb['Amount'] = tb.Amount.sum()
-            tb = tb[self.kbar_columns]
+            tb = tb[TradeData.KBars.kbar_columns]
             return tb.drop_duplicates(['name', 'Time'])
         except:
             return pd.DataFrame()
 
-    def concatKBars(self, df1: pd.DataFrame, df2: pd.DataFrame):
+    def concatKBars(self, freq: str, df2: pd.DataFrame):
         '''合併K棒資料表'''
+        df1 = TradeData.KBars.Freq[freq]
         return concat_df(df1, df2, sort_by=['name', 'Time'], reset_index=True)
 
     def updateKBars(self, scale: str):
         '''檢查並更新K棒資料表'''
 
         _scale = self._scale_converter(scale)
-        now = self.round_time(datetime.now())
+        now = time_tool.round_time(datetime.now())
         t1 = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
         t2 = now - timedelta(minutes=_scale - .5)
-        tb = self.KBars['1T'].tail(_scale)[self.kbar_columns].copy()
+        tb = TradeData.KBars.Freq['1T'].tail(
+            _scale)[TradeData.KBars.kbar_columns].copy()
 
         if (
             not self.is_kbar_1t_updated[scale] or
-            not self.KBars[scale][self.KBars[scale].Time >= t2].empty or
+            not TradeData.KBars.Freq[scale][TradeData.KBars.Freq[scale].Time >= t2].empty or
             tb.isnull().values.any()
         ):
             return
 
         tb = tb[(tb.Time >= t2) & (tb.Time < t1)]
-        tb.Time = tb.Time.astype(str).apply(self.round_time)
+        tb.Time = tb.Time.astype(str).apply(time_tool.round_time)
         if tb.shape[0]:
             logging.debug(
                 f'Update {scale} kbar data| from {tb.Time.min()} to {tb.Time.max()}')
@@ -293,40 +289,68 @@ class KBarTool(TechnicalSignals, TimeTool, FileHandler):
             for col in KbarFeatures[scale]:
                 tb[col] = None
 
-            kbar = self.concatKBars(self.KBars[scale], tb)
-            self.KBars[scale] = self.featureFuncs[scale](kbar)
+            kbar = self.concatKBars(scale, tb)
+            TradeData.KBars.Freq[scale] = self.featureFuncs[scale](kbar)
             self.is_kbar_1t_updated[scale] = False
 
-    def _update_K1(self, quotes, quote_type='Securities'):
+    def _update_K1(self, target, quote_type='Securities'):
         '''每隔1分鐘更新1分K'''
 
         now = datetime.now()
         if quote_type == 'Index':
-            if TimeStartStock <= now <= TimeEndStock:
-                for i in quotes.AllIndex:
-                    tb = self.tick_to_df_index(quotes.AllIndex[i])
-                    self.KBars['1T'] = self.concatKBars(self.KBars['1T'], tb)
+            # if TimeStartStock <= now <= TimeEndStock:
+            df = self.tick_to_df_index(target)
         else:
-            df = self.tick_to_df_targets(quotes)
+            df = self.tick_to_df_targets(target)
             # df = self.revert_dividend_price(df, dividends) # TODO
-            self.KBars['1T'] = self.concatKBars(self.KBars['1T'], df)
+        df = self.concatKBars('1T', df)
+        TradeData.KBars.Freq['1T'] = self.featureFuncs['1T'](df)
 
-        self.KBars['1T'] = self.featureFuncs['1T'](self.KBars['1T'])
-
-        now = self.round_time(now)
+        now = time_tool.round_time(now)
         for freq in [2, 5, 15, 30, 60]:
             if now.minute % freq == 0:
                 self.is_kbar_1t_updated[f'{freq}T'] = True
 
 
-class TickDataProcesser(TimeTool, FileHandler):
+class TickDataProcesser:
     '''轉換期貨逐筆交易'''
+
+    def filter_file_dates(self, market: str, **kwargs):
+        '''
+        取得逐筆交易明細表的日期清單。以year為主，取得該年度的資料日期，可另外指定要合併的區間
+        '''
+
+        dir_path = f'{PATH}/ticks/{market.lower()}'
+        files = file_handler.Operate.list_files(dir_path, pattern='.csv')
+
+        # Filter files by time interval
+        start = kwargs.get('start')
+        if start:
+            if not isinstance(start, pd.Timestamp):
+                start = pd.to_datetime(start)
+        else:
+            start = pd.to_datetime('1970-01-01')
+
+        end = kwargs.get('end')
+        if end:
+            if not isinstance(end, pd.Timestamp):
+                end = pd.to_datetime(end)
+        else:
+            end = TODAY
+
+        dates = []
+        for f in files:
+            date = f.split('Daily_')[-1][:-4]
+            if start <= datetime(*(int(d) for d in date.split('_')[-3:])) <= end:
+                dates.append(date.replace('Daily_', '').replace('_', '-'))
+
+        return dates
 
     def convert_daily_tick(self, date: str, scale: str):
         ymd = date.split('-')
         m = f'Daily_{ymd[0]}_{ymd[1]}'
         folder = f'{PATH}/ticks/futures/{ymd[0]}/{m}'
-        df = self.read_table(f'{folder}/{m}_{ymd[2]}.csv')
+        df = file_handler.Process.read_table(f'{folder}/{m}_{ymd[2]}.csv')
         if df.shape[0]:
             df = self.preprocess_futures_tick(df)
             df = self.tick_2_kbar(df, scale, period='all')
@@ -414,7 +438,7 @@ class TickDataProcesser(TimeTool, FileHandler):
 
         # 留下近月交割 & 非時間價差交易
         df['due'] = df.Time.apply(
-            lambda x: self.GetDueMonth(x, is_backtest=True))
+            lambda x: time_tool.GetDueMonth(x, is_backtest=True))
         df = df[
             (df.Simtrade == False) &
             (df.DueMonthOld == df.DueMonthNew) &

@@ -1,37 +1,166 @@
 import time
 import logging
 import pandas as pd
+from datetime import datetime
 from collections import namedtuple
 
-from ..config import API, PATH
+from ..config import API, PATH, FEE_RATE
 from . import concat_df
-from .file import FileHandler
+from .objects.data import TradeData
+from .file import file_handler
+from .positions import FuturesMargin, TradeDataHandler
 from .database import db
 from .database.tables import TradingStatement
 
 
-class OrderTool(FileHandler):
-    OrderInfo = namedtuple(
-        typename="OrderInfo",
-        field_names=[
-            'action_type',
-            'action', 'target', 'quantity',
-            'order_cond', 'octype', 'pos_target',
-            'pos_balance', 'daytrade_short', 'reason'
-        ],
-        defaults=['', '', '', 0, '', '', 0, 0, False, '']
-    )
-    MsgOrder = namedtuple(
-        typename='MsgOrder',
-        field_names=['operation', 'order', 'status', 'contract']
-    )
-    OrderTable = pd.DataFrame(columns=[
-        'Time', 'market', 'code', 'action',
-        'price', 'quantity', 'amount',
-        'order_cond', 'order_lot', 'leverage',
-        'op_type', 'account_id', 'msg',
+class OrderTool(FuturesMargin):
+    def __init__(self, account_name: str):
+        super().__init__()
+        self.account_name = account_name
+        self.OrderInfo = namedtuple(
+            typename="OrderInfo",
+            field_names=[
+                'action_type',
+                'action', 'target', 'quantity',
+                'order_cond', 'octype', 'pos_target',
+                'pos_balance', 'daytrade_short', 'reason'
+            ],
+            defaults=['', '', '', 0, '', '', 0, 0, False, '']
+        )
+        self.MsgOrder = namedtuple(
+            typename='MsgOrder',
+            field_names=['operation', 'order', 'status', 'contract']
+        )
+        self.OrderTable = pd.DataFrame(columns=[
+            'Time', 'market', 'code', 'action',
+            'price', 'quantity', 'amount',
+            'order_cond', 'order_lot', 'leverage',
+            'op_type', 'account_id', 'msg',
 
-    ])
+        ])
+
+    @staticmethod
+    def is_new_order(operation: dict):
+        return operation['op_code'] == '00' or operation['op_msg'] == ''
+
+    @staticmethod
+    def is_cancel_order(operation: dict):
+        return operation['op_type'] == 'Cancel'
+
+    @staticmethod
+    def is_insufficient_quota(operation: dict):
+        return operation['op_code'] == '88' and '此證券配額張數不足' in operation['op_msg']
+
+    @staticmethod
+    def sign_(action: str):
+        if action in ['Sell', 'Cover']:
+            return -1
+        return 1
+
+    @staticmethod
+    def get_cost_price(target: str, price: float, order_cond: str):
+        '''取得股票的進場價'''
+
+        if order_cond == 'ShortSelling':
+            return price
+
+        if target in TradeData.Stocks.Info.code.values:
+            cost_price = TradeData.Stocks.Info.set_index(
+                'code').cost_price.to_dict()
+            return cost_price[target]
+        return 0
+
+    def _account_id(self, content, market='Stocks'):
+        is_real_trade = isinstance(content, dict)
+        if is_real_trade:
+            action = content['action'] if is_real_trade else content.action
+            if market == 'Stocks' and action == 'Sell':
+                return content['account_id']
+            return content['account']['account_id']
+        return f'simulate-{self.account_name}'
+
+    def _order_lot(self, content):
+        if isinstance(content, dict):
+            return content.get('order_lot', '')
+        elif content.quantity < 1000:
+            return 'IntradayOdd'
+        return 'Common'
+
+    def generate_data(self, target: str, content, market='Stocks'):
+        is_stock = market == 'Stocks'
+        is_real_trade = isinstance(content, dict)
+        action = content['action'] if is_real_trade else content.action
+
+        if is_real_trade:
+            order_cond = content.get('order_cond', '')
+            op_type = content.get('oc_type', '')
+            price = content.get('price', 0)
+        else:
+            order_cond = content.order_cond
+            op_type = content.octype
+            price = 0
+
+        if price == 0:
+            price = TradeDataHandler.getQuotesNow(target)['price']
+
+        sign = self.sign_(action if is_stock else op_type)
+
+        if is_stock:
+            quantity = self.get_stock_quantity(content, market)
+            amount = self.get_stock_amount(
+                target, price*sign, quantity, order_cond)
+        else:
+            if is_real_trade:
+                quantity = content['quantity']
+            else:
+                quantity = self.get_sell_quantity(content, market)
+            amount = self.get_open_margin(target, quantity)*sign
+
+        order_data = {
+            'Time': datetime.now(),
+            'market': market,
+            'code': target,
+            'action': action,
+            'price': price*sign,
+            'quantity': quantity,
+            'amount': amount,
+            'order_cond': order_cond,
+            'order_lot': self._order_lot(content),
+            'op_type': op_type,
+            'account_id': self._account_id(content, market),
+            'msg': '' if is_real_trade else content.reason
+        }
+        return order_data
+
+    def check_leverage(self, target: str, mode='long'):
+        '''取得個股的融資/融券成數'''
+        if mode in ['long', 'MarginTrading']:
+            return TradeData.Stocks.Leverage.Long.get(target, 0)
+        elif mode in ['short', 'ShortSelling']:
+            return 1 - TradeData.Stocks.Leverage.Short.get(target, 0)
+        return 0
+
+    def get_stock_amount(self, target: str, price: float, quantity: int, mode='long'):
+        '''Calculate the amount of stock orders.'''
+
+        leverage = self.check_leverage(target, mode)
+
+        if price < 0:
+            price = -price
+            cost_price = self.get_cost_price(target, price, mode)
+            return -(price - cost_price*leverage)*quantity*(1 - FEE_RATE)
+
+        fee = max(price*quantity*FEE_RATE, 20)
+        return price*quantity*(1 - leverage) + fee
+
+    def get_stock_quantity(self, content: namedtuple, market='Stocks'):
+        if isinstance(content, dict):
+            quantity = content['quantity']
+            if content['action'] == 'Buy' and content['order_lot'] == 'Common':
+                quantity *= 1000
+        else:
+            quantity = 1000*self.get_sell_quantity(content, market)
+        return quantity
 
     def get_sell_quantity(self, content: namedtuple, market: str = 'Stocks'):
         '''根據庫存, 剩餘部位比例, 賣出比例，反推賣出量(張)'''
@@ -61,12 +190,22 @@ class OrderTool(FileHandler):
             msg = order_result.status.msg
             logging.warning(f'Order not submitted/filled: {msg}')
 
-    def appendOrder(self, order_data: dict):
+    def appendOrder(self, target: str, content, market='Stocks'):
         '''Add new order data to OrderTable'''
+
+        if isinstance(content, dict):
+            order_cond = content.get('order_cond', '')
+        else:
+            order_cond = content.order_cond
+
+        order_data = self.generate_data(target, content, market)
+        order_data['leverage'] = self.check_leverage(target, order_cond)
+
         self.OrderTable = concat_df(
             self.OrderTable,
             pd.DataFrame([order_data])
         )
+        return order_data
 
     def deleteOrder(self, code: str):
         '''Delete order data from OrderTable'''
@@ -95,8 +234,9 @@ class OrderTool(FileHandler):
                 self.OrderTable.op_type.fillna('', inplace=True)
             db.dataframe_to_DB(self.OrderTable, TradingStatement)
         else:
-            statement = self.read_and_concat(filename, self.OrderTable)
-            self.save_table(statement, filename)
+            statement = file_handler.Process.read_and_concat(
+                filename, self.OrderTable)
+            file_handler.Process.save_table(statement, filename)
 
     def read_statement(self, account: str = ''):
         '''Import trading statement'''
@@ -108,7 +248,8 @@ class OrderTool(FileHandler):
             )
         else:
             filename = f"{PATH}/stock_pool/statement_{account.split('-')[-1]}.csv"
-            df = self.read_table(filename, df_default=self.OrderTable)
+            df = file_handler.Process.read_table(
+                filename, df_default=self.OrderTable)
             df = df[df.account_id == account]
             df = df.astype({
                 'price': float,

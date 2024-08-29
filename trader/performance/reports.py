@@ -9,8 +9,8 @@ from plotly.subplots import make_subplots
 from .. import tdp
 from ..config import PATH, TODAY, TODAY_STR, SelectMethods, StrategyNameList
 from ..utils import progress_bar
-from ..utils.time import TimeTool
-from ..utils.file import FileHandler
+from ..utils.time import time_tool
+from ..utils.file import file_handler
 from ..utils.orders import OrderTool
 from ..utils.database import db, KBarTables
 from ..utils.database.tables import SelectedStocks
@@ -28,7 +28,7 @@ class FiguresSet:
     pass
 
 
-class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
+class PerformanceReport(SuplotHandler, OrderTool):
     def __init__(self, account: str, market: str):
         self.account = account
         self.market = market
@@ -135,7 +135,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
         writer.close()
 
     def getSelections(self, statement):
-        start = self.last_business_day(statement.OpenTime.values[0])
+        start = time_tool.last_business_day(statement.OpenTime.values[0])
         if db.HAS_DB:
             df = db.query(
                 SelectedStocks,
@@ -143,7 +143,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
             )
         else:
             dir_path = f'{PATH}/selections/history'
-            df = self.read_tables_in_folder(dir_path)
+            df = file_handler.read_tables_in_folder(dir_path)
         df = df[
             df.Strategy.isin(statement.Strategy) &
             (df.Time >= start)
@@ -167,7 +167,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
             )
         else:
             dir_path = f'{PATH}/KBars/1D'
-            df = self.read_tables_in_folder(dir_path)
+            df = file_handler.read_tables_in_folder(dir_path)
             df = df[
                 (df.Time >= start) &
                 (df.Time <= end) &
@@ -391,7 +391,7 @@ class PerformanceReport(SuplotHandler, OrderTool, TimeTool, FileHandler):
         return fig
 
 
-class BacktestReport(SuplotHandler, FileHandler):
+class BacktestReport(SuplotHandler):
     def __init__(self, backtestScript) -> None:
         self.Figures = FiguresSet
         self.Script = backtestScript
@@ -436,7 +436,7 @@ class BacktestReport(SuplotHandler, FileHandler):
         df['losses'] = (df.profit*(df.profit <= 0)).cumsum()
         return df
 
-    def plot_backtest_result(self, TestResult: object, Kbars: dict, title="Backtest Report"):
+    def plot_backtest_result(self, TestResult: object, KBars: dict, title="Backtest Report"):
         '''將回測結果畫成圖表'''
 
         if TestResult.Statement is None:
@@ -468,7 +468,7 @@ class BacktestReport(SuplotHandler, FileHandler):
         # TSE/OTC candlesticks
         if self.Script.market == 'Stocks':
             for col, (a, b) in enumerate([('1', 'TWSE'), ('101', 'OTC')]):
-                temp = Kbars['1D'].copy()
+                temp = KBars['1D'].copy()
                 temp = temp[temp.name == a].sort_values('Time')
                 temp['name'] = b
                 fig = self.add_candlestick(
@@ -489,11 +489,11 @@ class BacktestReport(SuplotHandler, FileHandler):
                 )
         else:
             fig = self.add_candlestick(
-                fig, Kbars['1D'].copy(), row=4, col=1, plot_volume=True)
+                fig, KBars['1D'].copy(), row=4, col=1, plot_volume=True)
 
         # Put/Call Ratio
-        if 'put_call_ratio' in Kbars:
-            df_pcr = pd.DataFrame(Kbars['put_call_ratio']).T
+        if 'put_call_ratio' in KBars:
+            df_pcr = pd.DataFrame(KBars['put_call_ratio']).T
             df_pcr['pc115'] = 115
             for args in [
                 dict(y='PutCallRatio', name='Put/Call Ratio',
@@ -640,13 +640,13 @@ class BacktestReport(SuplotHandler, FileHandler):
         '''輸出回測圖表'''
 
         folder_path = f'{self.DATAPATH}/回測報告/{TODAY_STR}-{filename}'
-        self.create_folder(folder_path)
+        file_handler.Operate.create_folder(folder_path)
         export_figure(fig.BacktestResult, f'{folder_path}/回測結果.html')
 
         figures = [f for f in fig.__dict__ if 'fig' in f]
         for f in figures:
             export_figure(fig.__dict__[f], f'{folder_path}/{f}.html')
 
-        files = self.listdir(folder_path, pattern='.html')
+        files = file_handler.Operate.listdir(folder_path, pattern='.html')
         for file in files:
             convert_encodings(f'{folder_path}/{file}')

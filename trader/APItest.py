@@ -1,20 +1,20 @@
 import time
-import shioaji as sj
-from dotenv import dotenv_values
+from shioaji import constant
 
-from .config import TODAY
-from .utils.time import TimeTool
+from .config import TODAY, create_api
+from .utils.time import time_tool
+from .utils.objects.env import UserEnv
 
 
-class APITester(TimeTool):
+class APITester:
     '''API串接測試，正式下單前，必須先經過測試，才可開通下單功能'''
 
     def __init__(self):
-        self.api = sj.Shioaji(simulation=True)
+        self.api = create_api(simulation=True)
 
-    def simulation_test(self, API_KEY, SECRET_KEY, acct):
-
-        self.api.login(API_KEY, SECRET_KEY)
+    def simulation_test(self, env):
+        acct = env.ACCOUNT_NAME
+        self.api.login(env.api_key(), env.secret_key())
 
         is_simulate = self.api.simulation
         if is_simulate:
@@ -29,12 +29,12 @@ class APITester(TimeTool):
         stockid = '2603'
         contract = self.api.Contracts.Stocks[stockid]
         order = self.api.Order(
-            action=sj.constant.Action.Buy,
+            action=constant.Action.Buy,
             price=contract.limit_up,
             quantity=1,
-            price_type=sj.constant.StockPriceType.LMT,
-            order_type=sj.constant.OrderType.ROD,
-            order_lot=sj.constant.StockOrderLot.Common,
+            price_type=constant.StockPriceType.LMT,
+            order_type=constant.OrderType.ROD,
+            order_lot=constant.StockOrderLot.Common,
 
             account=self.api.stock_account
         )
@@ -46,15 +46,15 @@ class APITester(TimeTool):
         time.sleep(2)
 
         # 期貨下單測試
-        futuresid = f'MXF{self.GetDueMonth(TODAY)}'
+        futuresid = f'MXF{time_tool.GetDueMonth(TODAY)}'
         contract = self.api.Contracts.Futures.MXF[futuresid]
         order = self.api.Order(
-            action=sj.constant.Action.Buy,
+            action=constant.Action.Buy,
             price=contract.limit_up,
             quantity=1,
-            price_type=sj.constant.FuturesPriceType.LMT,
-            order_type=sj.constant.OrderType.ROD,
-            octype=sj.constant.FuturesOCType.Auto,
+            price_type=constant.FuturesPriceType.LMT,
+            order_type=constant.OrderType.ROD,
+            octype=constant.FuturesOCType.Auto,
             account=self.api.futopt_account,
         )
         print(f'\n[futures order] content: {order}')
@@ -64,10 +64,10 @@ class APITester(TimeTool):
 
         print(f'\nLog out {acct}: {self.api.logout()}\n')
 
-    def verify_test(self, API_KEY, SECRET_KEY, acct):
-        self.api = sj.Shioaji(simulation=False)
-        self.api.login(API_KEY, SECRET_KEY)
-        print(f"Log in to {acct} with real mode")
+    def verify_test(self, env):
+        self.api = create_api(simulation=False)
+        self.api.login(env.api_key(), env.secret_key())
+        print(f"Log in to {env.ACCOUNT_NAME} with real mode")
         time.sleep(10)
 
         accounts = self.api.list_accounts()
@@ -96,15 +96,12 @@ class APITester(TimeTool):
         '''Shioaji 帳號測試'''
 
         for i in range(2):
-            config = dotenv_values(f'./lib/envs/{account}.env')
-            API_KEY = config['API_KEY']
-            SECRET_KEY = config['SECRET_KEY']
-
+            config = UserEnv(account)
             if i == 0:
-                self.simulation_test(API_KEY, SECRET_KEY, account)
-                self.CountDown(720)
+                self.simulation_test(config)
+                time_tool.CountDown(720)
             else:
-                self.verify_test(API_KEY, SECRET_KEY, account)
+                self.verify_test(config)
 
 
 if __name__ == "__main__":

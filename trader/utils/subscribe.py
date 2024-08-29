@@ -6,23 +6,12 @@ from threading import Lock
 from ..config import API
 from . import get_contract
 from .kbar import KBarTool
-
-
-class Quotes:
-    AllIndex = {'TSE001': [], 'OTC101': []}
-    NowIndex = {}
-    AllTargets = {}
-    NowTargets = {}
-    TempKbars = {}
+from .objects.data import TradeData
 
 
 class Subscriber(KBarTool):
     def __init__(self, kbar_start_day=''):
         KBarTool.__init__(self, kbar_start_day)
-
-        # 即時成交資料, 所有成交資料, 下單資料
-        self.BidAsk = {}
-        self.Quotes = Quotes()
         self.lock = Lock()
 
     def _set_target_quote_default(self, targets: list):
@@ -39,27 +28,29 @@ class Subscriber(KBarTool):
                 'Amount': 0
             }
 
-        self.Quotes.AllTargets.update({s: default_values() for s in targets})
+        TradeData.Quotes.AllTargets.update({
+            s: default_values() for s in targets
+        })
 
     def _set_index_quote_default(self):
         '''初始化指數盤中資訊'''
-        self.Quotes.AllIndex = {'TSE001': [], 'OTC101': []}
+        TradeData.Quotes.AllIndex = {'TSE001': [], 'OTC101': []}
 
     def index_v0(self, quote: dict):
         indexes = {'001': 'TSE001', '101': 'OTC101'}
         code = indexes[quote['Code']]
 
-        if code in self.Quotes.NowIndex:
+        if code in TradeData.Quotes.NowIndex:
             t1 = pd.to_datetime(quote['Time'])
-            t2 = pd.to_datetime(self.Quotes.NowIndex[code]['Time'])
+            t2 = pd.to_datetime(TradeData.Quotes.NowIndex[code]['Time'])
 
-            if code in self.Quotes.NowIndex and t1.minute != t2.minute:
+            if code in TradeData.Quotes.NowIndex and t1.minute != t2.minute:
                 with self.lock:
-                    self._update_K1(self.Quotes, quote_type='Index')
-                    self.Quotes.AllIndex[code] = []
+                    self._update_K1(code, quote_type='Index')
+                    TradeData.Quotes.AllIndex[code] = []
 
-        self.Quotes.NowIndex[code] = quote
-        self.Quotes.AllIndex[code].append(quote)
+        TradeData.Quotes.NowIndex[code] = quote
+        TradeData.Quotes.AllIndex[code].append(quote)
 
     def update_quote_v1(self, tick, code=''):
         '''處理即時成交資料'''
@@ -83,15 +74,15 @@ class Subscriber(KBarTool):
         tick_data['price'] = price
 
         if (
-            code in self.Quotes.NowTargets and
-            tick_data['datetime'].minute != self.Quotes.NowTargets[code]['datetime'].minute
+            code in TradeData.Quotes.NowTargets and
+            tick_data['datetime'].minute != TradeData.Quotes.NowTargets[code]['datetime'].minute
         ):
             with self.lock:
-                self._update_K1(self.Quotes)
+                self._update_K1(code)
                 self._set_target_quote_default([code])
 
-        kbar_data = self.Quotes.AllTargets[code].copy()
-        self.Quotes.AllTargets[code] = {
+        kbar_data = TradeData.Quotes.AllTargets[code].copy()
+        TradeData.Quotes.AllTargets[code] = {
             'Open': price if kbar_data['Open'] is None else kbar_data['Open'],
             'High': max(kbar_data['High'], price),
             'Low': min(kbar_data['Low'], price),
@@ -100,7 +91,7 @@ class Subscriber(KBarTool):
             'Amount': kbar_data['Amount'] + tick_data['amount'],
         }
 
-        self.Quotes.NowTargets[code] = tick_data
+        TradeData.Quotes.NowTargets[code] = tick_data
         return tick_data
 
     def subscribe_index(self):
@@ -146,10 +137,3 @@ class Subscriber(KBarTool):
         self.unsubscribe_index()
         self.unsubscribe_targets(targetLists, 'tick')
         self.unsubscribe_targets(targetLists, 'bidask')
-
-    def getQuotesNow(self, target: str):
-        if target in self.Quotes.NowIndex:
-            return self.Quotes.NowIndex[target]
-        elif target in self.Quotes.NowTargets:
-            return self.Quotes.NowTargets[target]
-        return -1

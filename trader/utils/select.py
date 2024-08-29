@@ -4,8 +4,8 @@ import pandas as pd
 from datetime import timedelta
 
 from ..config import PATH, TODAY_STR, TODAY, SelectMethods
-from .time import TimeTool
-from .file import FileHandler
+from .time import time_tool
+from .file import file_handler
 from .crawler import readStockList
 from .database import db, KBarTables
 from .database.tables import SelectedStocks
@@ -21,7 +21,7 @@ except:
     FeaturesSelect = None
 
 
-class SelectStock(TimeTool, FileHandler):
+class SelectStock:
     def __init__(self, scale='1D'):
         self.set_select_scripts(SelectConditions, FeaturesSelect)
         self.scale = scale
@@ -88,7 +88,7 @@ class SelectStock(TimeTool, FileHandler):
             df = db.query(KBarTables[self.scale], condition1, condition2)
         else:
             dir_path = f'{PATH}/Kbars/{self.scale}'
-            df = self.read_tables_in_folder(dir_path, pattern='stocks')
+            df = file_handler.read_tables_in_folder(dir_path, pattern='stocks')
 
         df = df.drop_duplicates(['name', 'Time'], keep='last')
         df = df.sort_values(['name', 'Time'])
@@ -162,19 +162,17 @@ class SelectStock(TimeTool, FileHandler):
         if db.HAS_DB:
             db.dataframe_to_DB(df, SelectedStocks)
         else:
-            self.save_table(df, f'{PATH}/selections/all.csv')
-            self.save_table(
-                df, f'{PATH}/selections/history/{TODAY_STR}-all.csv')
+            file_handler.Process.save_table(df, f'{PATH}/selections/all.csv')
 
     def get_selection_files(self):
         '''取得選股清單'''
 
-        day = self.last_business_day()
+        day = time_tool.last_business_day()
 
         if db.HAS_DB:
             df = db.query(SelectedStocks, SelectedStocks.Time == day)
         else:
-            df = self.read_table(
+            df = file_handler.Process.read_table(
                 filename=f'{PATH}/selections/all.csv',
                 df_default=pd.DataFrame(columns=[
                     'code', 'company_name', 'category', 'Time',

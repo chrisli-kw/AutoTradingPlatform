@@ -9,6 +9,14 @@ class StrategySet(StrategyTool):
     StrategySet is a set of strategy class for AutoTradingPlatform, it 
     inherits the StrategyTool Object for the use of common functions.
 
+    Parameters:
+    * env: User env settings for a single account that can be automatically 
+           set when initializing the StrategyExecutor.
+      -- Example
+      -- from trader.utils.objects.env import UserEnv
+      -- env = UserEnv(account_name='account_name')
+
+
     *****
     The attributes in the __init__ are all necessary, itestablishes the 
     Funcs attribute when the system starts.
@@ -23,8 +31,8 @@ class StrategySet(StrategyTool):
     ===================================================================
     '''
 
-    def __init__(self, **kwargs):
-        StrategyTool.__init__(self, **kwargs)
+    def __init__(self, env, **kwargs):
+        StrategyTool.__init__(self, env)
 
         # customized settings
         self.STRATEGIES = pd.DataFrame(

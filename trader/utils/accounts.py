@@ -1,18 +1,22 @@
 import time
 import logging
+import numpy as np
 import pandas as pd
 import shioaji as sj
 from datetime import datetime
 from shioaji.account import StockAccount
 
-from .. import crawler2
 from ..config import API, PATH, TODAY, TODAY_STR
 from . import concat_df
-from .time import TimeTool
-from .file import FileHandler
+from .time import time_tool
+from .crawler import crawler
+from .file import file_handler
+from .objects import Margin
+from .objects.env import UserEnv
+from .objects.data import TradeData
 
 
-class AccountInfo(TimeTool, FileHandler):
+class AccountInfo:
     def __init__(self):
         self.filename = f'{TODAY.year}_股票帳務資訊.xlsx'
         self.DEFAULT_TABLE = pd.DataFrame(
@@ -36,16 +40,16 @@ class AccountInfo(TimeTool, FileHandler):
                 '結算現值'
             ])
         self.HAS_FUTOPT_ACCOUNT = False
-        self.desposal_margin = 0
-        self.ProfitAccCount = 0  # 權益總值
 
-    def _login(self, API_KEY, SECRET_KEY, account_name):
+    def login_(self, env):
+        self.account_name = env.ACCOUNT_NAME
+
         n = 0
         while n < 5:
             try:
                 API.login(
-                    api_key=API_KEY,
-                    secret_key=SECRET_KEY,
+                    api_key=env.api_key(),
+                    secret_key=env.secret_key(),
                     contracts_timeout=10000
                 )
                 break
@@ -54,7 +58,7 @@ class AccountInfo(TimeTool, FileHandler):
                 n += 1
                 time.sleep(5)
 
-        nth_account = int(account_name[-1])
+        nth_account = int(self.account_name[-1])
         if nth_account > 1:
             accounts = API.list_accounts()
             accounts = [a for a in accounts if isinstance(a, StockAccount)]
@@ -63,13 +67,11 @@ class AccountInfo(TimeTool, FileHandler):
             else:
                 logging.warning('The number of accounts of this ID is 1')
 
-        self.account_name = account_name
-
         if API.futopt_account:
             self.HAS_FUTOPT_ACCOUNT = True
 
         time.sleep(0.05)
-        logging.info(f'【{account_name}】log-in successful!')
+        logging.info(f'【{self.account_name}】log-in successful!')
 
     def _list_settlements(self):
         '''取得交割資訊'''
@@ -94,7 +96,7 @@ class AccountInfo(TimeTool, FileHandler):
             return pd.DataFrame([{o[0]: o[1] for o in objects}])
 
     def create_info_table(self):
-        if self.is_in_dir(self.filename, f'{PATH}/daily_info/'):
+        if file_handler.Operate.is_in_dir(self.filename, f'{PATH}/daily_info/'):
             return pd.ExcelFile(f'{PATH}/daily_info/{self.filename}')
         else:
             return self.DEFAULT_TABLE
@@ -130,31 +132,36 @@ class AccountInfo(TimeTool, FileHandler):
             return stockname.name
         return stockname
 
-    def securityInfo(self):
+    def securityInfo(self, market='Stocks'):
         '''查庫存明細'''
-        while True:
-            try:
-                stocks = API.list_positions(
-                    API.stock_account,
-                    unit=sj.constant.Unit.Share
-                )
-                stocks = self._obj_2_df(stocks)
-                break
-            except:
-                logging.warning('Cannot get the security info, retrying...')
-                time.sleep(1)
-        stocks = stocks.rename(columns={
-            'cond': 'order_cond',
-            'direction': 'action',
-            'price': 'cost_price',
-        })
-        if stocks.shape[0]:
-            stocks.pnl = stocks.pnl.astype(int)  # 未實現損益
-            stocks.order_cond = stocks.order_cond.astype(str)  # 交易別
-            stocks.insert(1, 'name', stocks.code.apply(self.get_stock_name))
-            stocks[['account', 'market']] = [self.account_name, 'Stocks']
-            return stocks
-        return self.get_info_default('Stocks')
+
+        if market == 'Stocks':
+            while True:
+                try:
+                    stocks = API.list_positions(
+                        API.stock_account,
+                        unit=sj.constant.Unit.Share
+                    )
+                    stocks = self._obj_2_df(stocks)
+                    break
+                except:
+                    logging.warning('Cannot get the security info, retrying')
+                    time.sleep(1)
+            stocks = stocks.rename(columns={
+                'cond': 'order_cond',
+                'direction': 'action',
+                'price': 'cost_price',
+            })
+            if stocks.shape[0]:
+                names = stocks.code.apply(self.get_stock_name)
+                stocks.pnl = stocks.pnl.astype(int)  # 未實現損益
+                stocks.order_cond = stocks.order_cond.astype(str)  # 交易別
+                stocks.insert(1, 'name', names)
+                stocks[['account', 'market']] = [self.account_name, 'Stocks']
+                return stocks
+            return TradeData['Stocks'].InfoDefault
+
+        return self.get_openpositions()
 
     def get_profit_loss(self, start: str, end: str):
         '''查詢已實現損益'''
@@ -182,7 +189,7 @@ class AccountInfo(TimeTool, FileHandler):
         i = 0
         while i < 5:
             try:
-                day = self._strf_timedelta(TODAY, i)
+                day = time_tool._strf_timedelta(TODAY, i)
                 if not start:
                     start_ = day
                 if not end:
@@ -248,7 +255,7 @@ class AccountInfo(TimeTool, FileHandler):
             is_leverage = (
                 'MarginTrading' == stocks.order_cond.apply(lambda x: x._value_))
             leverages = [
-                crawler2.get_leverage(s)['融資成數']/100 for s in stocks.code]
+                crawler.FromHTML.Leverage(s)['融資成數']/100 for s in stocks.code]
             return sum(is_leverage*stocks.cost_price*stocks.quantity*leverages)
         return 0
 
@@ -326,25 +333,6 @@ class AccountInfo(TimeTool, FileHandler):
         tb = pd.read_excel(df, sheet_name='dentist_1')
         return concat_df(tb, pd.DataFrame([row]), reset_index=True)
 
-    def get_info_default(self, market='Stocks'):
-        '''Get info default table'''
-
-        if market == 'Stocks':
-            return pd.DataFrame(
-                columns=[
-                    'account', 'market',
-                    'code', 'order_cond', 'action', 'pnl',
-                    'cost_price', 'quantity', 'yd_quantity', 'last_price'
-                ]
-            )
-        return pd.DataFrame(
-            columns=[
-                'account', 'market',
-                'code', 'action', 'quantity', 'cost_price',
-                'last_price', 'pnl'
-            ]
-        )
-
     def get_account_margin(self):
         '''期權保證金資訊'''
 
@@ -357,19 +345,19 @@ class AccountInfo(TimeTool, FileHandler):
                 margin = None
 
             if margin:
-                self.desposal_margin = margin.available_margin
-                self.ProfitAccCount = margin.equity
-                break
+                return margin
 
             time.sleep(1)
             n += 1
+
+        return Margin
 
     def get_openpositions(self):
         '''查看期權帳戶持有部位'''
 
         positions = API.list_positions(API.futopt_account)
         if not positions:
-            return self.get_info_default('Futures')
+            return TradeData['Futures'].InfoDefault
 
         df = self._obj_2_df(positions)
         if df.shape[0]:
@@ -379,7 +367,7 @@ class AccountInfo(TimeTool, FileHandler):
             })
             df[['account', 'market']] = [self.account_name, 'Futures']
             return df
-        return self.get_info_default('Futures')
+        return TradeData['Futures'].InfoDefault
 
     def get_settle_profitloss(self, start_date: str, end_date: str, market='Stocks'):
         '''查詢已實現損益'''
@@ -409,3 +397,103 @@ class AccountInfo(TimeTool, FileHandler):
 
     def dataUsage(self):
         return round(API.usage().bytes/2**20, 2)
+
+
+class AccountHandler(AccountInfo):
+    def __init__(self, account_name: str) -> None:
+        super().__init__()
+
+        self.env = UserEnv(account_name)
+        self.simulation = self.env.MODE == 'Simulation'
+        self.simulate_amount = np.iinfo(np.int64).max
+
+        # Stocks
+        self.total_market_value = 0
+        self.desposal_money = 0
+
+        # Futures
+        self.desposal_margin = 0
+        self.ProfitAccCount = 0  # 權益總值
+
+    def _set_trade_risks(self):
+        '''設定交易風險值: 可交割金額、總市值'''
+
+        df = TradeData.Stocks.Info.copy()
+        cost_value = (df.quantity*df.cost_price).sum()
+        pnl = df.pnl.sum()
+        if self.simulation:
+            account_balance = self.env.INIT_POSITION
+            settle_info = pnl
+        else:
+            account_balance = self.balance()
+            settle_info = self.settle_info(mode='info').iloc[1:, 1].sum()
+
+        self.desposal_money = min(
+            account_balance+settle_info, self.env.POSITION_LIMIT_LONG)
+        self.total_market_value = self.desposal_money + cost_value + pnl
+
+        logging.info(
+            f'[AccountInfo] Desposal amount = {self.desposal_money} (limit: {self.env.POSITION_LIMIT_LONG})')
+
+    def _set_margin_limit(self):
+        '''計算可交割的保證金額，不可超過帳戶可下單的保證金額上限'''
+        if self.simulation:
+            account_balance = 0
+            self.desposal_margin = self.simulate_amount
+            self.ProfitAccCount = self.simulate_amount
+        else:
+            account_balance = self.balance()
+            margin = self.get_account_margin()
+            self.desposal_margin = margin.available_margin
+            self.ProfitAccCount = margin.equity  # 權益總值
+        self.desposal_margin = min(
+            account_balance+self.desposal_margin, self.env.MARGIN_LIMIT)
+        logging.info(
+            f'[AccountInfo] Margin: total={self.ProfitAccCount}; available={self.desposal_margin}; limit={self.env.MARGIN_LIMIT}')
+
+    def _set_leverage(self, stockids: list):
+        '''
+        取得個股融資成數資料，
+        若帳戶設定為不可融資，則全部融資成數為0
+        '''
+
+        df = pd.DataFrame([crawler.FromHTML.Leverage(s) for s in stockids])
+        if df.shape[0]:
+            df.columns = df.columns.str.replace(' ', '')
+            df.loc[df.個股融券信用資格 == 'N', '融券成數'] = 100
+            df.代號 = df.代號.astype(str)
+            df.融資成數 /= 100
+            df.融券成數 /= 100
+
+            if self.env.ORDER_COND1 != 'Cash':
+                TradeData.Stocks.Leverage.Long = df.set_index(
+                    '代號').融資成數.to_dict()
+            else:
+                TradeData.Stocks.Leverage.Long = {code: 0 for code in stockids}
+
+            if self.env.ORDER_COND2 != 'Cash':
+                TradeData.Stocks.Leverage.Short = df.set_index(
+                    '代號').融券成數.to_dict()
+            else:
+                TradeData.Stocks.Leverage.Short = {
+                    code: 1 for code in stockids}
+
+        logging.info(f'Long leverages: {TradeData.Stocks.Leverage.Long}')
+        logging.info(f'Short leverages: {TradeData.Stocks.Leverage.Short}')
+
+    def _set_futures_code_list(self):
+        '''期貨商品代號與代碼對照表'''
+        if self.env.can_futures:
+            logging.debug('Set Futures_Code_List')
+            TradeData.Futures.CodeList.update({
+                f.code: f.symbol for m in API.Contracts.Futures for f in m
+            })
+
+    def activate_ca_(self):
+        logging.info(f'[AccountInfo] Activate {self.env.ACCOUNT_NAME} CA')
+        id = self.env.account_id()
+        API.activate_ca(
+            ca_path=f"./lib/ekey/551/{id}/S/Sinopac.pfx",
+            ca_passwd=self.env.ca_passwd() if self.env.ca_passwd() else id,
+            person_id=id,
+        )

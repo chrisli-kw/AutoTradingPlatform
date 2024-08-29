@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from ..config import API
+from .notify import notifier
 
 
 def reduce_mem_usage(df, verbose=True):
@@ -59,14 +60,17 @@ def create_queue(target_list, crawled_list=[]):
     return (q)
 
 
-def get_contract(target: str):
-    if target[:3] in API.Contracts.Indexs.__dict__:
-        return API.Contracts.Indexs[target[:3]][target]
-    elif target[:3] in API.Contracts.Futures.__dict__:
-        return API.Contracts.Futures[target[:3]][target]
-    elif target[:3] in API.Contracts.Options.__dict__:
-        return API.Contracts.Options[target[:3]][target]
-    return API.Contracts.Stocks[target]
+def get_contract(target: str, api=None):
+    if api is None:
+        api = API
+
+    if target[:3] in api.Contracts.Indexs.__dict__:
+        return api.Contracts.Indexs[target[:3]][target]
+    elif target[:3] in api.Contracts.Futures.__dict__:
+        return api.Contracts.Futures[target[:3]][target]
+    elif target[:3] in api.Contracts.Options.__dict__:
+        return api.Contracts.Options[target[:3]][target]
+    return api.Contracts.Stocks[target]
 
 
 def concat_df(df1: pd.DataFrame, df2: pd.DataFrame, sort_by=[], reset_index=False):
@@ -83,3 +87,18 @@ def concat_df(df1: pd.DataFrame, df2: pd.DataFrame, sort_by=[], reset_index=Fals
     if reset_index:
         df = df.reset_index(drop=True)
     return df
+
+
+def tasker(func):
+    def wrapper(**kwargs):
+        name = func.__name__
+        try:
+            func(**kwargs)
+        except KeyboardInterrupt:
+            notifier.post(f"\n【Interrupt】【{name}】已手動關閉", msgType='Tasker')
+        except:
+            logging.exception('Catch an exception:')
+            notifier.post(f"\n【Error】【{name}】發生異常", msgType='Tasker')
+        finally:
+            logging.info(f'API log out: {API.logout()}')
+    return wrapper
