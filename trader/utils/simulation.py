@@ -1,5 +1,4 @@
 import logging
-import numpy as np
 import pandas as pd
 from datetime import datetime
 from collections import namedtuple
@@ -16,7 +15,6 @@ from .objects.data import TradeData
 class Simulator:
     def __init__(self, account_name: str) -> None:
         self.order_tool = OrderTool(account_name)
-        self.simulate_amount = np.iinfo(np.int64).max
 
     def get_table(self, market='Stocks'):
         table = SecurityInfoStocks if market == 'Stocks' else SecurityInfoFutures

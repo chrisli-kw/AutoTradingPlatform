@@ -15,7 +15,7 @@ from .config import (
     ConvertScales
 )
 from .create_env import app
-from .utils import tasker
+from .utils import tasker, get_contract
 from .utils.time import time_tool
 from .utils.crawler import crawler
 from .utils.notify import notifier
@@ -24,6 +24,7 @@ from .utils.database import redis_tick
 from .utils.objects.env import UserEnv
 from .utils.subscribe import Subscriber
 from .utils.accounts import AccountInfo
+from .utils.callback import CallbackHandler
 from .executor import StrategyExecutor
 
 try:
@@ -175,7 +176,7 @@ def runSimulationChecker(**kwargs):
 def runAutoTrader(account: str):
     try:
         se = StrategyExecutor(account)
-        se.login_and_activate()
+        se.init_account()
         se.run()
     except KeyboardInterrupt:
         notifier.post(
@@ -245,16 +246,13 @@ def runCrawlStockData(account: str, start=None, end=None):
 
 
 def thread_subscribe(user: str, targets: list):
+    config = UserEnv(user)
     subscriber = Subscriber()
     api = create_api()
 
     @api.quote.on_event
     def event_callback(resp_code: int, event_code: int, info: str, event: str):
-        if 'Subscription Not Found' in info:
-            logging.warning(info)
-        else:
-            logging.info(
-                f'Response code: {resp_code} | Event code: {event_code} | info: {info} | Event: {event}')
+        CallbackHandler.events(resp_code, event_code, info, event, config)
 
     @api.on_quote_stk_v1()
     def stk_quote_callback_v1(exchange, tick):
@@ -262,32 +260,21 @@ def thread_subscribe(user: str, targets: list):
             tick_data = subscriber.update_quote_v1(tick)
             redis_tick.to_redis({tick.code: tick_data})
 
-    config = UserEnv(user)
     api.login(config.api_key(), config.secret_key())
     time.sleep(2)
 
     try:
         logging.info('Subscribe targets')
         for t in targets:
-            if t[:3] in api.Contracts.Indexs.__dict__:
-                target = api.Contracts.Indexs[t[:3]][t]
-            elif t[:3] in api.Contracts.Futures.__dict__:
-                target = api.Contracts.Futures[t[:3]][t]
-            elif t[:3] in api.Contracts.Options.__dict__:
-                target = api.Contracts.Options[t[:3]][t]
-            else:
-                target = api.Contracts.Stocks[t]
+            target = get_contract(t, api=api)
             api.quote.subscribe(target, quote_type='tick', version='v1')
 
         logging.info(f'Done subscribe {len(targets)} targets')
-
-        now = datetime.now()
-        time.sleep(max((TimeEndStock - now).total_seconds(), 0))
+        time.sleep(max((TimeEndStock - datetime.now()).total_seconds(), 0))
     except:
         logging.exception('Catch an exception:')
     finally:
-        logging.info(f'{datetime.now()} is log-out: {api.logout()}')
-        time.sleep(10)
+        logging.info(f'{user} log-out: {api.logout()}')
     return "Task completed"
 
 

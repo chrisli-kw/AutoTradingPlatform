@@ -1,7 +1,6 @@
 import ssl
 import time
 import logging
-import pandas as pd
 from shioaji import constant
 from collections import namedtuple
 from datetime import datetime, timedelta
@@ -17,18 +16,17 @@ from .config import (
     TimeTransferFutures
 )
 from .utils import get_contract
-from .utils.objects.data import TradeData
-from .utils.orders import OrderTool
 from .utils.time import time_tool
 from .utils.crawler import crawler
 from .utils.notify import notifier
+from .utils.orders import OrderTool
 from .utils.file import file_handler
-from .utils.objects.env import UserEnv
-from .utils.accounts import AccountInfo
 from .utils.subscribe import Subscriber
 from .utils.simulation import Simulator
-from .utils.positions import WatchListTool, TradeDataHandler
+from .utils.accounts import AccountHandler
 from .utils.callback import CallbackHandler
+from .utils.objects.data import TradeData
+from .utils.positions import WatchListTool, TradeDataHandler
 try:
     from .scripts.StrategySet import StrategySet as StrategySets
 except:
@@ -38,98 +36,23 @@ except:
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
-class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
+class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
     def __init__(self, account_name: str):
-        self.env = UserEnv(account_name)
-
-        super().__init__()
+        super().__init__(account_name)
+        AccountHandler.__init__(self, account_name)
+        WatchListTool.__init__(self, account_name)
+        OrderTool.__init__(self, account_name)
         Subscriber.__init__(self, self.env.KBAR_START_DAYay)
-        OrderTool.__init__(self, self.env.ACCOUNT_NAME)
-        WatchListTool.__init__(self, self.env.ACCOUNT_NAME)
 
-        self.simulation = self.env.MODE == 'Simulation'
-        self.simulator = Simulator(self.env.ACCOUNT_NAME)
+        self.simulator = Simulator(account_name)
         self.StrategySet = StrategySets(self.env)
         self.day_trade_cond = {
             'MarginTrading': 'ShortSelling',
             'ShortSelling': 'MarginTrading',
             'Cash': 'Cash'
         }
-        self.desposal_money = 0
-        self.total_market_value = 0
+
         self.punish_list = []
-
-    def _set_trade_risks(self):
-        '''設定交易風險值: 可交割金額、總市值'''
-
-        df = TradeData.Stocks.Info.copy()
-        cost_value = (df.quantity*df.cost_price).sum()
-        pnl = df.pnl.sum()
-        if self.simulation:
-            account_balance = self.env.INIT_POSITION
-            settle_info = pnl
-        else:
-            account_balance = self.balance()
-            settle_info = self.settle_info(mode='info').iloc[1:, 1].sum()
-
-        self.desposal_money = min(
-            account_balance+settle_info, self.env.POSITION_LIMIT_LONG)
-        self.total_market_value = self.desposal_money + cost_value + pnl
-
-        logging.info(
-            f'Desposal amount = {self.desposal_money} (limit: {self.env.POSITION_LIMIT_LONG})')
-
-    def _set_margin_limit(self):
-        '''計算可交割的保證金額，不可超過帳戶可下單的保證金額上限'''
-        if self.simulation:
-            account_balance = 0
-            self.desposal_margin = self.simulator.simulate_amount
-            self.ProfitAccCount = self.simulator.simulate_amount
-        else:
-            account_balance = self.balance()
-            self.get_account_margin()
-        self.desposal_margin = min(
-            account_balance+self.desposal_margin, self.env.MARGIN_LIMIT)
-        logging.info(
-            f'[AccountInfo] Margin: total={self.ProfitAccCount}; available={self.desposal_margin}; limit={self.env.MARGIN_LIMIT}')
-
-    def _set_leverage(self, stockids: list):
-        '''
-        取得個股融資成數資料，
-        若帳戶設定為不可融資，則全部融資成數為0
-        '''
-
-        df = pd.DataFrame([crawler.FromHTML.Leverage(s) for s in stockids])
-        if df.shape[0]:
-            df.columns = df.columns.str.replace(' ', '')
-            df.loc[df.個股融券信用資格 == 'N', '融券成數'] = 100
-            df.代號 = df.代號.astype(str)
-            df.融資成數 /= 100
-            df.融券成數 /= 100
-
-            if self.env.ORDER_COND1 != 'Cash':
-                TradeData.Stocks.Leverage.Long = df.set_index(
-                    '代號').融資成數.to_dict()
-            else:
-                TradeData.Stocks.Leverage.Long = {code: 0 for code in stockids}
-
-            if self.env.ORDER_COND2 != 'Cash':
-                TradeData.Stocks.Leverage.Short = df.set_index(
-                    '代號').融券成數.to_dict()
-            else:
-                TradeData.Stocks.Leverage.Short = {
-                    code: 1 for code in stockids}
-
-        logging.info(f'Long leverages: {TradeData.Stocks.Leverage.Long}')
-        logging.info(f'Short leverages: {TradeData.Stocks.Leverage.Short}')
-
-    def _set_futures_code_list(self):
-        '''期貨商品代號與代碼對照表'''
-        if self.env.can_futures:
-            logging.debug('Set Futures_Code_List')
-            TradeData.Futures.CodeList.update({
-                f.code: f.symbol for m in API.Contracts.Futures for f in m
-            })
 
     def _order_callback(self, stat, msg):
         '''處理委託/成交回報'''
@@ -224,7 +147,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
             notifier.post_fDeal(stat, msg)
             CallbackHandler.fDeal(msg)
 
-    def login_and_activate(self):
+    def init_account(self):
         # 登入
         self.login_(self.env)
         self.account_id_stock = API.stock_account.account_id
@@ -238,20 +161,9 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
             logging.info(
                 f'[AccountInfo] Futures account ID: {self.account_id_futopt}')
 
-        # 啟動憑證 (Mac 不需啟動)
-        logging.info(f'[AccountInfo] Activate {self.env.ACCOUNT_NAME} CA')
-        id = self.env.account_id()
-        API.activate_ca(
-            ca_path=f"./lib/ekey/551/{id}/S/Sinopac.pfx",
-            ca_passwd=self.env.ca_passwd() if self.env.ca_passwd() else id,
-            person_id=id,
-        )
+        self.activate_ca_()
 
-        # 系統 callback 設定
-        self._set_callbacks()
-
-    def _set_callbacks(self):
-        '''取得API回傳報價'''
+        # set callbacks
         @API.on_tick_stk_v1()
         def stk_quote_callback_v1(exchange, tick):
             if tick.intraday_odd == 0 and tick.simtrade == 0:
@@ -443,23 +355,6 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         self.check_remove_monitor(target, action_type, market)
         self.update_watchlist_position(order)
         self.StrategySet.update_StrategySet_data(target)
-
-    # def merge_buy_sell_lists(self, stocks_pool: Dict[str, str], market='Stocks'):
-    #     # TODO remove
-    #     '''合併進出場清單: 將庫存與選股清單，合併'''
-
-    #     if market == 'Stocks' and TradeData.Stocks.Info.shape[0]:
-    #         sells = TradeData.Stocks.Info.code.values
-    #     elif market == 'Futures' and TradeData.Futures.Info.shape[0]:
-    #         sells = TradeData.Futures.Info.code.values
-    #     else:
-    #         sells = []
-
-    #     all = sells.copy()
-    #     for ids in stocks_pool.values():
-    #         all = np.append(all, ids)
-
-    #     return np.unique(all)
 
     def monitor_stocks(self, target: str):
         if target in TradeData.Quotes.NowTargets:
@@ -710,10 +605,7 @@ class StrategyExecutor(AccountInfo, WatchListTool, OrderTool, Subscriber):
         return self.securityInfo(market)
 
     def get_securityPool(self, market='Stocks'):
-        '''
-        Get the target securities pool with the format:
-          {code: strategy}
-        '''
+        '''Get the target securities pool with the format: {code: strategy}'''
 
         pools = {}
         if market == 'Stocks':

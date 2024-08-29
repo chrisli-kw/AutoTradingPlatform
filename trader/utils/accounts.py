@@ -1,5 +1,6 @@
 import time
 import logging
+import numpy as np
 import pandas as pd
 import shioaji as sj
 from datetime import datetime
@@ -10,6 +11,8 @@ from . import concat_df
 from .time import time_tool
 from .crawler import crawler
 from .file import file_handler
+from .objects import Margin
+from .objects.env import UserEnv
 from .objects.data import TradeData
 
 
@@ -37,8 +40,6 @@ class AccountInfo:
                 '結算現值'
             ])
         self.HAS_FUTOPT_ACCOUNT = False
-        self.desposal_margin = 0
-        self.ProfitAccCount = 0  # 權益總值
 
     def login_(self, env):
         self.account_name = env.ACCOUNT_NAME
@@ -344,12 +345,12 @@ class AccountInfo:
                 margin = None
 
             if margin:
-                self.desposal_margin = margin.available_margin
-                self.ProfitAccCount = margin.equity
-                break
+                return margin
 
             time.sleep(1)
             n += 1
+
+        return Margin
 
     def get_openpositions(self):
         '''查看期權帳戶持有部位'''
@@ -396,3 +397,103 @@ class AccountInfo:
 
     def dataUsage(self):
         return round(API.usage().bytes/2**20, 2)
+
+
+class AccountHandler(AccountInfo):
+    def __init__(self, account_name: str) -> None:
+        super().__init__()
+
+        self.env = UserEnv(account_name)
+        self.simulation = self.env.MODE == 'Simulation'
+        self.simulate_amount = np.iinfo(np.int64).max
+
+        # Stocks
+        self.total_market_value = 0
+        self.desposal_money = 0
+
+        # Futures
+        self.desposal_margin = 0
+        self.ProfitAccCount = 0  # 權益總值
+
+    def _set_trade_risks(self):
+        '''設定交易風險值: 可交割金額、總市值'''
+
+        df = TradeData.Stocks.Info.copy()
+        cost_value = (df.quantity*df.cost_price).sum()
+        pnl = df.pnl.sum()
+        if self.simulation:
+            account_balance = self.env.INIT_POSITION
+            settle_info = pnl
+        else:
+            account_balance = self.balance()
+            settle_info = self.settle_info(mode='info').iloc[1:, 1].sum()
+
+        self.desposal_money = min(
+            account_balance+settle_info, self.env.POSITION_LIMIT_LONG)
+        self.total_market_value = self.desposal_money + cost_value + pnl
+
+        logging.info(
+            f'[AccountInfo] Desposal amount = {self.desposal_money} (limit: {self.env.POSITION_LIMIT_LONG})')
+
+    def _set_margin_limit(self):
+        '''計算可交割的保證金額，不可超過帳戶可下單的保證金額上限'''
+        if self.simulation:
+            account_balance = 0
+            self.desposal_margin = self.simulate_amount
+            self.ProfitAccCount = self.simulate_amount
+        else:
+            account_balance = self.balance()
+            margin = self.get_account_margin()
+            self.desposal_margin = margin.available_margin
+            self.ProfitAccCount = margin.equity  # 權益總值
+        self.desposal_margin = min(
+            account_balance+self.desposal_margin, self.env.MARGIN_LIMIT)
+        logging.info(
+            f'[AccountInfo] Margin: total={self.ProfitAccCount}; available={self.desposal_margin}; limit={self.env.MARGIN_LIMIT}')
+
+    def _set_leverage(self, stockids: list):
+        '''
+        取得個股融資成數資料，
+        若帳戶設定為不可融資，則全部融資成數為0
+        '''
+
+        df = pd.DataFrame([crawler.FromHTML.Leverage(s) for s in stockids])
+        if df.shape[0]:
+            df.columns = df.columns.str.replace(' ', '')
+            df.loc[df.個股融券信用資格 == 'N', '融券成數'] = 100
+            df.代號 = df.代號.astype(str)
+            df.融資成數 /= 100
+            df.融券成數 /= 100
+
+            if self.env.ORDER_COND1 != 'Cash':
+                TradeData.Stocks.Leverage.Long = df.set_index(
+                    '代號').融資成數.to_dict()
+            else:
+                TradeData.Stocks.Leverage.Long = {code: 0 for code in stockids}
+
+            if self.env.ORDER_COND2 != 'Cash':
+                TradeData.Stocks.Leverage.Short = df.set_index(
+                    '代號').融券成數.to_dict()
+            else:
+                TradeData.Stocks.Leverage.Short = {
+                    code: 1 for code in stockids}
+
+        logging.info(f'Long leverages: {TradeData.Stocks.Leverage.Long}')
+        logging.info(f'Short leverages: {TradeData.Stocks.Leverage.Short}')
+
+    def _set_futures_code_list(self):
+        '''期貨商品代號與代碼對照表'''
+        if self.env.can_futures:
+            logging.debug('Set Futures_Code_List')
+            TradeData.Futures.CodeList.update({
+                f.code: f.symbol for m in API.Contracts.Futures for f in m
+            })
+
+    def activate_ca_(self):
+        logging.info(f'[AccountInfo] Activate {self.env.ACCOUNT_NAME} CA')
+        id = self.env.account_id()
+        API.activate_ca(
+            ca_path=f"./lib/ekey/551/{id}/S/Sinopac.pfx",
+            ca_passwd=self.env.ca_passwd() if self.env.ca_passwd() else id,
+            person_id=id,
+        )
