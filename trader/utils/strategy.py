@@ -64,6 +64,7 @@ class StrategyTool:
     def mapQuantities(self, strategy: str):
 
         def default_quantity(**kwargs):
+            # return target_quantity, quantity_limit
             return 1, 499
 
         if strategy in self.QuantityFunc:

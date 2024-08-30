@@ -5,7 +5,7 @@ from shioaji import constant
 from collections import namedtuple
 from datetime import datetime, timedelta
 
-from . import __version__, picker
+from . import __version__, picker, exec
 from .config import (
     API,
     PATH,
@@ -878,6 +878,15 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
         text += f"\n【數據用量】{usage}MB"
         notifier.post(text, msgType='Monitor')
 
+        def periodic_check():
+            # Check if the connection is still alive
+            # TODO: delete in the future
+            if now.minute % 10 == 0 and now.second == 30:
+                balance = self.balance(mode='debug')
+                if balance == -1:
+                    self._log_and_notify(
+                        f"【連線異常】{self.env.ACCOUNT_NAME} 無法查詢餘額")
+
         # 開始監控
         while True:
             self.loop_pause()
@@ -886,12 +895,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
             if self.is_break_loop(now):
                 break
 
-            # 防止斷線用 TODO:待永豐更新後刪除
-            if now.minute % 10 == 0 and now.second == 0:
-                balance = self.balance(mode='debug')
-                if balance == -1:
-                    self._log_and_notify(
-                        f"【連線異常】{self.env.ACCOUNT_NAME} 無法查詢餘額")
+            exec.submit(periodic_check)
 
             # update K-bar data
             if MonitorFreq <= now.second:
