@@ -96,6 +96,13 @@ Go to ```./lib``` and create a ```config.ini``` file, which has 6 main sections:
 USERS = your_env_file_name
 LOG_LEVEL = DEBUG
 
+[COST] # Account trading costs for stocks/futures/options
+STOCK_FEE_RATE = 0.001425
+FUTURES_FEE_TXF = 100
+FUTURES_FEE_MXF = 100
+FUTURES_FEE_TMF = 100
+FUTURES_FEE_TXO = 100
+
 [DATA]
 DATA_PATH = your/path/to/save/datasets
 
