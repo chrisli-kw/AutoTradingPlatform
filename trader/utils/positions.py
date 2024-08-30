@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
-from ..config import PATH, TODAY_STR, API
+from ..config import PATH, TODAY_STR, API, Cost
 from . import get_contract, concat_df
 from .time import time_tool
 from .file import file_handler
@@ -121,10 +121,6 @@ class WatchListTool:
             db.delete(Watchlist, Watchlist.position <= 0, self.MatchAccount)
 
     def update_watchlist_position(self, order: namedtuple):
-        # if order.action_type == 'Close':
-        #     if order.pos_target == 100 or order.pos_target >= order.pos_balance:
-        #         order = order._replace(pos_target=100)
-
         target = order.target
         position = order.pos_target
 
@@ -214,6 +210,7 @@ class TradeDataHandler:
     def update_monitor(action: str, data: dict, position: float = 100):
         '''更新監控庫存(成交回報)'''
         target = data['code']
+        quantity_ = position_ = 0
         if action in ['Buy', 'Sell']:
             if TradeData.Stocks.Monitor[target] is not None:
                 # TODO: 部分進場
@@ -290,10 +287,10 @@ class FuturesMargin:
         return df
 
     def get_open_margin(self, target: str, quantity: int):
-        '''計算期貨保證金額'''
+        '''Calculate the amount of margin for opening a position'''
 
         if self.margin_table and target in self.margin_table:
-            fee = 100  # TODO
+            fee = getattr(Cost, f'FUTURES_FEE_{target[:3]}', 100)
             return self.margin_table[target]*quantity + fee
         return 0
 

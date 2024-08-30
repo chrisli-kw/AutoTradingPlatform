@@ -13,14 +13,14 @@ def create_api(simulation=False):
     return sj.Shioaji(simulation=simulation)
 
 
-def getList(section, option):
-    content = SystemConfig.get(section, option)
+def getList(section, option, fallback=None):
+    content = SystemConfig.get(section, option, fallback=fallback)
     if len(content) > 0:
         return content.replace(' ', '').split(',')
     return []
 
 
-def get_settings(section, option, dataType='str'):
+def get_settings(section, option, dataType='str', default=''):
     funcs = {
         'str': SystemConfig.get,
         'int': SystemConfig.getint,
@@ -28,17 +28,16 @@ def get_settings(section, option, dataType='str'):
         'bool': SystemConfig.getboolean,
         'list': getList
     }
-    if section in SystemConfig.sections():
-        options = SystemConfig.options(section)
-        if options and option.lower() in options:
-            try:
-                return funcs[dataType](section, option)
-            except:
-                return SystemConfig.get(section, option)
 
-    if dataType == 'list':
-        return []
-    return ''
+    if default == '' and dataType in ['int', 'float']:
+        default = 0
+    elif default == 'bool':
+        default = False
+
+    try:
+        return funcs[dataType](section, option, fallback=default)
+    except:
+        return SystemConfig.get(section, option, fallback=default)
 
 
 def get_holidays():
@@ -67,6 +66,14 @@ TODAY = datetime.today()
 ACCOUNTS = get_settings("ACCOUNT", "USERS", dataType='list')
 LOG_LEVEL = get_settings("ACCOUNT", "LOG_LEVEL")
 PATH = get_settings('DATA', 'DATA_PATH')
+
+
+class Cost:
+    STOCK_FEE_RATE = get_settings('COST', 'STOCK_FEE_RATE', 'float', 0.001425)
+    FUTURES_FEE_TXF = get_settings('COST', 'FUTURES_FEE_TX', 'int', 100)
+    FUTURES_FEE_MXF = get_settings('COST', 'FUTURES_FEE_MX', 'int', 100)
+    FUTURES_FEE_TMF = get_settings('COST', 'FUTURES_FEE_TM', 'int', 100)
+    FUTURES_FEE_TXO = get_settings('COST', 'FUTURES_FEE_OP', 'int', 100)
 
 
 class RedisConfig:
@@ -107,10 +114,7 @@ class StrategyNameList:
 
 # 策略相關
 StrategyList = StrategyNameList()
-MonitorFreq = get_settings('STRATEGY', 'MonitorFreq', 'int')
-
-# 交易相關
-FEE_RATE = .01
+MonitorFreq = get_settings('STRATEGY', 'MonitorFreq', 'int', default=5)
 
 # 時間相關
 TimeSimTradeStockEnd = pd.to_datetime('13:25:00')

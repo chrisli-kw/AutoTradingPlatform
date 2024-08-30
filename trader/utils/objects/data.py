@@ -22,6 +22,7 @@ class Stocks:
     Leverage = Leverage()
     Bought = []
     Sold = []
+    Dividends = {}
 
 
 class Futures:

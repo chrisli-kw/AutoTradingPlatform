@@ -1,6 +1,7 @@
 import pandas as pd
 from datetime import datetime
 from trader.utils.strategy import StrategyTool
+from trader.utils.objects.data import TradeData
 
 
 class StrategySet(StrategyTool):
@@ -69,7 +70,7 @@ class StrategySet(StrategyTool):
             'Strategy1': self.quantity_Strategy1
         }
 
-    def update_indicators(self, now: datetime, kbars: dict):
+    def update_indicators(self, now: datetime):
         '''
         ===================================================================
 
@@ -135,7 +136,7 @@ class StrategySet(StrategyTool):
             return self.futures_limit
         return self.futures_limit
 
-    def quantity_Strategy1(self, inputs: dict, kbars: dict, mode='trading', **kwargs):
+    def quantity_Strategy1(self, inputs: dict, mode='trading', **kwargs):
         '''
         ===================================================================
 
@@ -153,7 +154,7 @@ class StrategySet(StrategyTool):
         quantity_limit = 499
         return quantity, quantity_limit
 
-    def open_Strategy1(self, inputs: dict, kbars: dict, mode='trading', **kwargs):
+    def open_Strategy1(self, inputs: dict, mode='trading', **kwargs):
         '''
         ===================================================================
         Functions of determining if the system can open a LONG stock 
@@ -174,13 +175,20 @@ class StrategySet(StrategyTool):
         reason, and msg.
         ===================================================================
         '''
+
+        # Call the KBar data in the TradeData to get any indicators
+        # when necessary
+        freq = '1T'
+        kbar = TradeData.KBars.Freq[freq]
+        kbar = kbar[kbar.name == inputs['code']].copy()
+
         buy_condition = inputs['price'] > inputs['open']
         if buy_condition == True:
             buy_position = 100
             return self.Action(buy_position, 'buy_reason', 'buy_message')
         return self.Action()
 
-    def close_Strategy1(self, inputs: dict, kbars: dict, mode='trading', **kwargs):
+    def close_Strategy1(self, inputs: dict, mode='trading', **kwargs):
         '''
         ===================================================================
         Functions of determining if the system can close a LONG stock 
@@ -201,13 +209,20 @@ class StrategySet(StrategyTool):
         reason, and msg.
         ===================================================================
         '''
+
+        # Call the KBar data in the TradeData to get any indicators
+        # when necessary
+        freq = '1T'
+        kbar = TradeData.KBars.Freq[freq]
+        kbar = kbar[kbar.name == inputs['code']].copy()
+
         sell_condition = inputs['price'] < inputs['open']
         if sell_condition == True:
             sell_position = 100
             return self.Action(sell_position, 'sell_reason', 'sell_message')
         return self.Action()
 
-    def open_Strategy2(self, inputs: dict, kbars: dict, mode='trading', **kwargs):
+    def open_Strategy2(self, inputs: dict, mode='trading', **kwargs):
         '''
         ===================================================================
         Functions of determining if the system can open a SHORT stock 
@@ -228,13 +243,20 @@ class StrategySet(StrategyTool):
         reason, and msg.
         ===================================================================
         '''
+
+        # Call the KBar data in the TradeData to get any indicators
+        # when necessary
+        freq = '1T'
+        kbar = TradeData.KBars.Freq[freq]
+        kbar = kbar[kbar.name == inputs['code']].copy()
+
         sell_condition = inputs['price'] < inputs['open']
         if sell_condition == True:
             sell_position = 100
             return self.Action(sell_position, 'sell_reason', 'sell_message')
         return self.Action()
 
-    def close_Strategy2(self, inputs: dict, kbars: dict, mode='trading', **kwargs):
+    def close_Strategy2(self, inputs: dict, mode='trading', **kwargs):
         '''
         ===================================================================
         Functions of determining if the system can close a SHORT stock 
@@ -255,6 +277,13 @@ class StrategySet(StrategyTool):
         reason, and msg.
         ===================================================================
         '''
+
+        # Call the KBar data in the TradeData to get any indicators
+        # when necessary
+        freq = '1T'
+        kbar = TradeData.KBars.Freq[freq]
+        kbar = kbar[kbar.name == inputs['code']].copy()
+
         buy_condition = inputs['price'] > inputs['open']
         if buy_condition == True:
             buy_position = 100

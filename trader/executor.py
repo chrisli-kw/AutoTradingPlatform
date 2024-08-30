@@ -250,6 +250,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
         TradeData.Stocks.Info = info
         self.env.N_LIMIT_LS = self.StrategySet.setNStockLimitLong()
         self.env.N_LIMIT_SS = self.StrategySet.setNStockLimitShort()
+        self.StrategySet.get_ex_dividends_list()
         self.punish_list = crawler.FromHTML.PunishList()
         self._set_leverage(all_targets)
         self._set_trade_risks()

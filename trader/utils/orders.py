@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
-from ..config import API, PATH, FEE_RATE
+from ..config import API, PATH, Cost
 from . import concat_df
 from .objects.data import TradeData
 from .file import file_handler
@@ -148,9 +148,9 @@ class OrderTool(FuturesMargin):
         if price < 0:
             price = -price
             cost_price = self.get_cost_price(target, price, mode)
-            return -(price - cost_price*leverage)*quantity*(1 - FEE_RATE)
+            return -(price - cost_price*leverage)*quantity*(1 - Cost.STOCK_FEE_RATE)
 
-        fee = max(price*quantity*FEE_RATE, 20)
+        fee = max(price*quantity*Cost.STOCK_FEE_RATE, 20)
         return price*quantity*(1 - leverage) + fee
 
     def get_stock_quantity(self, content: namedtuple, market='Stocks'):

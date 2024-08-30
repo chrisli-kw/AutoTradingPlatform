@@ -144,7 +144,6 @@ class KBarTool(TechnicalSignals):
             end = TODAY_STR
 
         contract = get_contract(stockid)
-        # TODO: fix AttributeError
         try:
             kbars = API.kbars(contract, start=start, end=end, timeout=60000)
         except AttributeError:
@@ -196,10 +195,11 @@ class KBarTool(TechnicalSignals):
             )
         return tb
 
-    def revert_dividend_price(self, df: pd.DataFrame, dividends: Dict[str, float]):
+    def revert_dividend_price(self, df: pd.DataFrame):
         '''還原除權息股價'''
 
         if df.shape[0]:
+            dividends = TradeData.Stocks.Dividends
             has_dividend = df.name.isin(dividends.keys())
             if has_dividend.sum():
                 _dividends = df[has_dividend].name.map(dividends)
@@ -302,7 +302,7 @@ class KBarTool(TechnicalSignals):
             df = self.tick_to_df_index(target)
         else:
             df = self.tick_to_df_targets(target)
-            # df = self.revert_dividend_price(df, dividends) # TODO
+            df = self.revert_dividend_price(df)
         df = self.concatKBars('1T', df)
         TradeData.KBars.Freq['1T'] = self.featureFuncs['1T'](df)
 

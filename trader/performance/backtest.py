@@ -13,7 +13,7 @@ from .base import (
     getMDD
 )
 from .. import file_handler
-from ..config import PATH, TODAY_STR
+from ..config import PATH, TODAY_STR, Cost
 from ..utils import progress_bar
 from ..utils.time import time_tool
 from ..utils.file import file_handler
@@ -129,7 +129,7 @@ class BacktestPerformance:
             )
         else:
             df = result['statement'].copy()
-            df['KRun'] = -1  # TODO
+            # df['KRun'] = -1
 
         if df.shape[0]:
 
@@ -309,7 +309,7 @@ class BackTester(BacktestPerformance):
 
         self.isLong = True
         self.sign = 1
-        self.FEE_RATE = .001425*.65
+        self.FEE_RATE = Cost.STOCK_FEE_RATE*.65
         self.TAX_RATE_STOCK = .003
         self.TAX_RATE_FUTURES = .00002
         self.TimeCol = 'Time'
@@ -515,7 +515,7 @@ class BackTester(BacktestPerformance):
             'CloseAmount': amount,
             'CloseFee': closefee,
             'Tax': tax,
-            'KRun': data['krun'],
+            'KRun': data.get('krun', -1),
             'PotentialReturn': 100*round(return_ - 1, 4)
         })
 

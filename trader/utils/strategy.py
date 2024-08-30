@@ -7,6 +7,7 @@ from .. import file_handler
 from ..config import PATH, TODAY_STR, StrategyList
 from ..utils.database import db
 from ..utils.database.tables import PutCallRatioList, ExDividendTable
+from ..utils.objects.data import TradeData
 
 
 class StrategyTool:
@@ -18,7 +19,6 @@ class StrategyTool:
             defaults=[0, '', '', 0, 'Buy']
         )
         self.pc_ratio = self.get_put_call_ratio()
-        self.dividends = self.get_ex_dividends_list()
         self.STRATEGIES_STOCK = pd.DataFrame(
             columns=['name', 'long_weight', 'short_weight']
         )
@@ -143,15 +143,17 @@ class StrategyTool:
 
         if db.HAS_DB:
             df = db.query(ExDividendTable)
-            return df[df.Date == TODAY_STR].set_index('Code').CashDividend.to_dict()
+        else:
+            try:
+                df = file_handler.Process.read_table(f'{PATH}/exdividends.csv')
+                df.Code = df.Code.astype(str).str.zfill(4)
+            except:
+                logging.warning(
+                    '==========exdividends.csv不存在，無除權息股票清單==========')
+                df = pd.DataFrame(columns=['Date', 'Code', 'CashDividend'])
 
-        try:
-            df = file_handler.Process.read_table(f'{PATH}/exdividends.csv')
-            df.Code = df.Code.astype(str).str.zfill(4)
-            return df[df.Date == TODAY_STR].set_index('Code').CashDividend.to_dict()
-        except:
-            logging.warning('==========exdividends.csv不存在，無除權息股票清單==========')
-            return {}
+        df = df[df.Date == TODAY_STR].set_index('Code').CashDividend.to_dict()
+        TradeData.Stocks.Dividends = df
 
     def get_strategy_list(self, market='Stocks'):
         if market == 'Stocks':
