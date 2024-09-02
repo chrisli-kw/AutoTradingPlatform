@@ -107,6 +107,7 @@ FUTURES_FEE_TXO = 100
 DATA_PATH = your/path/to/save/datasets
 
 [DB] # optional, can be left blank
+DB_ENGINE = mysql+pymysql/postgresql
 REDIS_HOST = your_redis_host
 REDIS_PORT = your_redis_port
 REDIS_PWD = your_redis_password
