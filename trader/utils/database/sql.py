@@ -18,7 +18,7 @@ class SQLDatabase:
     def __init__(self):
         self.HAS_DB = DBConfig.HAS_DB
         if self.HAS_DB:
-            self.sql_connect = f"mysql+pymysql://{DBConfig.URL}/{DBConfig.NAME}?charset=utf8mb4&binary_prefix=true"
+            self.sql_connect = f"{DBConfig.ENGINE}://{DBConfig.URL}/{DBConfig.NAME}"
             self.engine = create_engine(
                 self.sql_connect,
                 pool_size=50,

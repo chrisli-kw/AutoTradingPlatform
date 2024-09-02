@@ -84,6 +84,7 @@ class RedisConfig:
 
 
 class DBConfig:
+    ENGINE = get_settings('DB', 'DB_ENGINE')
     HOST = get_settings('DB', 'DB_HOST')
     PORT = get_settings('DB', 'DB_PORT', dataType='int')
     USER = get_settings('DB', 'DB_USER')

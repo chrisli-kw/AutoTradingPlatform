@@ -8,7 +8,7 @@ from ...config import DBConfig
 
 
 def create_schema(schemaName):
-    engine = create_engine(f'mysql+pymysql://{DBConfig.URL}')
+    engine = create_engine(f'{DBConfig.ENGINE}://{DBConfig.URL}')
 
     conn = engine.connect()
     if schemaName.lower() not in conn.dialect.get_schema_names(conn):
