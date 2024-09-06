@@ -214,7 +214,7 @@ class BacktestPerformance:
                 '最大單筆虧損': AccountingNumber(profits['MaxLoss']),
                 'MDD': mdd,
                 'MDD期間': mddTimes,
-                '全部平均持倉K線數': round(df.KRun.mean(), 1),
+                '全部平均持倉K線數': round(df.KRun.mean(), 1) if 'KRun' in df.columns else -1,
                 '獲利平均持倉K線數': profits['KRunProfit'],
                 '虧損平均持倉K線數': profits['KRunLoss'],
                 '獲利交易筆數': profits['Wins'],
