@@ -2,7 +2,7 @@ import logging
 import requests
 import pandas as pd
 
-from ..config import API, Tokens
+from ..config import API, Tokens, LOG_LEVEL
 
 
 class Notification:
@@ -51,6 +51,8 @@ class Notification:
     def post_tftOrder(self, stat, msg: dict):
         '''發送推播-股票委託'''
         logging.debug(f'[{stat}][{msg}]')
+        if LOG_LEVEL != 'DEBUG':
+            return
 
         stock = msg['contract']['code']
         name = API.Contracts.Stocks[stock].name
@@ -89,6 +91,8 @@ class Notification:
     def post_fOrder(self, stat, msg: dict):
         '''發送推播-期貨委託'''
         logging.debug(f'[{stat}][{msg}]')
+        if LOG_LEVEL != 'DEBUG':
+            return
 
         code = msg['contract']['code']
         delivery_month = msg['contract']['delivery_month']

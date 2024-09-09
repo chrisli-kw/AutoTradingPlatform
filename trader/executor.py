@@ -9,6 +9,7 @@ from . import __version__, picker, exec
 from .config import (
     API,
     PATH,
+    LOG_LEVEL,
     TODAY_STR,
     MonitorFreq,
     TimeSimTradeStockEnd,
@@ -564,7 +565,8 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
         logging.debug(log_msg)
         if self.simulation:
             order_data = self.appendOrder(target, content, market)
-            notifier.post(log_msg, msgType='Order')
+            if LOG_LEVEL == 'DEBUG':
+                notifier.post(log_msg, msgType='Order')
             logging.debug('Place simulate order complete.')
             return order_data
         else:
