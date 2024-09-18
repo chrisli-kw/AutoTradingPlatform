@@ -25,7 +25,7 @@ class UserEnv:
 
         # 股票使用者設定
         self.KBAR_START_DAYay = self.get('KBAR_START_DAYay', 'date')
-        self.FILTER_IN = self.get('FILTER_IN', 'dict')
+        self.FILTER_IN = self.get('FILTER_IN', 'dict', default={})
         self.FILTER_OUT = self.get('FILTER_OUT', 'list')
         self.STRATEGY_STOCK = self.get('STRATEGY_STOCK', 'list')
         self.PRICE_THRESHOLD = self.get('PRICE_THRESHOLD', 'int')
@@ -67,9 +67,10 @@ class UserEnv:
                 return env.replace(' ', '').split(',')
             elif type_ == 'dict':
                 envs = {}
-                for e in env.split(','):
-                    e = e.split(':')
-                    envs.update({e[0]: e[1]})
+                if env:
+                    for e in env.split(','):
+                        e = e.split(':')
+                        envs.update({e[0]: e[1]})
                 return envs
             elif type_ == 'date' and env:
                 return pd.to_datetime(env)

@@ -496,7 +496,6 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
                         new_contract = f'{target[:3]}{time_tool.GetDueMonth()}'
                         self.transfer_margin(target, new_contract)
                         TradeData.Futures.Monitor.update({new_contract: None})
-                        TradeData.Futures.Monitor.pop(target, None)
                         self.history_kbars([new_contract])
                         self.subscribe_all([new_contract])
                         TradeData.Futures.Transferred.update({
@@ -506,6 +505,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
                             }
                         })
                         TradeData.Futures.Strategy[new_contract] = strategy
+                        TradeData.Futures.Strategy.pop(target, None)
 
                     infos = dict(
                         action_type=actionType,
@@ -819,7 +819,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
 
             else:
                 day_trade = self.StrategySet.isDayTrade(
-                    TradeData.Futures.Strategy[target])
+                    TradeData.Futures.Strategy.get(target, 'unknown'))
                 TradeDataHandler.reset_monitor(
                     target, market, day_trade=day_trade)
 

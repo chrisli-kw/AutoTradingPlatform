@@ -158,11 +158,11 @@ class TradeDataHandler:
     @staticmethod
     def check_is_empty(target, market='Stocks'):
         if market == 'Stocks':
-            quantity = TradeData.Stocks.Monitor[target]['quantity']
-            position = TradeData.Stocks.Monitor[target]['position']
+            data = TradeData.Stocks.Monitor.get(target, {})
         else:
-            quantity = TradeData.Futures.Monitor[target]['order']['quantity']
-            position = TradeData.Futures.Monitor[target]['position']
+            data = TradeData.Futures.Monitor.get(target, {})
+            quantity = data.get('order', {}).get('quantity', 0)
+        position = data.get('position', 0)
 
         is_empty = (quantity <= 0 or position <= 0)
         logging.debug(
