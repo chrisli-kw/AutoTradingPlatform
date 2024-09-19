@@ -812,11 +812,10 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
             logging.debug(f'[Monitor List]Remove|{market}|{target}|')
             if market == 'Stocks':
                 day_trade = self.StrategySet.isDayTrade(
-                    TradeData.Stocks.Strategy[target])
+                    TradeData.Stocks.Strategy.get(target, 'unknown'))
                 TradeDataHandler.reset_monitor(target, market, day_trade=False)
                 if target in TradeData.Stocks.Info.code.values:
                     TradeData.Stocks.Info = remove_(TradeData.Stocks.Info)
-
             else:
                 day_trade = self.StrategySet.isDayTrade(
                     TradeData.Futures.Strategy.get(target, 'unknown'))
