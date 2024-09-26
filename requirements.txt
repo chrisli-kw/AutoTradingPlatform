@@ -19,7 +19,7 @@ pandas==2.1.1
 plotly==5.5.0
 python-dotenv==1.0.0
 pymysql==1.1.0
-psycopg2==2.9.9
+psycopg2-binary==2.9.9
 redis==4.3.4
 requests==2.31.0
 shioaji==1.2.3

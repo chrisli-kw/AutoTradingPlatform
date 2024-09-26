@@ -139,6 +139,7 @@ logs/
 test.py
 dev.py
 
+dockerfile
 shell/*
 trader/scripts/*
 !trader/scripts/README.md
