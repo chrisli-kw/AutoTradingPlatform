@@ -6,7 +6,7 @@ from collections import namedtuple
 from .. import file_handler
 from ..config import PATH, TODAY_STR, StrategyList
 from ..utils.database import db
-from ..utils.database.tables import PutCallRatioList, ExDividendTable
+from ..utils.database.tables import ExDividendTable
 from ..utils.objects.data import TradeData
 
 
@@ -18,7 +18,6 @@ class StrategyTool:
             field_names=['position', 'reason', 'msg', 'price', 'action'],
             defaults=[0, '', '', 0, 'Buy']
         )
-        self.pc_ratio = self.get_put_call_ratio()
         self.STRATEGIES_STOCK = pd.DataFrame(
             columns=['name', 'long_weight', 'short_weight']
         )
@@ -161,24 +160,6 @@ class StrategyTool:
         else:
             strategies = self.STRATEGIES_FUTURES.copy()
         return strategies.sort_values(ascending=False).name.to_list()
-
-    def get_put_call_ratio(self):
-        '''Get the latest Put-Call ratio'''
-        if db.HAS_DB:
-            pc_ratio = db.query(PutCallRatioList.PutCallRatio)
-            if pc_ratio.shape[0]:
-                return pc_ratio.PutCallRatio.values[-1]
-            return 100
-
-        try:
-            pc_ratio = file_handler.Process.read_table(
-                f'{PATH}/put_call_ratio.csv')
-            pc_ratio = pc_ratio.sort_values('Date')
-            return pc_ratio.PutCallRatio.values[-1]
-        except:
-            logging.warning(
-                '==========put_call_ratio.csv does not exist, the trader will run without Put/Call Ratio==========')
-            return 100
 
     def transfer_position(self, inputs: dict, **kwargs):
         target = inputs['symbol']

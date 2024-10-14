@@ -269,7 +269,11 @@ class FuturesMargin:
         '''Get futures margin table'''
 
         if not os.path.exists(self.full_path_name):
-            return None
+            logging.warning(
+                f'File not found: {self.full_path_name}, any action requiring the margin info may be inaccurate. Try to execute the runCrawlIndexMargin task to acquire the margin table.')
+            if type == 'dict':
+                return dict()
+            return pd.DataFrame()
 
         df = file_handler.Process.read_table(self.full_path_name)
 
