@@ -389,6 +389,9 @@ class AccountInfo:
             pl_detail = API.list_profit_loss_detail(account, pls.id)
             profitloss_detail += pl_detail
 
+        if not len(profitloss_detail):
+            return TradeData.Futures.SettleDefault
+
         df = self._obj_2_df(profitloss_detail)
         df = df.sort_values('date').drop_duplicates()
         df.date = df.date.apply(lambda x: f'{x[:4]}-{x[4:6]}-{x[6:]}')

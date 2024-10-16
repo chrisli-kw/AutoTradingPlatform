@@ -33,6 +33,12 @@ class Futures:
             'last_price', 'pnl'
         ]
     )
+    SettleDefault = pd.DataFrame(
+        columns=[
+            'date', 'code', 'quantity', 'dseq', 'fee', 'tax', 'currency',
+            'direction', 'entry_price', 'cover_price', 'pnl'
+        ]
+    )
     Info = pd.DataFrame()
     Strategy = {}
     Monitor = {}
