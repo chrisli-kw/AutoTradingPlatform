@@ -58,7 +58,11 @@ class AccountInfo:
                 n += 1
                 time.sleep(5)
 
-        nth_account = int(self.account_name[-1])
+        if not self.account_name[-1].isdigit():
+            nth_account = 1
+        else:
+            nth_account = int(self.account_name[-1])
+
         if nth_account > 1:
             accounts = API.list_accounts()
             accounts = [a for a in accounts if isinstance(a, StockAccount)]
