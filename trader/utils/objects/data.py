@@ -36,7 +36,7 @@ class Futures:
     SettleDefault = pd.DataFrame(
         columns=[
             'date', 'code', 'quantity', 'dseq', 'fee', 'tax', 'currency',
-            'direction', 'entry_price', 'cover_price', 'pnl'
+            'direction', 'entry_price', 'cover_price', 'pnl', 'profit'
         ]
     )
     Info = pd.DataFrame()
