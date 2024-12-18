@@ -12,7 +12,8 @@ def create_schema(schemaName):
 
     conn = engine.connect()
     if schemaName.lower() not in conn.dialect.get_schema_names(conn):
-        logging.warning(f'Schema {schemaName} not exist, create {schemaName}.')
+        logging.warning(
+            f'Schema {schemaName} not exist, create {schemaName}.')
         engine.execute(f"CREATE SCHEMA {schemaName}")
         conn.close()
         logging.warning(f'Done creating schema {schemaName}')
@@ -25,14 +26,18 @@ db = SQLDatabase()
 redis_tick = RedisTools(redisKey='TickData')
 
 if db.HAS_DB:
-    create_schema(DBConfig.NAME)
-    Base.metadata.create_all(db.engine)
+    try:
+        create_schema(DBConfig.NAME)
+        Base.metadata.create_all(db.engine)
 
-    KBarTables = {
-        '1D': KBarData1D,
-        '1T': KBarData1T,
-        '30T': KBarData30T,
-        '60T': KBarData60T
-    }
+        KBarTables = {
+            '1D': KBarData1D,
+            '1T': KBarData1T,
+            '30T': KBarData30T,
+            '60T': KBarData60T
+        }
+    except:
+        db.HAS_DB = False
+        logging.exception('Some error happened to DB initialization.')
 else:
     KBarTables = {}
