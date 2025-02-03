@@ -463,6 +463,9 @@ class CrawlFromHTML:
         if db.HAS_DB:
             db.dataframe_to_DB(df, KBarData1T)
 
+        if df.empty:
+            return
+
         year_month = TODAY_STR[:-3]
         filename = f'{PATH}/Kbars/1T/{year_month}-futures-1T.pkl'
         df.Volume = df.Volume.astype('int32')
