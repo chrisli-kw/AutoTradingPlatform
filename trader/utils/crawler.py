@@ -48,17 +48,17 @@ class CrawlFromSJ:
         self.scale = scale
         self.StockData = []
 
-    def get_security_list(self, stock_only: bool = True):
+    def get_security_list(self, market='Stocks', stock_only: bool = True):
         '''
-        自 Shioaji 取得股票清單
-        只保留普通股股票且不需要權證: stock_only = True 
+        自 Shioaji 取得商品清單
+        當 market='Stocks' 且只保留普通股股票且不需要權證: stock_only = True 
         '''
-        stock_list = [
-            {**stock} for exchange in API.Contracts.Stocks for stock in exchange]
-        df = pd.DataFrame(stock_list)
+        id_list = [
+            {**id} for exchange in API.Contracts[market] for id in exchange]
+        df = pd.DataFrame(id_list)
         df = df[(df.update_date == df.update_date.max())]
 
-        if stock_only:
+        if market == 'Stocks' and stock_only:
             df.update_date = pd.to_datetime(df.update_date)
             df = df[
                 ~(df.category.isin(['00', '  '])) & (df.code.apply(len) == 4)]
