@@ -495,6 +495,9 @@ class AccountHandler(AccountInfo):
             TradeData.Futures.CodeList.update({
                 f.code: f.symbol for m in API.Contracts.Futures for f in m
             })
+            TradeData.Futures.CodeList.update({
+                f.code: f.symbol for m in API.Contracts.Options for f in m
+            })
 
     def activate_ca_(self):
         logging.info(f'[AccountInfo] Activate {self.env.ACCOUNT_NAME} CA')
