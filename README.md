@@ -141,7 +141,7 @@ It is necessary to create an env file for a whole-new AutoTradingPlatform. First
 python run.py -TASK create_env
 ```  
 
-Then, go to http://127.0.0.1:5000/. Press the "Submit" button after filling out the forms, an env file will be created in ```./lib/envs```
+Then, go to http://127.0.0.1:8090/. Press the "Submit" button after filling out the forms, an env file will be created in ```./lib/envs```
 
 #### Step 3: Create long/short stragety
 Go to ```./trader/scripts``` and follow the [instructions](./trader/scripts/readme.md#longshort-strategies) to create your own trading strategy before starting the auto-trader.

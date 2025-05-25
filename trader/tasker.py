@@ -38,7 +38,7 @@ def runCreateENV(**kwargs):
     file_handler.Operate.create_folder('./lib')
     file_handler.Operate.create_folder('./lib/envs')
     file_handler.Operate.create_folder('./lib/schedules')
-    app.run()
+    app.run(host='0.0.0.0', port=8090)
 
 
 @tasker
