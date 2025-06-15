@@ -50,8 +50,8 @@ if account:
                 st.info(f'打開 http://localhost:8090 已設定交易參數')
 
             st.session_state.logged_in = True
-            if func.__name__ == 'runResistenceMonitor':
-                func(account=account, stream_output=log_area)
+            if task == 'resistence':
+                func(stream_output=log_area)
             elif func.__name__ in ['runAutoTrader', 'runCrawlStockData']:
                 func(account=account)
             else:

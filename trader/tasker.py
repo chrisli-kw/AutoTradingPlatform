@@ -30,6 +30,7 @@ from .executor import StrategyExecutor
 try:
     from .scripts.TaskList import customTasks
 except:
+    logging.exception(f'Importing customTasks failed:')
     customTasks = {}
 
 

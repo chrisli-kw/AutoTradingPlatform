@@ -123,10 +123,11 @@ class Subscriber(KBarTool):
             target = get_contract(t)
             API.quote.unsubscribe(target, quote_type=quote_type, version='v1')
 
-    def subscribe_all(self, targetLists: Union[list, np.array]):
+    def subscribe_all(self, targetLists: Union[list, np.array], pass_index=False):
         '''訂閱指數、tick、bidask資料'''
 
-        self.subscribe_index()
+        if not pass_index:
+            self.subscribe_index()
         self.subscribe_targets(targetLists, 'tick')
         self.subscribe_targets(targetLists, 'bidask')
         self._set_target_quote_default(targetLists)
