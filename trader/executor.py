@@ -437,11 +437,14 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
             strategy = TradeData.Futures.Strategy[target]
 
             # new position
-            if data is None:
+            raise_pos = self.StrategySet.isRaiseQty(strategy)
+            if data is None or (data and raise_pos):
                 actionType = 'Open'
-                pos_balance = 100
                 octype = 'New'
-                quantity = self.get_quantity(target, strategy, 'Futures')
+                pos_balance = self.StrategySet.get_pos_balance(
+                    strategy, raise_pos=raise_pos)
+                quantity = self.get_quantity(
+                    target, strategy, 'Futures', raise_pos=raise_pos)
                 enoughOpen = self._check_enough_open(target, quantity)
 
             # in-stock position
@@ -646,7 +649,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
 
         return pools
 
-    def get_quantity(self, target: str, strategy: str, order_cond: str):
+    def get_quantity(self, target: str, strategy: str, order_cond: str, raise_pos=False):
         '''Calculate the quantity for opening a position'''
 
         if order_cond == 'Futures':
@@ -658,7 +661,8 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
         quantityFunc = self.StrategySet.mapQuantities(strategy)
 
         inputs = TradeDataHandler.getQuotesNow(target)
-        quantity, quantity_limit = quantityFunc(inputs=inputs)
+        quantity, quantity_limit = quantityFunc(
+            inputs=inputs, raise_pos=raise_pos)
         leverage = self.check_leverage(target, order_cond)
 
         quantity = int(min(quantity, quantity_limit)/(1 - leverage))

@@ -161,7 +161,7 @@ class TradeDataHandler:
             data = TradeData.Stocks.Monitor.get(target, {})
         else:
             data = TradeData.Futures.Monitor.get(target, {})
-            quantity = data.get('order', {}).get('quantity', 0)
+        quantity = data.get('order', {}).get('quantity', 0)
         position = data.get('position', 0)
 
         is_empty = (quantity <= 0 or position <= 0)
@@ -211,11 +211,17 @@ class TradeDataHandler:
         '''更新監控庫存(成交回報)'''
         target = data['code']
         quantity_ = position_ = 0
-        if action in ['Buy', 'Sell']:
+        if action in ['Open', 'Close']:
             if TradeData.Stocks.Monitor[target] is not None:
-                # TODO: 部分進場
-                stage = 'Update|Stocks'
                 quantity = data['quantity']
+
+                if action == 'New':
+                    stage = 'Add|Stocks'
+                    position *= -1
+                    quantity *= -1
+                else:
+                    stage = 'Update|Stocks'
+
                 TradeData.Stocks.Monitor[target]['position'] -= position
                 TradeData.Stocks.Monitor[target]['quantity'] -= quantity
             else:
@@ -229,8 +235,14 @@ class TradeDataHandler:
         # New, Cover
         else:
             if TradeData.Futures.Monitor[target] is not None:
-                stage = 'Update|Futures'
                 quantity = data['order']['quantity']
+
+                if action == 'New':
+                    stage = 'Add|Futures'
+                    position *= -1
+                    quantity *= -1
+                else:
+                    stage = 'Update|Futures'
 
                 TradeData.Futures.Monitor[target]['position'] -= position
                 TradeData.Futures.Monitor[target]['order']['quantity'] -= quantity
@@ -305,3 +317,49 @@ class FuturesMargin:
             return
 
         self.margin_table[target_new] = self.margin_table[target_old]
+
+
+class Position:
+    def __init__(self):
+        self.entries = []  # [{'price': float, 'time': datetime}]
+        # [{'price': float, 'time': datetime, 'reason': str}]
+        self.exits = []
+        self.total_qty = 0
+        self.total_profit = 0.0
+
+    def open(self, price, time, qty=1):
+        self.entries.append({'price': price, 'time': time, 'qty': qty})
+        self.total_qty += qty
+
+    def close(self, price, time, reason='', qty=1):
+        qty = min(qty, self.total_qty)
+
+        closed_qty = 0
+        profit = 0.0
+        while closed_qty < qty and self.entries:
+            if self.entries[0]['qty'] > qty:
+                entry = self.entries[0]
+                e_qty = qty
+                self.entries[0]['qty'] -= qty
+            else:
+                entry = self.entries.pop(0)
+                e_qty = entry['qty']
+
+            closed_qty += e_qty
+            entry_price = entry['price']
+            profit = (price - entry_price) * e_qty
+            self.exits.append({
+                'entry_price': entry_price,
+                'exit_price': price,
+                'profit': profit,
+                'qty': e_qty,
+                'open_time': entry['time'],
+                'close_time': time,
+                'reason': reason
+            })
+        self.total_qty -= closed_qty
+        self.total_profit += profit
+        return profit
+
+    def is_open(self):
+        return self.total_qty > 0

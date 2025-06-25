@@ -177,6 +177,9 @@ class StrategyTool:
         '''Check if a strategy is a day-trade strategy.'''
         return strategy in StrategyList.DayTrade
 
+    def isRaiseQty(self, strategy: str):
+        return False
+
     def export_strategy_data(self):
         pass
 

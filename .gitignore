@@ -136,7 +136,7 @@ logs/
 *.ipynb
 *.properties.*
 *.DS_Store
-test.py
+*test*.py
 dev.py
 
 dockerfile
