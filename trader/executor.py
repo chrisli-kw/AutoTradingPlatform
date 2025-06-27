@@ -58,6 +58,9 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
     def _order_callback(self, stat, msg):
         '''處理委託/成交回報'''
 
+        if self.simulation:
+            return
+
         if stat == constant.OrderState.StockOrder:
             stock = msg['contract']['code']
             order = msg['order']
