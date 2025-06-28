@@ -217,7 +217,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
     def _log_and_notify(self, msg: str):
         '''將訊息加入log並推播'''
         logging.info(msg)
-        notifier.post(f'\n{msg}', msgType='Monitor')
+        notifier.send.post(f'\n{msg}')
 
     def init_stocks(self):
         '''初始化股票資訊'''
@@ -572,7 +572,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
         if self.simulation:
             order_data = self.appendOrder(target, content, market)
             if LOG_LEVEL == 'DEBUG':
-                notifier.post(log_msg, msgType='Order')
+                notifier.send.post(log_msg)
             logging.debug('Place simulate order complete.')
             return order_data
         else:
@@ -885,7 +885,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
         text += f"\n【期貨策略】{self.env.STRATEGY_FUTURES}"
         text += f"\n【AI版本】Stock-{self.env.STOCK_MODEL_VERSION}; Futures:{self.env.FUTURES_MODEL_VERSION}"
         text += f"\n【數據用量】{usage}MB"
-        notifier.post(text, msgType='Monitor')
+        notifier.send.post(text)
 
         def periodic_check():
             # Check if the connection is still alive

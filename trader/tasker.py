@@ -171,7 +171,7 @@ def runSimulationChecker(**kwargs):
                 text += f'\nwatchlist - stocks: {set(watchlist.code) - set(stocks.code)}'
                 text += f'\nstocks - watchlist: {set(stocks.code) - set(watchlist.code)}'
 
-                notifier.post(text, msgType='Monitor')
+                notifier.send.post(text)
 
 
 def runAutoTrader(account: str):
@@ -180,22 +180,22 @@ def runAutoTrader(account: str):
         se.init_account()
         se.run()
     except KeyboardInterrupt:
-        notifier.post(
-            f"\n【Interrupt】【下單機監控】{se.account_name}已手動關閉", msgType='Tasker')
+        notifier.send.post(
+            f"\n【Interrupt】【下單機監控】{se.account_name}已手動關閉")
     except:
         logging.exception('Catch an exception:')
-        notifier.post(
-            f"\n【Error】【下單機監控】{se.account_name}發生異常", msgType='Tasker')
+        notifier.send.post(
+            f"\n【Error】【下單機監控】{se.account_name}發生異常")
     finally:
         try:
             se.output_files()
         except:
             logging.exception('Catch an exception (output_files):')
-            notifier.post(
-                f"\n【Error】【下單機監控】{se.account_name}資料儲存失敗", msgType='Tasker')
+            notifier.send.post(
+                f"\n【Error】【下單機監控】{se.account_name}資料儲存失敗")
 
         logging.info(f'API log out: {API.logout()}')
-        notifier.post(f"\n【停止監控】{se.account_name}關閉程式並登出", msgType='Tasker')
+        notifier.send.post(f"\n【停止監控】{se.account_name}關閉程式並登出")
 
     del se
 
@@ -234,10 +234,10 @@ def runCrawlStockData(account: str, start=None, end=None):
         crawler.FromSJ.merge_daily_data(TODAY_STR, '1T', save=True)
 
     except KeyboardInterrupt:
-        notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
+        notifier.send.post(f"\n【Interrupt】【爬蟲程式】已手動關閉")
     except:
         logging.exception('Catch an exception:')
-        notifier.post(f"\n【Error】【爬蟲程式】股價爬蟲發生異常", msgType='Tasker')
+        notifier.send.post(f"\n【Error】【爬蟲程式】股價爬蟲發生異常")
         if len(crawler.FromSJ.StockData):
             df = pd.concat(crawler.FromSJ.StockData)
             filename = f'{crawler.FromSJ.folder_path}/stock_data_1T.pkl'

@@ -94,10 +94,12 @@ class DBConfig:
     URL = f'{USER}:{PWD}@{HOST}:{PORT}' if HAS_DB else ''
 
 
-class Tokens:
-    '''LINE notify tokens'''
-    MONITOR = get_settings('LINENOTIFY', 'TOKEN_MONITOR')
-    INFO = get_settings('LINENOTIFY', 'TOKEN_INFO')
+class NotifyConfig:
+    '''Configuration regarding notifications'''
+    PLATFORM = get_settings('NOTIFY', 'PLATFORM')
+    LINE_TOKEN = get_settings('NOTIFY', 'LINE_TOKEN')
+    TELEGRAM_TOKEN = get_settings('NOTIFY', 'TELEGRAM_TOKEN')
+    TELEGRAM_CHAT_ID = get_settings('NOTIFY', 'TELEGRAM_CHAT_ID')
 
 
 class StrategyNameList:

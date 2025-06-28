@@ -11,8 +11,7 @@ from . import concat_df
 class FileOperations:
     @staticmethod
     def create_folder(path):
-        if not os.path.exists(path):
-            os.makedirs(path)
+        os.makedirs(path, exist_ok=True)
 
     @staticmethod
     def listdir(dir_path: str, pattern: str = '', filter_out: list = ['desktop.ini']):
