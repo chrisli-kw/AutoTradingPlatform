@@ -7,7 +7,7 @@ from sqlalchemy import asc, desc, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, scoped_session, load_only
 
-from ...config import DBConfig
+from ...config import PATH, DBConfig
 from ..file import file_handler
 
 
@@ -16,13 +16,14 @@ Base = declarative_base()
 
 class SQLDatabase:
     def __init__(self):
-        self.HAS_DB = DBConfig.HAS_DB
-        if self.HAS_DB:
+        self.engine = None
+        self.sessionmaker_ = None
+
+        try:
             self.sql_connect = f"{DBConfig.ENGINE}://{DBConfig.URL}/{DBConfig.NAME}"
             self.engine = create_engine(
                 self.sql_connect,
                 pool_size=50,
-                # max_overflow=max_overflow,
                 pool_recycle=10,
                 pool_timeout=10,
                 pool_pre_ping=True,
@@ -30,15 +31,36 @@ class SQLDatabase:
                 pool_use_lifo=True,
                 echo=False
             )
+            self.engine.connect().close()
+            DBConfig.HAS_DB = True
+            logging.info("Connected to MySQL.")
+        except Exception as e:
+            logging.warning(
+                f"MySQL connection failed, change database to SQLite.")
+            try:
+                DBConfig.ENGINE = "sqlite"
+                DBConfig.URL = ""
+                DBConfig.NAME = f"{PATH}/{DBConfig.FALLBACK_NAME}"
+
+                self.sql_connect = f"sqlite:///{PATH}/{DBConfig.FALLBACK_NAME}"
+                self.engine = create_engine(self.sql_connect, echo=False)
+                self.engine.connect().close()
+                logging.info(f"Fallback to SQLite: {self.sql_connect}")
+                DBConfig.HAS_DB = True
+            except Exception as e:
+                logging.error(f"SQLite connection failed: {e}")
+                DBConfig.HAS_DB = False
+
+        self.HAS_DB = DBConfig.HAS_DB
+        if self.HAS_DB and self.engine:
             self.sessionmaker_ = sessionmaker(bind=self.engine)
 
     def get_session(self):
         return scoped_session(self.sessionmaker_)
 
     def create_table(self, table):
-        engine = create_engine(self.sql_connect)
-        table
-        Base.metadata.create_all(engine)
+        if self.engine:
+            Base.metadata.create_all(self.engine)
 
     def query(self, table, *filterBy, **conditions):
         '''Get data from DB'''

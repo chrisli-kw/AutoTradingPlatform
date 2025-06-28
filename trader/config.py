@@ -92,6 +92,7 @@ class DBConfig:
     NAME = get_settings('DB', 'DB_NAME')
     HAS_DB = all(x for x in [HOST, NAME, PORT, PWD, USER])
     URL = f'{USER}:{PWD}@{HOST}:{PORT}' if HAS_DB else ''
+    FALLBACK_NAME = "AutoTradingPlatform.db"
 
 
 class NotifyConfig:

@@ -24,10 +24,12 @@ def create_schema(schemaName):
 
 db = SQLDatabase()
 redis_tick = RedisTools(redisKey='TickData')
+KBarTables = {}
 
 if db.HAS_DB:
     try:
-        create_schema(DBConfig.NAME)
+        if db.engine and 'mysql' in str(db.engine.url):
+            create_schema(DBConfig.NAME)
         Base.metadata.create_all(db.engine)
 
         KBarTables = {
@@ -39,5 +41,3 @@ if db.HAS_DB:
     except:
         db.HAS_DB = False
         logging.exception('Some error happened to DB initialization.')
-else:
-    KBarTables = {}
