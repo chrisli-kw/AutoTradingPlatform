@@ -1,10 +1,11 @@
 import logging
+import numpy as np
 import pandas as pd
-from datetime import datetime
-from collections import namedtuple
 
-from .. import file_handler
-from ..config import PATH, TODAY_STR, StrategyList
+from importlib import import_module
+
+from .objects import Action
+from ..config import TODAY_STR, StrategyList
 from ..utils.database import db
 from ..utils.database.tables import ExDividendTable
 from ..utils.objects.data import TradeData
@@ -12,33 +13,6 @@ from ..utils.objects.data import TradeData
 
 class StrategyTool:
     def __init__(self, env=None):
-        self.set_config(env)
-        self.Action = namedtuple(
-            typename="Action",
-            field_names=['position', 'reason', 'msg', 'price', 'action'],
-            defaults=[0, '', '', 0, 'Buy']
-        )
-        self.STRATEGIES_STOCK = pd.DataFrame(
-            columns=['name', 'long_weight', 'short_weight']
-        )
-        self.STRATEGIES_FUTURES = pd.DataFrame(
-            columns=['name', 'long_weight', 'short_weight']
-        )
-        self.Funcs = {
-            'Open': {  # action
-                '當沖': {},  # tradeType
-                '非當沖': {}
-            },
-            'Close': {
-                '當沖': {},
-                '非當沖': {}
-            }
-        }
-        self.QuantityFunc = {}
-        self.revert_action = {}
-        self.n_categories = None
-
-    def set_config(self, env):
         self.account_name = env.ACCOUNT_NAME
 
         self.stock_limit_type = env.N_STOCK_LIMIT_TYPE
@@ -52,33 +26,35 @@ class StrategyTool:
 
         self.is_simulation = env.MODE == 'Simulation'
 
-    def mapFunction(self, action: str, tradeType: str, strategy: str):
-        has_action = action in self.Funcs
-        has_tradeType = tradeType in self.Funcs[action]
-        has_strategy = strategy in self.Funcs[action][tradeType]
-        if has_action and has_tradeType and has_strategy:
-            return self.Funcs[action][tradeType][strategy]
+        self.strategy_configs = {
+            s: import_module(f'trader.scripts.StrategySet.{s}').StrategyConfig(self.account_name) for s in StrategyList.All
+        }
+
+    def mapFunction(self, action: str, strategy: str):
+        if strategy in self.strategy_configs:
+            conf = self.strategy_configs.get(strategy)
+            return getattr(conf, action)
+
         return self.__DoNothing__
 
     def mapQuantities(self, strategy: str):
 
         def default_quantity(**kwargs):
-            # return target_quantity, quantity_limit
+            # (target_quantity, quantity_limit)
             return 1, 499
 
-        if strategy in self.QuantityFunc:
-            return self.QuantityFunc[strategy]
+        if strategy in self.strategy_configs:
+            return self.strategy_configs[strategy].Quantity
 
         return default_quantity
 
     def __DoNothing__(self, **kwargs):
-        return self.Action()
+        return Action()
 
-    def update_indicators(self, now: datetime, KBars: dict):
-        pass
-
-    def update_StrategySet_data(self, target: str):
-        pass
+    def update_StrategySet_data_(self, target: str):
+        for conf in self.strategy_configs.values():
+            if hasattr(conf, 'update_StrategySet_data'):
+                conf.update_StrategySet_data(target)
 
     def setNStockLimitLong(self, **kwargs):
         '''
@@ -112,8 +88,12 @@ class StrategyTool:
 
     def setNFuturesLimit(self, **kwargs):
         '''Set the number limit of securities of a portfolio can hold'''
-        self.futures_limit = 0
-        return 0
+        if self.futures_limit_type != 'constant':
+            limit = self.futures_limit
+        else:
+            limit = self.futures_limit
+        self.futures_limit = limit
+        return limit
 
     def _get_value(self, data: pd.DataFrame, stockid: str, col: str):
         if isinstance(data, pd.DataFrame):
@@ -148,16 +128,18 @@ class StrategyTool:
         df = df[df.Date == TODAY_STR].set_index('Code').CashDividend.to_dict()
         TradeData.Stocks.Dividends = df
 
-    def get_strategy_list(self, market='Stocks'):
-        if market == 'Stocks':
-            strategies = self.STRATEGIES_STOCK.copy()
-        else:
-            strategies = self.STRATEGIES_FUTURES.copy()
-        return strategies.sort_values(ascending=False).name.to_list()
+    def get_pos_balance(self, strategy: str, raise_pos=False):
+        if strategy not in self.strategy_configs:
+            return 100
+
+        conf = self.strategy_configs.get(strategy)
+        if raise_pos:
+            return 100*(conf.raise_qty/conf.max_qty)
+        return 100*(conf.open_qty/conf.max_qty)
 
     def transfer_position(self, inputs: dict, **kwargs):
         target = inputs['symbol']
-        return self.Action(100, '轉倉', f'{target} 轉倉-Cover')
+        return Action(100, '轉倉', f'{target} 轉倉-Cover')
 
     def isLong(self, strategy: str):
         '''Check if a strategy is a long strategy.'''
@@ -172,10 +154,26 @@ class StrategyTool:
         return strategy in StrategyList.DayTrade
 
     def isRaiseQty(self, strategy: str):
-        return False
+        if strategy not in self.strategy_configs:
+            return False
 
-    def export_strategy_data(self):
-        pass
+        conf = self.strategy_configs.get(strategy)
+        position = conf.positions
+        if not position.entries:
+            return False
 
-    def append_monitor_list(self, monitor_list: list):
-        return monitor_list
+        return (
+            conf.raiseQuota and
+            conf.raise_qty <= conf.max_qty - position.total_qty
+        )
+
+    def export_strategy_data_(self):
+        for conf in self.strategy_configs.values():
+            if hasattr(conf, 'export_strategy_data'):
+                conf.export_strategy_data()
+
+    def append_monitor_list_(self, monitor_list: list):
+        for conf in self.strategy_configs.values():
+            if hasattr(conf, 'append_monitor_list'):
+                monitor_list = conf.append_monitor_list(monitor_list)
+        return np.unique(monitor_list).tolist()

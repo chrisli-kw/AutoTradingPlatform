@@ -1,5 +1,7 @@
 import pandas as pd
 from datetime import datetime
+
+from trader.utils.objects import Action
 from trader.utils.strategy import StrategyTool
 from trader.utils.objects.data import TradeData
 
@@ -66,8 +68,8 @@ class StrategySet(StrategyTool):
             }
         }
 
-        self.QuantityFunc = {
-            'Strategy1': self.quantity_Strategy1
+        self.strategy_configs = {
+            'Strategy1': self.strategy1_config
         }
 
     def update_indicators(self, now: datetime):
@@ -185,8 +187,8 @@ class StrategySet(StrategyTool):
         buy_condition = inputs['price'] > inputs['open']
         if buy_condition == True:
             buy_position = 100
-            return self.Action(buy_position, 'buy_reason', 'buy_message')
-        return self.Action()
+            return Action(buy_position, 'buy_reason', 'buy_message')
+        return Action()
 
     def close_Strategy1(self, inputs: dict, mode='trading', **kwargs):
         '''
@@ -219,8 +221,8 @@ class StrategySet(StrategyTool):
         sell_condition = inputs['price'] < inputs['open']
         if sell_condition == True:
             sell_position = 100
-            return self.Action(sell_position, 'sell_reason', 'sell_message')
-        return self.Action()
+            return Action(sell_position, 'sell_reason', 'sell_message')
+        return Action()
 
     def open_Strategy2(self, inputs: dict, mode='trading', **kwargs):
         '''
@@ -253,8 +255,8 @@ class StrategySet(StrategyTool):
         sell_condition = inputs['price'] < inputs['open']
         if sell_condition == True:
             sell_position = 100
-            return self.Action(sell_position, 'sell_reason', 'sell_message')
-        return self.Action()
+            return Action(sell_position, 'sell_reason', 'sell_message')
+        return Action()
 
     def close_Strategy2(self, inputs: dict, mode='trading', **kwargs):
         '''
@@ -287,5 +289,5 @@ class StrategySet(StrategyTool):
         buy_condition = inputs['price'] > inputs['open']
         if buy_condition == True:
             buy_position = 100
-            return self.Action(buy_position, 'buy_reason', 'buy_message')
-        return self.Action()
+            return Action(buy_position, 'buy_reason', 'buy_message')
+        return Action()

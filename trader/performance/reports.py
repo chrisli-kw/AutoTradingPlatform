@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from .. import tdp
-from ..config import PATH, TODAY, TODAY_STR, SelectMethods, StrategyNameList
+from ..config import PATH, TODAY, TODAY_STR, SelectMethods, StrategyList
 from ..utils import progress_bar
 from ..utils.time import time_tool
 from ..utils.file import file_handler
@@ -59,7 +59,7 @@ class PerformanceReport(SuplotHandler, OrderTool):
     def getStrategyList(self, df: pd.DataFrame):
         '''Get strategy list in code order'''
 
-        strategies = pd.DataFrame([StrategyNameList.Code]).T.reset_index()
+        strategies = pd.DataFrame([StrategyList.Code]).T.reset_index()
         strategies.columns = ['name', 'code']
         strategies = strategies[strategies.name.isin(df.Strategy)].name.values
         return strategies
@@ -271,7 +271,7 @@ class PerformanceReport(SuplotHandler, OrderTool):
                     f'Cannot plot candlesticks chart if {len(self.strategies)} strategies')
 
         for stra, color in zip(self.strategies, colors):
-            name = StrategyNameList.Code[stra]
+            name = StrategyList.Code[stra]
 
             # 累積獲利
             init_position = int(df_config.loc[0, stra].replace(',', ''))
@@ -362,7 +362,7 @@ class PerformanceReport(SuplotHandler, OrderTool):
             tb3 = df_summary.iloc[i, :]
             fig.add_trace(
                 go.Bar(
-                    x=[StrategyNameList.Code[s] for s in tb3[1:].index],
+                    x=[StrategyList.Code[s] for s in tb3[1:].index],
                     y=tb3[1:],
                     showlegend=False,
                     marker_color=c,

@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 from . import __version__, picker, exec
 from .config import (
     API,
-    PATH,
     LOG_LEVEL,
     TODAY_STR,
     MonitorFreq,
@@ -21,32 +20,28 @@ from .utils.time import time_tool
 from .utils.crawler import crawler
 from .utils.notify import notifier
 from .utils.orders import OrderTool
-from .utils.file import file_handler
 from .utils.subscribe import Subscriber
 from .utils.simulation import Simulator
 from .utils.accounts import AccountHandler
 from .utils.callback import CallbackHandler
 from .utils.objects.data import TradeData
 from .utils.positions import WatchListTool, TradeDataHandler
-try:
-    from .scripts.StrategySet import StrategySet as StrategySets
-except:
-    from .utils.strategy import StrategyTool as StrategySets
+from .utils.strategy import StrategyTool
 
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
-class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
+class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
     def __init__(self, account_name: str):
         super().__init__(account_name)
         AccountHandler.__init__(self, account_name)
-        WatchListTool.__init__(self, account_name)
         OrderTool.__init__(self, account_name)
         Subscriber.__init__(self, self.env.KBAR_START_DAYay)
 
         self.simulator = Simulator(account_name)
-        self.StrategySet = StrategySets(self.env)
+        self.WatchList = WatchListTool(account_name)
+        self.StrategySet = StrategyTool(self.env)
         self.day_trade_cond = {
             'MarginTrading': 'ShortSelling',
             'ShortSelling': 'MarginTrading',
@@ -233,7 +228,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
 
         # 庫存的處理
         # TODO: delete
-        info = self.merge_info(info)
+        info = self.WatchList.merge_info(info)
         TradeData.Stocks.Strategy.update(
             info.set_index('code').strategy.to_dict())
 
@@ -282,7 +277,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
 
         # 庫存的處理
         info = preprocess_(info)
-        info = self.merge_info(info)
+        info = self.WatchList.merge_info(info)
         info.index = info.code
 
         # 剔除不堅控的股票
@@ -297,7 +292,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
 
         # 新增歷史K棒資料
         all_futures = list(TradeData.Futures.Monitor)
-        all_futures = self.StrategySet.append_monitor_list(all_futures)
+        all_futures = self.StrategySet.append_monitor_list_(all_futures)
         self.history_kbars(all_futures)
 
         # 交易風險控制
@@ -327,7 +322,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
         order = self.update_pos_target(order, is_empty)
 
         # append watchlist or udpate watchlist position
-        self.update_position(order)
+        self.WatchList.update_position(order)
 
     def update_stocks_to_monitor(self):
         '''更新買進/賣出股票監控清單'''
@@ -356,8 +351,8 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
         )
         order = self.OrderInfo(**infos)
         self.check_remove_monitor(target, action_type, market)
-        self.update_position(order)
-        self.StrategySet.update_StrategySet_data(target)
+        self.WatchList.update_position(order)
+        self.StrategySet.update_StrategySet_data_(target)
 
     def monitor_stocks(self, target: str):
         if target in TradeData.Quotes.NowTargets:
@@ -403,9 +398,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
             isDTClose = (is_day_trade and (actionType == 'Close'))
 
             if quantity > 0 and (isOpen or isClose or isDTClose):
-                tradeType = '當沖' if is_day_trade else '非當沖'
-                func = self.StrategySet.mapFunction(
-                    actionType, tradeType, strategy)
+                func = self.StrategySet.mapFunction(actionType, strategy)
 
                 if data:
                     inputs.update(data)
@@ -477,8 +470,6 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
                 inputs['datetime'])
             c2 = octype == 'Cover'
             if quantity > 0 and pos_balance > 0 and (c1 or c2):
-                is_day_trade = self.StrategySet.isDayTrade(strategy)
-                tradeType = '當沖' if is_day_trade else '非當沖'
                 isTransfer = (
                     (actionType == 'Close') and
                     ('isDue' in data) and
@@ -488,8 +479,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
                 if isTransfer:
                     func = self.StrategySet.transfer_position
                 else:
-                    func = self.StrategySet.mapFunction(
-                        actionType, tradeType, strategy)
+                    func = self.StrategySet.mapFunction(actionType, strategy)
 
                 if data:
                     inputs.update(data)
@@ -641,9 +631,8 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
             df = df[~df.code.isin(self.env.FILTER_OUT)]
             df = df.sort_values('Close')
 
-            strategies_ordered = self.StrategySet.get_strategy_list(market)
-            for s in strategies_ordered:
-                if s in df.Strategy.values and s in strategies:
+            for s in strategies:
+                if s in df.Strategy.values:
                     code = df[df.Strategy == s].code
                     pools.update({stock: s for stock in code})
                     df = df[~df.code.isin(code)]
@@ -938,7 +927,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
         '''停止交易時，輸出庫存資料 & 交易明細'''
 
         self.output_statement()
-        self.StrategySet.export_strategy_data()
+        self.StrategySet.export_strategy_data_()
 
         if self.simulation:
             self.simulator.save_securityInfo(self.env, 'Stocks')
