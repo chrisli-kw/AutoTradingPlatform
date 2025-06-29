@@ -151,29 +151,6 @@ def runShioajiSubscriber(**kwargs):
         logging.info(future.result())
 
 
-@tasker
-def runSimulationChecker(**kwargs):
-    for account in ACCOUNTS:
-        config = UserEnv(account)
-
-        if config.MODE == 'Simulation':
-            se = StrategyExecutor(account)
-
-            # check stock pool size
-            watchlist = se.watchlist[se.watchlist.market == 'Stocks']
-            stocks = se.get_securityInfo('Stocks')
-            is_same_shape = watchlist.shape[0] == stocks.shape[0]
-            if not is_same_shape:
-                text = f'\n【{account} 庫存不一致】'
-                text += f'\nSize: watchlist {watchlist.shape[0]}; stocks: {stocks.shape[0]}'
-                text += f'\nwatchlist day start: {watchlist.buyday.min()}'
-                text += f'\nwatchlist day end: {watchlist.buyday.max()}'
-                text += f'\nwatchlist - stocks: {set(watchlist.code) - set(stocks.code)}'
-                text += f'\nstocks - watchlist: {set(stocks.code) - set(watchlist.code)}'
-
-                notifier.send.post(text)
-
-
 def runAutoTrader(account: str):
     try:
         se = StrategyExecutor(account)
@@ -281,7 +258,7 @@ def thread_subscribe(user: str, targets: list):
 
 Tasks = {
     'create_env': [runCreateENV],
-    'account_info': [runAccountInfo, runSimulationChecker],
+    'account_info': [runAccountInfo],
     'update_and_select_stock': [
         runCrawlStockData,
         runSelectStock,

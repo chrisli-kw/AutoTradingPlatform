@@ -65,6 +65,9 @@ class SQLDatabase:
     def query(self, table, *filterBy, **conditions):
         '''Get data from DB'''
 
+        if not self.HAS_DB:
+            return pd.DataFrame()
+
         session = self.get_session()
         query = session.query(table).filter(*filterBy)
 
@@ -91,6 +94,9 @@ class SQLDatabase:
     def update(self, table, update_content: dict, *filterBy):
         '''Update data in table'''
 
+        if not self.HAS_DB:
+            return
+
         session = self.get_session()
         session.execute(
             update(table).where(*filterBy).values(update_content)
@@ -100,6 +106,9 @@ class SQLDatabase:
 
     def delete(self, table, *args):
         '''Delete data in table'''
+
+        if not self.HAS_DB:
+            return
 
         session = self.get_session()
         query_data = session.query(table).filter(*args).all()
@@ -119,6 +128,9 @@ class SQLDatabase:
 
     def dataframe_to_DB(self, df: pd.DataFrame, table):
         '''Import dataframe to DB'''
+
+        if not self.HAS_DB:
+            return
 
         # 轉換時間格式
         for col in df.columns:

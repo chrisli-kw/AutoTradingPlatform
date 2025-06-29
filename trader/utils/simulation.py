@@ -3,11 +3,9 @@ import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
-from .. import PATH
 from .database import db
 from .database.tables import SecurityInfoStocks, SecurityInfoFutures
 from .orders import OrderTool
-from .file import file_handler
 from .positions import TradeDataHandler
 from .objects.data import TradeData
 
@@ -22,14 +20,12 @@ class Simulator:
 
     def securityInfo(self, account: str, market='Stocks'):
         try:
-            if db.HAS_DB:
-                table = self.get_table(market)
-                df = db.query(table, table.account == account)
-            else:
-                df = file_handler.Process.read_table(
-                    f'{PATH}/stock_pool/simulation_{market.lower()}_{account}.pkl',
-                    df_default=TradeData[market].InfoDefault
-                )
+            table = self.get_table(market)
+            df = db.query(table, table.account == account)
+
+            if df.empty:
+                df = TradeData[market].InfoDefault
+
         except:
             df = TradeData[market].InfoDefault
 
@@ -95,11 +91,6 @@ class Simulator:
             for target, values in update_values.items():
                 condition = table.code == target, match_account
                 db.update(table, values, *condition)
-        else:
-            file_handler.Process.save_table(
-                df=df,
-                filename=f'{PATH}/stock_pool/simulation_{market.lower()}_{account}.pkl'
-            )
 
     def save_securityInfo(self, env, market='Stocks'):
         '''Save the security info table if running under simulation mode.'''

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from datetime import timedelta
 
-from ..config import PATH, TODAY_STR, TODAY, SelectMethods
+from ..config import PATH, TODAY, SelectMethods
 from .time import time_tool
 from .file import file_handler
 from .crawler import readStockList
@@ -159,29 +159,19 @@ class SelectStock:
         return df
 
     def export(self, df: pd.DataFrame):
-        if db.HAS_DB:
-            db.dataframe_to_DB(df, SelectedStocks)
-        else:
-            file_handler.Process.save_table(df, f'{PATH}/selections/all.csv')
+        db.dataframe_to_DB(df, SelectedStocks)
 
     def get_selection_files(self):
         '''取得選股清單'''
 
         day = time_tool.last_business_day()
+        df = db.query(SelectedStocks, SelectedStocks.Time == day)
 
-        if db.HAS_DB:
-            df = db.query(SelectedStocks, SelectedStocks.Time == day)
-        else:
-            df = file_handler.Process.read_table(
-                filename=f'{PATH}/selections/all.csv',
-                df_default=pd.DataFrame(columns=[
-                    'code', 'company_name', 'category', 'Time',
-                    'Open', 'High', 'Low', 'Close',
-                    'Volume', 'Amount', 'Strategy'
-                ])
-            )
-            df.Time = pd.to_datetime(df.Time)
-            df.code = df.code.astype(str)
-            df = df[df.Time == day]
+        if df.empty:
+            df = pd.DataFrame(columns=[
+                'code', 'company_name', 'category', 'Time',
+                'Open', 'High', 'Low', 'Close',
+                'Volume', 'Amount', 'Strategy'
+            ])
 
         return df

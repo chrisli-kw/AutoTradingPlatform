@@ -30,12 +30,8 @@ def readStockList(markets=['OTC', 'TSE']):
             SecurityList.exchange.in_(markets)
         )
     else:
-        df = file_handler.Process.read_table(
-            f'{PATH}/selections/stock_list.xlsx',
-            df_default=pd.DataFrame(columns=['code', 'exchange'])
-        )
-        df.code = df.code.astype(int).astype(str)
-        df = df[df.exchange.isin(markets)]
+        df = pd.DataFrame(columns=['code', 'exchange'])
+
     return df
 
 
@@ -68,6 +64,9 @@ class CrawlFromSJ:
     def export_security_list(self, df: pd.DataFrame):
         '''Export security data either to local or to DB'''
 
+        if not db.HAS_DB:
+            return
+
         df.reference = df.reference.fillna(0)
         df.limit_up = df.limit_up.fillna(0)
         df.limit_down = df.limit_down.fillna(0)
@@ -75,20 +74,16 @@ class CrawlFromSJ:
         df.day_trade = df.day_trade.fillna(0)
         df.short_selling_balance = df.short_selling_balance.fillna(0)
 
-        if db.HAS_DB:
-            codes = db.query(SecurityList.code).code.values
+        codes = db.query(SecurityList.code).code.values
 
-            # add new data
-            tb = df[~df.code.isin(codes)].copy()
-            db.dataframe_to_DB(tb, SecurityList)
+        # add new data
+        tb = df[~df.code.isin(codes)].copy()
+        db.dataframe_to_DB(tb, SecurityList)
 
-            # delete old data
-            code1 = list(set(codes) - set(df.code))
-            condition = SecurityList.code.in_(code1)
-            db.delete(SecurityList, condition)
-        else:
-            file_handler.Process.save_table(
-                df, f'{PATH}/selections/stock_list.xlsx')
+        # delete old data
+        code1 = list(set(codes) - set(df.code))
+        condition = SecurityList.code.in_(code1)
+        db.delete(SecurityList, condition)
 
     def export_kbar_data(self, df: pd.DataFrame, scale: str):
         '''Export kbar data either to local or to DB'''
@@ -450,14 +445,11 @@ class CrawlFromHTML:
         return df.sort_values('Date').reset_index(drop=True)
 
     def export_put_call_ratio(self, df: pd.DataFrame):
-        if db.HAS_DB:
-            dates = db.query(PutCallRatioList.Date).Date
-            db.dataframe_to_DB(df[~df.Date.isin(dates)], PutCallRatioList)
-        else:
-            filename = f'{PATH}/put_call_ratio.csv'
-            df_pcr = file_handler.Process.read_and_concat(filename, df)
-            file_handler.Process.save_table(
-                df_pcr, f'{PATH}/put_call_ratio.csv')
+        if not db.HAS_DB:
+            return
+
+        dates = db.query(PutCallRatioList.Date).Date
+        db.dataframe_to_DB(df[~df.Date.isin(dates)], PutCallRatioList)
 
     def export_futures_kbar(self, df: pd.DataFrame):
         if db.HAS_DB:
@@ -473,13 +465,13 @@ class CrawlFromHTML:
         file_handler.Process.save_table(df, filename)
 
     def export_ex_dividend_list(self, df: pd.DataFrame):
-        if db.HAS_DB:
-            df_old = db.query(ExDividendTable)
-            df = df[df.Date > df_old.Date.max()].copy()
+        if not db.HAS_DB:
+            return
 
-            db.dataframe_to_DB(df, ExDividendTable)
-        else:
-            file_handler.Process.save_table(df, f'{PATH}/exdividends.csv')
+        df_old = db.query(ExDividendTable)
+        df = df[df.Date > df_old.Date.max()].copy()
+
+        db.dataframe_to_DB(df, ExDividendTable)
 
     def ex_dividend_list(self):
         '''爬蟲:證交所除權息公告表'''

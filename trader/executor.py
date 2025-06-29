@@ -231,10 +231,8 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
         # 取得遠端庫存
         info = self.get_securityInfo('Stocks')
 
-        # 取得策略清單
-        self.init_watchlist(info)
-
         # 庫存的處理
+        # TODO: delete
         info = self.merge_info(info)
         TradeData.Stocks.Strategy.update(
             info.set_index('code').strategy.to_dict())
@@ -316,7 +314,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
         2. update_deal_list
         3. check_remove_monitor
         4. update_pos_target
-        5. update_watchlist_position
+        5. update_position
         '''
         target = order.target
 
@@ -329,7 +327,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
         order = self.update_pos_target(order, is_empty)
 
         # append watchlist or udpate watchlist position
-        self.update_watchlist_position(order)
+        self.update_position(order)
 
     def update_stocks_to_monitor(self):
         '''更新買進/賣出股票監控清單'''
@@ -358,7 +356,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
         )
         order = self.OrderInfo(**infos)
         self.check_remove_monitor(target, action_type, market)
-        self.update_watchlist_position(order)
+        self.update_position(order)
         self.StrategySet.update_StrategySet_data(target)
 
     def monitor_stocks(self, target: str):
@@ -626,7 +624,7 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
             })
 
         df = picker.get_selection_files()
-        if df.shape[0]:
+        if not df.empty:
             # 排除不交易的股票
             if market == 'Stocks':
                 # 全額交割股不買
@@ -938,19 +936,9 @@ class StrategyExecutor(AccountHandler, WatchListTool, OrderTool, Subscriber):
 
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''
-        if 'position' in TradeData.Stocks.Info.columns and not self.simulation:
-            codeList = self.get_securityInfo('Stocks').code.to_list()
-            self.update_watchlist(codeList)
 
-        account = self.env.ACCOUNT_NAME
-        self.save_watchlist(self.watchlist)
-        self.output_statement(f'{PATH}/stock_pool/statement_{account}.csv')
+        self.output_statement()
         self.StrategySet.export_strategy_data()
-
-        for freq, df in TradeData.KBars.Freq.items():
-            if freq != '1D':
-                filename = f'{PATH}/Kbars/k{freq[:-1]}min_{account}.csv'
-                file_handler.Process.save_table(df, filename)
 
         if self.simulation:
             self.simulator.save_securityInfo(self.env, 'Stocks')

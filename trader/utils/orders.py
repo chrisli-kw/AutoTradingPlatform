@@ -4,10 +4,9 @@ import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
-from ..config import API, PATH, Cost
+from ..config import API, Cost
 from . import concat_df
 from .objects.data import TradeData
-from .file import file_handler
 from .positions import FuturesMargin, TradeDataHandler
 from .database import db
 from .database.tables import TradingStatement
@@ -220,7 +219,7 @@ class OrderTool(FuturesMargin):
         '''Filter OrderTable by market'''
         return self.OrderTable[self.OrderTable.market == market].copy()
 
-    def output_statement(self, filename: str = ''):
+    def output_statement(self):
         '''Export trading statement'''
 
         if db.HAS_DB:
@@ -233,10 +232,6 @@ class OrderTool(FuturesMargin):
             if 'op_type' in self.OrderTable.columns:
                 self.OrderTable.op_type.fillna('', inplace=True)
             db.dataframe_to_DB(self.OrderTable, TradingStatement)
-        else:
-            statement = file_handler.Process.read_and_concat(
-                filename, self.OrderTable)
-            file_handler.Process.save_table(statement, filename)
 
     def read_statement(self, account: str = ''):
         '''Import trading statement'''
@@ -247,17 +242,7 @@ class OrderTool(FuturesMargin):
                 TradingStatement.account_id == account
             )
         else:
-            filename = f"{PATH}/stock_pool/statement_{account.split('-')[-1]}.csv"
-            df = file_handler.Process.read_table(
-                filename, df_default=self.OrderTable)
-            df = df[df.account_id == account]
-            df = df.astype({
-                'price': float,
-                'quantity': float,
-                'amount': float,
-                'leverage': float
-            })
-            df.Time = pd.to_datetime(df.Time)
+            df = self.OrderTable
 
         df = df.drop_duplicates()
         return df

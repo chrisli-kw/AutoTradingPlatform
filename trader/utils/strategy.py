@@ -143,13 +143,7 @@ class StrategyTool:
         if db.HAS_DB:
             df = db.query(ExDividendTable)
         else:
-            try:
-                df = file_handler.Process.read_table(f'{PATH}/exdividends.csv')
-                df.Code = df.Code.astype(str).str.zfill(4)
-            except:
-                logging.warning(
-                    '==========exdividends.csv不存在，無除權息股票清單==========')
-                df = pd.DataFrame(columns=['Date', 'Code', 'CashDividend'])
+            df = pd.DataFrame(columns=['Date', 'Code', 'CashDividend'])
 
         df = df[df.Date == TODAY_STR].set_index('Code').CashDividend.to_dict()
         TradeData.Stocks.Dividends = df

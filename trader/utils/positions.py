@@ -4,13 +4,13 @@ import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
-from ..config import PATH, TODAY_STR, API, Cost
-from . import get_contract, concat_df
+from ..config import TODAY_STR, API, Cost
+from . import get_contract
+from .database import db
+from .database.tables import Watchlist
 from .time import time_tool
 from .file import file_handler
 from .objects.data import TradeData
-from .database import db
-from .database.tables import Watchlist
 
 
 class WatchListTool:
@@ -19,29 +19,13 @@ class WatchListTool:
         self.account_name = account_name
         self.MatchAccount = Watchlist.account == self.account_name
         self.watchlist_file = f'watchlist_{account_name}'
-        self.watchlist = self.get_watchlist()
 
-    def get_watchlist(self):
-        """Load watchlist data"""
-        if db.HAS_DB:
-            df = db.query(Watchlist, Watchlist.account == self.account_name)
-            return df
-
-        df = file_handler.Process.read_table(
-            filename=f'{PATH}/stock_pool/{self.watchlist_file}.csv',
-            df_default=pd.DataFrame(columns=[
-                'account', 'market', 'code', 'buyday',
-                'bsh', 'position', 'strategy'
-            ])
-        )
-        df.code = df.code.astype(str)
-        df.buyday = pd.to_datetime(df.buyday.astype(str))
-        df.position = df.position.fillna(100)
-        df.strategy = df.strategy.fillna('Unknown')
-        return df
-
-    def _append_watchlist(self, market: str, orderinfo: namedtuple, quotes: dict = 0):
+    def append(self, market: str, orderinfo: namedtuple, quotes: dict = 0):
         '''Add new stock data to watchlist'''
+
+        if not db.HAS_DB:
+            return
+
         if isinstance(orderinfo, str):
             # Manual trading
             target = orderinfo
@@ -55,7 +39,7 @@ class WatchListTool:
             cost_price = TradeData.Quotes.NowTargets[target]['price']
             check_quantity = orderinfo.quantity != 0
 
-        if target not in self.watchlist.code.values and check_quantity:
+        if db.query(Watchlist, Watchlist.code == target).empty and check_quantity:
             if market == 'Stocks':
                 strategy_pool = TradeData.Stocks.Strategy
             else:
@@ -69,89 +53,45 @@ class WatchListTool:
                 'position': position,
                 'strategy': strategy_pool.get(target, 'unknown')
             }
-            self.watchlist = concat_df(self.watchlist, pd.DataFrame([data]))
 
-            if db.HAS_DB:
-                db.add_data(Watchlist, **data)
-
-    def init_watchlist(self, stocks: pd.DataFrame):
-        stocks = stocks[~stocks.code.isin(self.watchlist.code)].code.values
-
-        # Add stocks to watchlist if it is empty.
-        if not self.watchlist.shape[0] and stocks.shape[0]:
-            for stock in stocks:
-                cost_price = get_contract(stock).reference
-                self._append_watchlist('Stocks', stock, cost_price)
-
-    def update_watchlist(self, codeList: list):
-        '''Update watchlist data when trading time is closed'''
-
-        # Update watchlist position if there's any stock both exists
-        # in stock account and watchlist but position <= 0.
-        condi1 = self.watchlist.code.isin(codeList)
-        condi2 = (self.watchlist.position <= 0)
-        self.watchlist.loc[~condi1 | condi2, 'position'] = 0
-        self.watchlist.loc[condi1 & condi2, 'position'] = 100
-
-        if db.HAS_DB:
-            code1 = self.watchlist[~condi1 | condi2].code.values
-            condition = Watchlist.code.in_(code1), self.MatchAccount
-            db.update(Watchlist, {'position': 0}, *condition)
-
-            code2 = self.watchlist[condi1 & condi2].code.values
-            condition = Watchlist.code.in_(code2), self.MatchAccount
-            db.update(Watchlist, {'position': 100}, condition)
-
-        self.remove_from_watchlist()
+            db.add_data(Watchlist, **data)
 
     def merge_info(self, tbInfo: pd.DataFrame):
+        # TODO: delete
+
+        watchlist = db.query(Watchlist)
         tbInfo = tbInfo.merge(
-            self.watchlist,
+            watchlist,
             how='left',
             on=['account', 'market', 'code']
         )
         tbInfo.position.fillna(100, inplace=True)
         return tbInfo
 
-    def remove_from_watchlist(self):
-        '''Delete Watchlist data where position <= 0.'''
-
-        self.watchlist = self.watchlist[self.watchlist.position > 0]
-        if db.HAS_DB:
-            db.delete(Watchlist, Watchlist.position <= 0, self.MatchAccount)
-
-    def update_watchlist_position(self, order: namedtuple):
+    def update_position(self, order: namedtuple):
         target = order.target
         position = order.pos_target
 
-        if target in self.watchlist.code.values:
-            condition = self.watchlist.code == target
-            if order.action_type == 'Open':
-                self.watchlist.loc[condition, 'position'] += position
-            else:
-                self.watchlist.loc[condition, 'position'] -= position
+        condition = Watchlist.code == target, self.MatchAccount
+        watchlist = db.query(Watchlist, *condition)
 
-            if db.HAS_DB and condition.sum():
-                position = self.watchlist.loc[condition, 'position'].values[0]
-                condition = Watchlist.code.in_([target]), self.MatchAccount
-                db.update(Watchlist, {'position': position}, *condition)
-
-            self.remove_from_watchlist()
-        elif order.action_type == 'Open':
+        if watchlist.empty and order.action_type == 'Open':
             market = 'Stocks' if not order.octype else 'Futures'
-            self._append_watchlist(market, order)
+            self.append(market, order)
 
-    def save_watchlist(self, df: pd.DataFrame):
-        if db.HAS_DB:
-            codes = db.query(Watchlist.code, self.MatchAccount).code.values
-            tb = df[~df.code.isin(codes)]
-            db.dataframe_to_DB(tb, Watchlist)
-        else:
-            file_handler.Process.save_table(
-                df=df,
-                filename=f'{PATH}/stock_pool/{self.watchlist_file}.csv',
-                saveEmpty=True
-            )
+        elif not watchlist.empty:
+            db_position = watchlist.position.values[0]
+
+            if order.action_type != 'Open':
+                position *= -1
+
+            db_position += position
+
+            if db_position > 0:
+                db.update(Watchlist, {'position': position}, *condition)
+            else:
+                db.delete(
+                    Watchlist, Watchlist.position <= 0, self.MatchAccount)
 
 
 class TradeDataHandler:
