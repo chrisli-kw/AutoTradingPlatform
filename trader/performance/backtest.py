@@ -386,18 +386,18 @@ class BackTester(BacktestPerformance):
 
         return KBars
 
-    def addFeatures(self, KBars: dict):
+    def add_features(self, KBars: dict):
         return KBars
 
     def selectStocks(self, KBars: dict):
         '''依照策略選股條件挑出可進場的股票，必須新增一個"isIn"欄位'''
         return KBars
 
-    def examineOpen(self, inputs: dict, KBars: dict, **kwargs):
+    def Open(self, inputs: dict, KBars: dict, **kwargs):
         '''檢查進場條件'''
         return self.Action(100, '進場', 'msg', KBars['1D']['Open'])
 
-    def examineClose(self, inputs: dict, KBars: dict, **kwargs):
+    def Close(self, inputs: dict, KBars: dict, **kwargs):
         '''檢查出場條件'''
         if inputs['low'] < inputs['open']:
             closePrice = inputs['open']
@@ -406,7 +406,11 @@ class BackTester(BacktestPerformance):
 
     def computeOpenLimit(self, KBars: dict, **kwargs):
         '''計算每日買進股票上限(可做幾支)'''
-        return 2000
+        if not hasattr(self, f'openLimit_{self.strategy}'):
+            return 2000
+
+        func = getattr(self, f'openLimit_{self.strategy}')
+        return func('backtest', KBars=KBars)
 
     def computeOpenUnit(self, KBars: dict):
         '''
@@ -414,7 +418,12 @@ class BackTester(BacktestPerformance):
         參數:
         inputs - 交易判斷當下的股票資料(開高低收等)
         '''
-        return 5
+        if not hasattr(self, f'quantity_{self.strategy}'):
+            return 5
+
+        func = getattr(self, f'quantity_{self.strategy}')
+        quantity, _ = func(None, 'backtest', KBars=KBars)
+        return quantity
 
     def setVolumeProp(self, market_value: float):
         '''根據成交量比例設定進場張數'''
@@ -438,21 +447,21 @@ class BackTester(BacktestPerformance):
         self.isLong = testScript.mode == 'long'
         self.sign = 1 if self.isLong else -1
 
-        @self.on_set_script_function(testScript, 'addFeatures')
+        @self.on_set_script_function(testScript, 'add_features')
         def func1(df):
-            return testScript.addFeatures(df)
+            return testScript.add_features(df)
 
         @self.on_set_script_function(testScript, 'selectStocks')
         def func2(df):
             return testScript.selectStocks(df)
 
-        @self.on_set_script_function(testScript, 'examineOpen')
+        @self.on_set_script_function(testScript, 'Open')
         def func3(inputs, KBars, **kwargs):
-            return testScript.examineOpen(inputs, KBars, **kwargs)
+            return testScript.Open(inputs, KBars, **kwargs)
 
-        @self.on_set_script_function(testScript, 'examineClose')
+        @self.on_set_script_function(testScript, 'Close')
         def func4(inputs, KBars, **kwargs):
-            return testScript.examineClose(inputs, KBars, **kwargs)
+            return testScript.Close(inputs, KBars, **kwargs)
 
         @self.on_set_script_function(testScript, 'computeOpenLimit')
         def func5(KBars, **kwargs):
@@ -660,7 +669,7 @@ class BackTester(BacktestPerformance):
         # if 'volume_ma' in inputs:
         #     unit = self.checkOpenUnitLimit(unit, inputs['volume_ma'])
 
-        openInfo = self.examineOpen(
+        openInfo = self.Open(
             None,
             KBars=inputs,
             market_value=self.market_value,
@@ -714,7 +723,7 @@ class BackTester(BacktestPerformance):
             'cum_max_min': cum_max_min
         })
 
-        closeInfo = self.examineClose(
+        closeInfo = self.Close(
             inputs=self.stocks,
             KBars=inputs,
             stocksClosed=stocksClosed

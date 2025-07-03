@@ -1,29 +1,19 @@
-import logging
 import numpy as np
 import pandas as pd
 from datetime import timedelta
+from importlib import import_module
 
-from ..config import PATH, TODAY, SelectMethods
+from ..config import PATH, TODAY, SelectMethods, StrategyList
 from .time import time_tool
 from .file import file_handler
 from .crawler import readStockList
 from .database import db, KBarTables
 from .database.tables import SelectedStocks
-try:
-    from ..scripts.conditions import SelectConditions
-except:
-    logging.warning('Cannot import select scripts from package.')
-    SelectConditions = None
-try:
-    from ..scripts.features import FeaturesSelect
-except:
-    logging.warning('Cannot import feature scripts from package.')
-    FeaturesSelect = None
 
 
 class SelectStock:
     def __init__(self, scale='1D'):
-        self.set_select_scripts(SelectConditions, FeaturesSelect)
+        self.set_select_scripts()
         self.scale = scale
         self.categories = {
             1: '水泥工業',
@@ -61,24 +51,21 @@ class SelectStock:
             80: '管理股票'
         }
 
-    def set_select_scripts(self, select_scripts: object = None, feature_scripts: object = None):
+    def set_select_scripts(self):
         '''Set preprocess & stock selection scripts'''
 
-        if select_scripts and feature_scripts:
-            feature_scripts = feature_scripts()
-            self.Preprocess = {
-                m: getattr(feature_scripts, f'preprocess_{m}') for m in SelectMethods}
+        self.Preprocess = {}
+        self.METHODS = {}
+        for m in SelectMethods:
+            if m in StrategyList:
+                conf = import_module(
+                    f'trader.scripts.StrategySet.{m}').StrategyConfig
 
-            if hasattr(feature_scripts, 'preprocess_common'):
-                self.Preprocess.update({
-                    'preprocess_common': feature_scripts.preprocess_common})
+                if hasattr(conf, 'select_preprocess'):
+                    self.Preprocess[m] = getattr(conf, 'select_preprocess')
 
-            select_scripts = select_scripts()
-            self.METHODS = {
-                m: getattr(select_scripts, f'condition_{m}') for m in SelectMethods}
-        else:
-            self.Preprocess = {}
-            self.METHODS = {}
+                if hasattr(conf, 'select_condition'):
+                    self.METHODS[m] = getattr(conf, 'select_condition')
 
     def load_and_merge(self, targets):
         if db.HAS_DB:
@@ -105,9 +92,6 @@ class SelectStock:
             df.loc[
                 (df.name == '6548') & (df.Time < '2019-09-09'), col] /= 10
 
-        if 'preprocess_common' in self.Preprocess:
-            df = self.Preprocess['preprocess_common'](df)
-
         return df
 
     def pick(self, *args):
@@ -116,8 +100,7 @@ class SelectStock:
         df = self.preprocess(df)
 
         for m, func in self.Preprocess.items():
-            if m != 'preprocess_common':
-                df = func(df)
+            df = func(df)
 
         for i, (m, func) in enumerate(self.METHODS.items()):
             df.insert(i+2, m, func(df, *args))
