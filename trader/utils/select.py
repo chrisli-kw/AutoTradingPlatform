@@ -57,7 +57,7 @@ class SelectStock:
         self.Preprocess = {}
         self.METHODS = {}
         for m in SelectMethods:
-            if m in StrategyList:
+            if m in StrategyList.All:
                 conf = import_module(
                     f'trader.scripts.StrategySet.{m}').StrategyConfig
 

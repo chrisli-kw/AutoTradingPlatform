@@ -17,11 +17,6 @@ from ..utils.database.tables import SelectedStocks
 from .base import convert_statement
 from .backtest import BacktestPerformance
 from .charts import export_figure, convert_encodings, SuplotHandler
-try:
-    from ..scripts import backtest_config
-except:
-    logging.warning('Cannot import test scripts from package.')
-    backtest_config = None
 
 
 class FiguresSet:
@@ -32,7 +27,7 @@ class PerformanceReport(SuplotHandler, OrderTool):
     def __init__(self, account: str, market: str):
         self.account = account
         self.market = market
-        self.set_report_scripts(backtest_config)
+        self.set_report_scripts()  # TODO: backtest_config
         self.TablesFile = f'{PATH}/daily_info/{TODAY_STR[:-3]}-{market}-performance-{account}.xlsx'
         self.Tables = namedtuple(
             typename='Tables',
