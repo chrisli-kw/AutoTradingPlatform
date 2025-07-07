@@ -7,7 +7,7 @@ from datetime import datetime
 from shioaji.account import StockAccount
 
 from ..config import API, PATH, TODAY, TODAY_STR
-from . import concat_df
+from . import concat_df, get_contract
 from .time import time_tool
 from .crawler import crawler
 from .file import file_handler
@@ -136,36 +136,12 @@ class AccountInfo:
             return stockname.name
         return stockname
 
-    def securityInfo(self, market='Stocks'):
+    def securityInfo(self):
         '''查庫存明細'''
 
-        if market == 'Stocks':
-            while True:
-                try:
-                    stocks = API.list_positions(
-                        API.stock_account,
-                        unit=sj.constant.Unit.Share
-                    )
-                    stocks = self._obj_2_df(stocks)
-                    break
-                except:
-                    logging.warning('Cannot get the security info, retrying')
-                    time.sleep(1)
-            stocks = stocks.rename(columns={
-                'cond': 'order_cond',
-                'direction': 'action',
-                'price': 'cost_price',
-            })
-            if stocks.shape[0]:
-                names = stocks.code.apply(self.get_stock_name)
-                stocks.pnl = stocks.pnl.astype(int)  # 未實現損益
-                stocks.order_cond = stocks.order_cond.astype(str)  # 交易別
-                stocks.insert(1, 'name', names)
-                stocks[['account', 'market']] = [self.account_name, 'Stocks']
-                return stocks
-            return TradeData['Stocks'].InfoDefault
-
-        return self.get_openpositions()
+        info_stock = self.get_stock_positions()
+        info_futures = self.get_futures_positions()
+        return pd.concat([info_stock, info_futures]).reset_index(drop=True)
 
     def get_profit_loss(self, start: str, end: str):
         '''查詢已實現損益'''
@@ -272,6 +248,7 @@ class AccountInfo:
     def query_all(self):
         # 庫存明細(股)
         stocks = self.securityInfo()
+        stocks = stocks[stocks.market == 'Stocks']
 
         # 已實現損益
         profit = self.realized_profit()
@@ -356,12 +333,40 @@ class AccountInfo:
 
         return Margin
 
-    def get_openpositions(self):
+    def get_stock_positions(self):
+        while True:
+            try:
+                stocks = API.list_positions(
+                    API.stock_account,
+                    unit=sj.constant.Unit.Share
+                )
+                stocks = self._obj_2_df(stocks)
+                break
+            except:
+                logging.warning('Cannot get the security info, retrying')
+                time.sleep(1)
+        stocks = stocks.rename(columns={
+            'cond': 'order_cond',
+            'direction': 'action',
+            'price': 'cost_price',
+        })
+        if stocks.shape[0]:
+            names = stocks.code.apply(self.get_stock_name)
+            stocks.pnl = stocks.pnl.astype(int)  # 未實現損益
+            stocks.order_cond = stocks.order_cond.apply(lambda x: x._value_)
+            stocks.order_cond = stocks.order_cond.astype(str)  # 交易別
+            stocks.insert(1, 'name', names)
+            stocks[['account', 'market']] = [self.account_name, 'Stocks']
+            stocks['order'] = ''
+            return stocks
+        return TradeData.Securities.InfoDefault
+
+    def get_futures_positions(self):
         '''查看期權帳戶持有部位'''
 
         positions = API.list_positions(API.futopt_account)
         if not positions:
-            return TradeData['Futures'].InfoDefault
+            return TradeData.Securities.InfoDefault
 
         df = self._obj_2_df(positions)
         if df.shape[0]:
@@ -370,8 +375,16 @@ class AccountInfo:
                 'price': 'cost_price',
             })
             df[['account', 'market']] = [self.account_name, 'Futures']
+            df['yd_quantity'] = df.quantity
+            df['order_cond'] = ''
+
+            df['contract'] = df.code.apply(lambda x: get_contract(x))
+            df['isDue'] = df.contract.apply(
+                lambda x: TODAY_STR.replace('-', '/') == x.delivery_date)
+            df.code = df.contract.apply(lambda x: x.symbol)
+            df['order'] = df[['quantity', 'action']].to_dict('records')
             return df
-        return TradeData['Futures'].InfoDefault
+        return TradeData.Securities.InfoDefault
 
     def get_settle_profitloss(self, start_date: str, end_date: str, market='Stocks'):
         '''查詢已實現損益'''
@@ -425,7 +438,8 @@ class AccountHandler(AccountInfo):
     def _set_trade_risks(self):
         '''設定交易風險值: 可交割金額、總市值'''
 
-        df = TradeData.Stocks.Info.copy()
+        df = TradeData.Securities.Info.copy()
+        df = df[df.market == 'Stocks']
         cost_value = (df.quantity*df.cost_price).sum()
         pnl = df.pnl.sum()
         if self.simulation:

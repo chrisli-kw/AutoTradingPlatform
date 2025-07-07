@@ -10,6 +10,12 @@ from ..utils.database.tables import ExDividendTable
 from ..utils.objects.data import TradeData
 
 
+def import_strategy(account_name: str, strategy: str):
+    module_path = f'trader.scripts.StrategySet.{strategy}'
+    conf = import_module(module_path).StrategyConfig(account_name)
+    return conf
+
+
 class StrategyTool:
     def __init__(self, env=None):
         self.account_name = env.ACCOUNT_NAME
@@ -25,13 +31,9 @@ class StrategyTool:
 
         self.is_simulation = env.MODE == 'Simulation'
 
-        self.strategy_configs = {
-            s: import_module(f'trader.scripts.StrategySet.{s}').StrategyConfig(self.account_name) for s in StrategyList.All
-        }
-
     def mapFunction(self, action: str, strategy: str):
-        if strategy in self.strategy_configs:
-            conf = self.strategy_configs.get(strategy)
+        if strategy in TradeData.StrategyConfig:
+            conf = TradeData.StrategyConfig.get(strategy)
             return getattr(conf, action)
 
         return self.__DoNothing__
@@ -42,8 +44,8 @@ class StrategyTool:
             # (target_quantity, quantity_limit)
             return 1, 499
 
-        if strategy in self.strategy_configs:
-            return self.strategy_configs[strategy].Quantity
+        if strategy in TradeData.StrategyConfig:
+            return TradeData.StrategyConfig[strategy].Quantity
 
         return default_quantity
 
@@ -51,7 +53,7 @@ class StrategyTool:
         return Action()
 
     def update_StrategySet_data_(self, target: str):
-        for conf in self.strategy_configs.values():
+        for conf in TradeData.StrategyConfig.values():
             if hasattr(conf, 'update_StrategySet_data'):
                 conf.update_StrategySet_data(target)
 
@@ -128,10 +130,10 @@ class StrategyTool:
         TradeData.Stocks.Dividends = df
 
     def get_pos_balance(self, strategy: str, raise_pos=False):
-        if strategy not in self.strategy_configs:
+        if strategy not in TradeData.StrategyConfig:
             return 100
 
-        conf = self.strategy_configs.get(strategy)
+        conf = TradeData.StrategyConfig.get(strategy)
         if raise_pos:
             return 100*(conf.raise_qty/conf.max_qty)
         return 100*(conf.open_qty/conf.max_qty)
@@ -153,10 +155,10 @@ class StrategyTool:
         return strategy in StrategyList.DayTrade
 
     def isRaiseQty(self, strategy: str):
-        if strategy not in self.strategy_configs:
+        if strategy not in TradeData.StrategyConfig:
             return False
 
-        conf = self.strategy_configs.get(strategy)
+        conf = TradeData.StrategyConfig.get(strategy)
         position = conf.positions
         if not position.entries:
             return False
@@ -167,12 +169,12 @@ class StrategyTool:
         )
 
     def export_strategy_data_(self):
-        for conf in self.strategy_configs.values():
+        for conf in TradeData.StrategyConfig.values():
             if hasattr(conf, 'export_strategy_data'):
                 conf.export_strategy_data()
 
     def append_monitor_list_(self, monitor_list: list):
-        for conf in self.strategy_configs.values():
+        for conf in TradeData.StrategyConfig.values():
             if hasattr(conf, 'append_monitor_list'):
                 monitor_list = conf.append_monitor_list(monitor_list)
         return np.unique(monitor_list).tolist()

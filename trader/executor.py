@@ -13,7 +13,8 @@ from .config import (
     MonitorFreq,
     TimeSimTradeStockEnd,
     TimeEndStock,
-    TimeTransferFutures
+    TimeTransferFutures,
+    StrategyList
 )
 from .utils import get_contract
 from .utils.time import time_tool
@@ -26,7 +27,7 @@ from .utils.accounts import AccountHandler
 from .utils.callback import CallbackHandler
 from .utils.objects.data import TradeData
 from .utils.positions import WatchListTool, TradeDataHandler
-from .utils.strategy import StrategyTool
+from .utils.strategy import StrategyTool, import_strategy
 
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -34,6 +35,10 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
     def __init__(self, account_name: str):
+        TradeData.StrategyConfig = {
+            s: import_strategy(account_name, s) for s in StrategyList.All
+        }
+
         super().__init__(account_name)
         AccountHandler.__init__(self, account_name)
         OrderTool.__init__(self, account_name)
@@ -137,7 +142,7 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
                     self.deleteOrder(symbol)
                     TradeDataHandler.update_deal_list(symbol, 'Cancel', market)
                     if order['oc_type'] == 'New':
-                        TradeData.Futures.Monitor[symbol] = None
+                        TradeData.Securities.Monitor[symbol] = None
 
                 # 更新監控庫存
                 TradeDataHandler.update_monitor(order['oc_type'], msg)
@@ -214,93 +219,59 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
         logging.info(msg)
         notifier.send.post(f'\n{msg}')
 
-    def init_stocks(self):
-        '''初始化股票資訊'''
+    def _get_filter_out(self):
+        filter_out = []
+        for conf in TradeData.Strategy.values():
+            filter_out.extend(getattr(conf, 'FILTER_OUT', []))
+        return filter_out
 
-        if not self.env.can_stock or datetime.now() > TimeEndStock:
-            return []
-
-        # 讀取選股清單
-        TradeData.Stocks.Strategy = self.get_securityPool('Stocks')
-
-        # 取得遠端庫存
-        info = self.get_securityInfo('Stocks')
-
-        # 庫存的處理
-        # TODO: delete
-        info = self.WatchList.merge_info(info)
-        TradeData.Stocks.Strategy.update(
-            info.set_index('code').strategy.to_dict())
-
-        # 剔除不堅控的股票
-        info = info[~info.code.isin(self.env.FILTER_OUT)]
-
-        # 新增歷史K棒資料
-        self.update_stocks_to_monitor()
-        all_targets = list(TradeData.Stocks.Monitor)
-        self.history_kbars(['TSE001', 'OTC101'] + all_targets)
-
-        # 交易風險控制
-        buy_condition = info.action == 'Buy'
-        TradeData.Stocks.N_Long = info[buy_condition].shape[0]
-        TradeData.Stocks.N_Short = info[~buy_condition].shape[0]
-        TradeData.Stocks.Info = info
-        self.env.N_LIMIT_LS = self.StrategySet.setNStockLimitLong()
-        self.env.N_LIMIT_SS = self.StrategySet.setNStockLimitShort()
-        self.StrategySet.get_ex_dividends_list()
-        self.punish_list = crawler.FromHTML.PunishList()
-        self._set_leverage(all_targets)
-        self._set_trade_risks()
-        logging.debug(f'Stocks to monitor: {TradeData.Stocks.Monitor}')
-        return all_targets
-
-    def init_futures(self):
-        '''初始化期貨資訊'''
-
-        def preprocess_(df):
-            if df.shape[0]:
-                df['contract'] = df.code.apply(lambda x: get_contract(x))
-                df['isDue'] = df.contract.apply(
-                    lambda x: TODAY_STR.replace('-', '/') == x.delivery_date)
-                df.code = df.contract.apply(lambda x: x.symbol)
-                df['order'] = df[['quantity', 'action']].to_dict('records')
-            return df
-
-        if not self.env.can_futures:
-            return []
+    def init_target_sets(self):
+        '''初始化監控資訊'''
 
         # 讀取選股清單
-        TradeData.Futures.Strategy = self.get_securityPool('Futures')
+        TradeData.Securities.Strategy = self.get_securityPool()
 
         # 取得遠端庫存
-        info = self.get_securityInfo('Futures')
-
-        # 庫存的處理
-        info = preprocess_(info)
-        info = self.WatchList.merge_info(info)
+        info = self.get_securityInfo()
         info.index = info.code
 
         # 剔除不堅控的股票
-        info = info[~info.code.isin(self.env.FILTER_OUT)]
-        TradeData.Futures.Strategy.update(info.strategy.to_dict())
+        info = info[~info.code.isin(self._get_filter_out())]
 
-        # update_futures_to_monitor
-        TradeData.Futures.Monitor.update(info.to_dict('index'))
-        TradeData.Futures.Monitor.update({
-            f: None for f in TradeData.Futures.Strategy if f not in TradeData.Futures.Monitor})
-        TradeData.Futures.Info = info
+        # 庫存的處理
+        tb = info[~info.code.isin(TradeData.Securities.Strategy.keys())].copy()
+        tb['strategy'] = None
+        TradeData.Securities.Strategy.update(tb.strategy.to_dict())
 
         # 新增歷史K棒資料
-        all_futures = list(TradeData.Futures.Monitor)
-        all_futures = self.StrategySet.append_monitor_list_(all_futures)
-        self.history_kbars(all_futures)
+        TradeData.Securities.Monitor.update(info.to_dict('index'))
+        TradeData.Securities.Info = info
+
+        for code in TradeData.Securities.Strategy:
+            if code not in TradeData.Securities.Monitor:
+                TradeData.Securities.Monitor.update({code: None})
+
+        # 新增歷史K棒資料
+        all_targets = list(TradeData.Securities.Monitor)
+        all_targets = self.StrategySet.append_monitor_list_(all_targets)
+        self.history_kbars(['TSE001', 'OTC101'] + all_targets)
 
         # 交易風險控制
+        buy_condition = (info.action == 'Buy') & (info.market == 'Stocks')
+        TradeData.Stocks.N_Long = info[buy_condition].shape[0]
+        TradeData.Stocks.N_Short = info[~buy_condition].shape[0]
+
+        self.env.N_LIMIT_LS = self.StrategySet.setNStockLimitLong()
+        self.env.N_LIMIT_SS = self.StrategySet.setNStockLimitShort()
+        self.StrategySet.get_ex_dividends_list()
+        # self.punish_list = crawler.FromHTML.PunishList() # TODO ValueError: No tables found
+        self._set_leverage(all_targets)
+        self._set_trade_risks()
         self.env.N_FUTURES_LIMIT = self.StrategySet.setNFuturesLimit()
         self._set_margin_limit()
         self.margin_table = self.get_margin_table()
-        logging.debug(f'Futures to monitor: {TradeData.Futures.Monitor}')
-        return all_futures
+        logging.debug(f'Targets to monitor: {TradeData.Securities.Monitor}')
+        return all_targets
 
     def _update_position(self, order: namedtuple, market: str, order_data: dict):
         '''
@@ -324,22 +295,6 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
         # append watchlist or udpate watchlist position
         self.WatchList.update_position(order)
 
-    def update_stocks_to_monitor(self):
-        '''更新買進/賣出股票監控清單'''
-
-        df = TradeData.Stocks.Info.copy()
-        df.index = df.code
-        if not self.simulation:
-            df.order_cond = df.order_cond.apply(lambda x: x._value_)
-        TradeData.Stocks.Monitor.update(df.to_dict('index'))
-
-        for stock, stra in TradeData.Stocks.Strategy.items():
-            if (
-                (self.env.can_buy and self.StrategySet.isLong(stra)) or
-                (self.env.can_sell and self.StrategySet.isShort(stra))
-            ) and (stock not in TradeData.Stocks.Monitor):
-                TradeData.Stocks.Monitor.update({stock: None})
-
     def update_after_interfere(self, target: str, action_type: str, market):
         logging.warning(
             f'[Monitor List]Interfere|{market}|{target}|{action_type}|')
@@ -357,8 +312,8 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
     def monitor_stocks(self, target: str):
         if target in TradeData.Quotes.NowTargets:
             inputs = TradeDataHandler.getQuotesNow(target).copy()
-            data = TradeData.Stocks.Monitor[target]
-            strategy = TradeData.Stocks.Strategy[target]
+            data = TradeData.Securities.Monitor[target]
+            strategy = TradeData.Securities.Strategy[target]
             isLongStrategy = self.StrategySet.isLong(strategy)
             isDTStrategy = self.StrategySet.isDayTrade(strategy)
             isSell = (
@@ -386,7 +341,7 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
                 quantity = data['quantity']
                 enoughOpen = False
 
-            inStocks = target in TradeData.Stocks.Info.code.values
+            inStocks = target in TradeData.Securities.Info.code.values
             inDeal = target in TradeData.Stocks.Bought + TradeData.Stocks.Sold
 
             is_day_trade = isDTStrategy and inDeal and (not inStocks)
@@ -427,8 +382,8 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
 
         if target in TradeData.Quotes.NowTargets and self.env.N_FUTURES_LIMIT != 0:
             inputs = TradeDataHandler.getQuotesNow(target).copy()
-            data = TradeData.Futures.Monitor[target]
-            strategy = TradeData.Futures.Strategy[target]
+            data = TradeData.Securities.Monitor[target]
+            strategy = TradeData.Securities.Strategy[target]
 
             # new position
             raise_pos = self.StrategySet.isRaiseQty(strategy)
@@ -489,7 +444,8 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
                     if isTransfer:
                         new_contract = f'{target[:3]}{time_tool.GetDueMonth()}'
                         self.transfer_margin(target, new_contract)
-                        TradeData.Futures.Monitor.update({new_contract: None})
+                        TradeData.Securities.Monitor.update(
+                            {new_contract: None})
                         self.history_kbars([new_contract])
                         self.subscribe_all([new_contract])
                         TradeData.Futures.Transferred.update({
@@ -498,8 +454,8 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
                                 'action': data['order']['action']
                             }
                         })
-                        TradeData.Futures.Strategy[new_contract] = strategy
-                        TradeData.Futures.Strategy.pop(target, None)
+                        TradeData.Securities.Strategy[new_contract] = strategy
+                        TradeData.Securities.Strategy.pop(target, None)
 
                     infos = dict(
                         action_type=actionType,
@@ -594,48 +550,45 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
                 self.check_order_status(result, market)
                 quantity -= q
 
-    def get_securityInfo(self, market='Stocks'):
+    def get_securityInfo(self):
         '''取得證券庫存清單'''
 
         if self.simulation:
-            return self.simulator.securityInfo(self.env.ACCOUNT_NAME, market)
-        return self.securityInfo(market)
+            return self.simulator.securityInfo(self.env.ACCOUNT_NAME)
+        return self.securityInfo()
 
-    def get_securityPool(self, market='Stocks'):
+    def get_securityPool(self):
         '''Get the target securities pool with the format: {code: strategy}'''
 
-        pools = {}
-        if market == 'Stocks':
-            pools.update(self.env.FILTER_IN)
-        else:
-            due_year_month = time_tool.GetDueMonth()
-            pools.update({
-                f'{code}{due_year_month}': st for code, st in self.env.FILTER_IN.items()
-            })
-
+        due_year_month = time_tool.GetDueMonth()
+        day_filter_out = crawler.FromHTML.get_CashSettle()
         df = picker.get_selection_files()
-        if not df.empty:
+
+        pools = {}
+        for strategy, conf in TradeData.StrategyConfig.items():
+            targets = getattr(conf, 'Targets', [])
+
+            for code in targets:
+                if conf.market == 'Stocks':
+                    pools.update({code: strategy})
+                else:
+                    pools.update({f'{code}{due_year_month}': strategy})
+
             # 排除不交易的股票
-            if market == 'Stocks':
-                # 全額交割股不買
-                day_filter_out = crawler.FromHTML.get_CashSettle()
-                df = df[~df.code.isin(day_filter_out.股票代碼.values)]
 
-                # 排除高價股
-                df = df[df.Close <= self.env.PRICE_THRESHOLD]
+            # --- 全額交割股不買
+            df = df[~df.code.isin(day_filter_out.股票代碼.values)]
 
-                strategies = self.env.STRATEGY_STOCK
-            else:
-                strategies = self.env.STRATEGY_FUTURES
+            # --- 排除高價股
+            df = df[df.Close <= getattr(conf, 'PRICE_THRESHOLD', 0)]
 
-            df = df[~df.code.isin(self.env.FILTER_OUT)]
+            df = df[~df.code.isin(getattr(conf, 'FILTER_OUT', []))]
             df = df.sort_values('Close')
 
-            for s in strategies:
-                if s in df.Strategy.values:
-                    code = df[df.Strategy == s].code
-                    pools.update({stock: s for stock in code})
-                    df = df[~df.code.isin(code)]
+            if strategy in df.Strategy.values:
+                code = df[df.Strategy == strategy].code
+                pools.update({stock: strategy for stock in code})
+                df = df[~df.code.isin(code)]
 
         return pools
 
@@ -691,7 +644,7 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
         else:
             func = self.StrategySet.isShort
 
-        strategies = TradeData.Stocks.Strategy
+        strategies = TradeData.Securities.Strategy
 
         buy_deals = TradeData.Stocks.Bought
         buy_deals = len([s for s in buy_deals if func(strategies[s])])
@@ -745,7 +698,7 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
         open_deals = len(TradeData.Futures.Opened)
         close_deals = len(TradeData.Futures.Closed)
         quota = abs(self.env.N_FUTURES_LIMIT) - \
-            TradeData.Futures.Info.shape[0] - open_deals + close_deals
+            TradeData.Securities.Info.shape[0] - open_deals + close_deals
 
         # 更新已委託金額
         df = self.filterOrderTable('Futures')
@@ -787,7 +740,7 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
             self.env.N_LIMIT_LS,
             self.env.N_LIMIT_SS,
             self.env.N_FUTURES_LIMIT,
-            TradeData.Futures.Info.shape[0]
+            TradeData.Securities.Info.shape[0]
         ])
 
     def is_break_loop(self, now: datetime):
@@ -806,18 +759,20 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
             logging.debug(f'[Monitor List]Remove|{market}|{target}|')
             if market == 'Stocks':
                 day_trade = self.StrategySet.isDayTrade(
-                    TradeData.Stocks.Strategy.get(target, 'unknown'))
+                    TradeData.Securities.Strategy.get(target, 'unknown'))
                 TradeDataHandler.reset_monitor(target, market, day_trade=False)
-                if target in TradeData.Stocks.Info.code.values:
-                    TradeData.Stocks.Info = remove_(TradeData.Stocks.Info)
+                if target in TradeData.Securities.Info.code.values:
+                    TradeData.Securities.Info = remove_(
+                        TradeData.Securities.Info)
             else:
                 day_trade = self.StrategySet.isDayTrade(
-                    TradeData.Futures.Strategy.get(target, 'unknown'))
+                    TradeData.Securities.Strategy.get(target, 'unknown'))
                 TradeDataHandler.reset_monitor(
                     target, market, day_trade=day_trade)
 
-                if target in TradeData.Futures.Info.code.values:
-                    TradeData.Futures.Info = remove_(TradeData.Futures.Info)
+                if target in TradeData.Securities.Info.code.values:
+                    TradeData.Securities.Info = remove_(
+                        TradeData.Securities.Info)
 
         if self.simulation:
             self.simulator.remove_from_info(target, self.account_name, market)
@@ -841,15 +796,16 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
     def run(self):
         '''執行自動交易'''
 
-        all_stocks = self.init_stocks()
-        all_futures = self.init_futures()
+        all_targets = self.init_target_sets()
         usage = round(API.usage().bytes/2**20, 2)
-        self.subscribe_all(all_stocks+all_futures)
+        self.subscribe_all(all_targets)
 
         logging.info(f'Start to monitor, basic settings:')
         logging.info(f'[AccountInfo] Current data usage: {usage}')
         logging.info(f'[AccountInfo] Mode: {self.env.MODE}')
-        logging.info(f'[Stock Strategy] {TradeData.Stocks.Strategy}')
+        logging.info(f'[Security Strategy] {TradeData.Securities.Strategy}')
+        logging.info(
+            f'[Security position] {TradeData.Securities.Info.shape[0]}')
         logging.info(f'[Stock Position] Long: {TradeData.Stocks.N_Long}')
         logging.info(
             f'[Stock Position] Limit Long: {self.env.POSITION_LIMIT_LONG}')
@@ -860,8 +816,6 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
         logging.info(f'[Stock Portfolio Limit] Short: {self.env.N_LIMIT_SS}')
         logging.info(f'[Stock Model Version] {self.env.STOCK_MODEL_VERSION}')
 
-        logging.info(f'[Futures Strategy] {TradeData.Futures.Strategy}')
-        logging.info(f'[Futures position] {TradeData.Futures.Info.shape[0]}')
         logging.info(f'[Futures portfolio Limit] {self.env.N_FUTURES_LIMIT}')
         logging.info(
             f'[Futures Model Version] {self.env.FUTURES_MODEL_VERSION}')
@@ -900,13 +854,13 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
                         self.updateKBars(f'{freq}T')
 
             # TODO: merge stocks_to_monitor & futures_to_monitor
-            for target in list(TradeData.Stocks.Monitor):
+            for target in list(TradeData.Securities.Monitor):
                 order = self.monitor_stocks(target)
                 if order.pos_target:
                     order_data = self._place_order(order, market='Stocks')
                     self._update_position(order, 'Stocks', order_data)
 
-            for target in list(TradeData.Futures.Monitor):
+            for target in list(TradeData.Securities.Monitor):
                 order = self.monitor_futures(target)
                 if order.pos_target:
                     order_data = self._place_order(order, market='Futures')
@@ -921,12 +875,11 @@ class StrategyExecutor(AccountHandler, OrderTool, Subscriber):
             self._log_and_notify(f"【停止監控】{self.env.ACCOUNT_NAME} 無可監控清單")
 
         time.sleep(3)
-        self.unsubscribe_all(all_stocks+all_futures)
+        self.unsubscribe_all(all_targets)
 
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''
 
-        self.output_statement()
         self.StrategySet.export_strategy_data_()
 
         if self.simulation:

@@ -4,7 +4,7 @@ from datetime import datetime
 from collections import namedtuple
 
 from .database import db
-from .database.tables import SecurityInfoStocks, SecurityInfoFutures
+from .database.tables import SecurityInfo
 from .orders import OrderTool
 from .positions import TradeDataHandler
 from .objects.data import TradeData
@@ -14,20 +14,11 @@ class Simulator:
     def __init__(self, account_name: str) -> None:
         self.order_tool = OrderTool(account_name)
 
-    def get_table(self, market='Stocks'):
-        table = SecurityInfoStocks if market == 'Stocks' else SecurityInfoFutures
-        return table
-
-    def securityInfo(self, account: str, market='Stocks'):
+    def securityInfo(self, account: str):
         try:
-            table = self.get_table(market)
-            df = db.query(table, table.account == account)
-
-            if df.empty:
-                df = TradeData[market].InfoDefault
-
+            df = db.query(SecurityInfo, SecurityInfo.account == account)
         except:
-            df = TradeData[market].InfoDefault
+            df = TradeData.Securities.InfoDefault
 
         df['account_id'] = 'simulate'
         return df
@@ -35,11 +26,8 @@ class Simulator:
     def monitor_list_to_df(self, account: str, market='Stocks'):
         '''Convert stocks/futures monitor list to dataframe'''
 
-        if market == 'Stocks':
-            data = TradeData.Stocks.Monitor
-        else:
-            data = TradeData.Futures.Monitor
-        logging.debug(f'{market.lower()}_to_monitor: {data}')
+        data = TradeData.Securities.Monitor
+        logging.debug(f'targets_to_monitor: {data}')
 
         df = {k: v for k, v in data.items() if v}
         df = pd.DataFrame(df).T
@@ -76,21 +64,20 @@ class Simulator:
         if df.empty:
             return
 
-        table = self.get_table(market)
         if db.HAS_DB:
-            match_account = table.account == account
-            codes = db.query(table.code, match_account).code.values
+            match_account = SecurityInfo.account == account
+            codes = db.query(SecurityInfo.code, match_account).code.values
             tb = df[~df.code.isin(codes)]
             update_values = df[df.code.isin(codes)].set_index('code')
 
             # add new stocks
-            db.dataframe_to_DB(tb, table)
+            db.dataframe_to_DB(tb, SecurityInfo)
 
             # update in-stocks
             update_values = update_values.to_dict('index')
             for target, values in update_values.items():
-                condition = table.code == target, match_account
-                db.update(table, values, *condition)
+                condition = SecurityInfo.code == target, match_account
+                db.update(SecurityInfo, values, *condition)
 
     def save_securityInfo(self, env, market='Stocks'):
         '''Save the security info table if running under simulation mode.'''
@@ -106,11 +93,10 @@ class Simulator:
 
     def remove_from_info(self, target: str, account: str, market='Stocks'):
         if db.HAS_DB:
-            table = self.get_table(market)
             db.delete(
-                table,
-                table.code == target,
-                table.account == account
+                SecurityInfo,
+                SecurityInfo.code == target,
+                SecurityInfo.account == account
             )
 
     def update_position(self, order: namedtuple, market: str, order_data: dict):

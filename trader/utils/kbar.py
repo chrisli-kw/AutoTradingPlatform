@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from typing import List
-from importlib import import_module
 from datetime import datetime, timedelta
 
 from ..config import (
@@ -44,10 +43,6 @@ class KBarTool(TechnicalSignals):
             '60T': self.add_K60min_feature,
             '1D': self.add_KDay_feature,
         }
-        self.strategy_configs = {
-            s: import_module(f'trader.scripts.StrategySet.{s}').StrategyConfig for s in StrategyList.All
-        }
-
         self.is_kbar_1t_updated = {
             '2T': False,
             '5T': False,
@@ -68,7 +63,7 @@ class KBarTool(TechnicalSignals):
         return max((TODAY - kbar_start_day).days, 35)
 
     def _apply_feature_by_scale(self, df: pd.DataFrame, scale: str):
-        for conf in self.strategy_configs.values():
+        for conf in TradeData.StrategyConfig.values():
             if scale in getattr(conf, 'kbarScales', []):
                 df = conf.add_features(df)
         return df

@@ -6,17 +6,22 @@ class Leverage:
     Short = {}
 
 
-class Stocks:
+class Securities:
     InfoDefault = pd.DataFrame(
         columns=[
             'account', 'market',
-            'code', 'order_cond', 'action', 'pnl',
-            'cost_price', 'quantity', 'yd_quantity', 'last_price'
+            'code', 'action', 'quantity', 'cost_price',
+            'last_price', 'pnl',
+            'yd_quantity', 'order_cond', 'order',
+            'timestamp', 'position', 'strategy'
         ]
     )
     Info = pd.DataFrame()
     Strategy = {}
     Monitor = {}
+
+
+class Stocks:
     N_Long = 0
     N_Short = 0
     Leverage = Leverage()
@@ -26,22 +31,12 @@ class Stocks:
 
 
 class Futures:
-    InfoDefault = pd.DataFrame(
-        columns=[
-            'account', 'market',
-            'code', 'action', 'quantity', 'cost_price',
-            'last_price', 'pnl'
-        ]
-    )
     SettleDefault = pd.DataFrame(
         columns=[
             'date', 'code', 'quantity', 'dseq', 'fee', 'tax', 'currency',
             'direction', 'entry_price', 'cover_price', 'pnl', 'profit'
         ]
     )
-    Info = pd.DataFrame()
-    Strategy = {}
-    Monitor = {}
     Opened = []
     Closed = []
     Transferred = {}
@@ -74,11 +69,13 @@ class KBars:
 
 class DefaultTableMeta(type):
     _data = {
+        'Securities': Securities,
         'Stocks': Stocks,
         'Futures': Futures,
         'BidAsk': {},
         'Quotes': Quotes(),
         'KBars': KBars(),
+        'Strategy': {}
     }
 
     def __getitem__(cls, key):

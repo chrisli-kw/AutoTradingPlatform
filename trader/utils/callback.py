@@ -13,9 +13,9 @@ class CallbackHandler:
         code = msg['code']
         delivery_month = msg['delivery_month']
         symbol = code + delivery_month
-        if symbol in TradeData.Futures.Monitor and TradeData.Futures.Monitor[symbol] is not None:
+        if TradeData.Securities.Monitor.get(symbol) is not None:
             price = msg['price']
-            TradeData.Futures.Monitor[symbol]['cost_price'] = price
+            TradeData.Securities.Monitor[symbol]['cost_price'] = price
 
     @staticmethod
     def update_stock_msg(msg: dict):

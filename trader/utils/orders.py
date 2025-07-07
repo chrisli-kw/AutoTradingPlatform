@@ -63,8 +63,8 @@ class OrderTool(FuturesMargin):
         if order_cond == 'ShortSelling':
             return price
 
-        if target in TradeData.Stocks.Info.code.values:
-            cost_price = TradeData.Stocks.Info.set_index(
+        if target in TradeData.Securities.Info.code.values:
+            cost_price = TradeData.Securities.Info.set_index(
                 'code').cost_price.to_dict()
             return cost_price[target]
         return 0
@@ -200,10 +200,7 @@ class OrderTool(FuturesMargin):
         order_data = self.generate_data(target, content, market)
         order_data['leverage'] = self.check_leverage(target, order_cond)
 
-        self.OrderTable = concat_df(
-            self.OrderTable,
-            pd.DataFrame([order_data])
-        )
+        db.add_data(TradingStatement, **order_data)
         return order_data
 
     def deleteOrder(self, code: str):
@@ -218,20 +215,6 @@ class OrderTool(FuturesMargin):
     def filterOrderTable(self, market: str):
         '''Filter OrderTable by market'''
         return self.OrderTable[self.OrderTable.market == market].copy()
-
-    def output_statement(self):
-        '''Export trading statement'''
-
-        if db.HAS_DB:
-            if 'order_cond' in self.OrderTable.columns:
-                self.OrderTable.order_cond.fillna('', inplace=True)
-            if 'order_lot' in self.OrderTable.columns:
-                self.OrderTable.order_lot.fillna('', inplace=True)
-            if 'leverage' in self.OrderTable.columns:
-                self.OrderTable.leverage.fillna(-1, inplace=True)
-            if 'op_type' in self.OrderTable.columns:
-                self.OrderTable.op_type.fillna('', inplace=True)
-            db.dataframe_to_DB(self.OrderTable, TradingStatement)
 
     def read_statement(self, account: str = ''):
         '''Import trading statement'''

@@ -7,7 +7,7 @@ from collections import namedtuple
 from ..config import TODAY_STR, API, Cost
 from . import get_contract
 from .database import db
-from .database.tables import Watchlist
+from .database.tables import SecurityInfo
 from .time import time_tool
 from .file import file_handler
 from .objects.data import TradeData
@@ -17,7 +17,7 @@ class WatchListTool:
 
     def __init__(self, account_name: str):
         self.account_name = account_name
-        self.MatchAccount = Watchlist.account == self.account_name
+        self.MatchAccount = SecurityInfo.account == self.account_name
         self.watchlist_file = f'watchlist_{account_name}'
 
     def append(self, market: str, orderinfo: namedtuple, quotes: dict = 0):
@@ -39,27 +39,23 @@ class WatchListTool:
             cost_price = TradeData.Quotes.NowTargets[target]['price']
             check_quantity = orderinfo.quantity != 0
 
-        if db.query(Watchlist, Watchlist.code == target).empty and check_quantity:
-            if market == 'Stocks':
-                strategy_pool = TradeData.Stocks.Strategy
-            else:
-                strategy_pool = TradeData.Futures.Strategy
-            data = {
+        if db.query(SecurityInfo, SecurityInfo.code == target).empty and check_quantity:
+            strategy_pool = TradeData.Securities.Strategy
+            data = {  # TODO: 新增欄位資料
                 'account': self.account_name,
                 'market': market,
                 'code': target,
-                'buyday': datetime.now(),
-                'bsh': cost_price,
+                'timestamp': datetime.now(),
                 'position': position,
                 'strategy': strategy_pool.get(target, 'unknown')
             }
 
-            db.add_data(Watchlist, **data)
+            db.add_data(SecurityInfo, **data)
 
     def merge_info(self, tbInfo: pd.DataFrame):
         # TODO: delete
 
-        watchlist = db.query(Watchlist)
+        watchlist = db.query(SecurityInfo)
         tbInfo = tbInfo.merge(
             watchlist,
             how='left',
@@ -72,8 +68,8 @@ class WatchListTool:
         target = order.target
         position = order.pos_target
 
-        condition = Watchlist.code == target, self.MatchAccount
-        watchlist = db.query(Watchlist, *condition)
+        condition = SecurityInfo.code == target, self.MatchAccount
+        watchlist = db.query(SecurityInfo, *condition)
 
         if watchlist.empty and order.action_type == 'Open':
             market = 'Stocks' if not order.octype else 'Futures'
@@ -88,39 +84,30 @@ class WatchListTool:
             db_position += position
 
             if db_position > 0:
-                db.update(Watchlist, {'position': position}, *condition)
+                db.update(SecurityInfo, {'position': position}, *condition)
             else:
                 db.delete(
-                    Watchlist, Watchlist.position <= 0, self.MatchAccount)
+                    SecurityInfo, SecurityInfo.position <= 0, self.MatchAccount)
 
 
 class TradeDataHandler:
     @staticmethod
     def check_is_empty(target, market='Stocks'):
-        if market == 'Stocks':
-            data = TradeData.Stocks.Monitor.get(target, {})
-        else:
-            data = TradeData.Futures.Monitor.get(target, {})
+        data = TradeData.Securities.Monitor.get(target, {})
         quantity = data.get('order', {}).get('quantity', 0)
         position = data.get('position', 0)
 
         is_empty = (quantity <= 0 or position <= 0)
         logging.debug(
-            f'[Monitor List]Check|{market}|{target}|{is_empty}|quantity: {quantity}; position: {position}|')
+            f'[Monitor List]Check|{target}|{is_empty}|quantity: {quantity}; position: {position}|')
         return is_empty
 
     @staticmethod
     def reset_monitor(target: str, market='Stocks', day_trade=False):
-        if market == 'Stocks':
-            TradeData.Stocks.Monitor.pop(target, None)
-            if day_trade:
-                logging.debug(f'[Monitor List]Reset|Stocks|{target}|')
-                TradeData.Stocks.Monitor[target] = None
-        else:
-            TradeData.Futures.Monitor.pop(target, None)
-            if day_trade:
-                logging.debug(f'[Monitor List]Reset|Futures|{target}|')
-                TradeData.Futures.Monitor[target] = None
+        TradeData.Securities.Monitor.pop(target, None)
+        if day_trade:
+            logging.debug(f'[Monitor List]Reset|Securities|{target}|')
+            TradeData.Securities.Monitor[target] = None
 
     @staticmethod
     def update_deal_list(target: str, action_type: str, market='Stocks'):
@@ -152,53 +139,53 @@ class TradeDataHandler:
         target = data['code']
         quantity_ = position_ = 0
         if action in ['Open', 'Close']:
-            if TradeData.Stocks.Monitor[target] is not None:
+            if TradeData.Securities.Monitor[target] is not None:
                 quantity = data['quantity']
 
                 if action == 'New':
-                    stage = 'Add|Stocks'
+                    stage = 'Add|Target'
                     position *= -1
                     quantity *= -1
                 else:
-                    stage = 'Update|Stocks'
+                    stage = 'Update|Target'
 
-                TradeData.Stocks.Monitor[target]['position'] -= position
-                TradeData.Stocks.Monitor[target]['quantity'] -= quantity
+                TradeData.Securities.Monitor[target]['position'] -= position
+                TradeData.Securities.Monitor[target]['quantity'] -= quantity
             else:
-                stage = 'Add|Stocks'
-                TradeData.Stocks.Monitor[target] = data
+                stage = 'Add|Target'
+                TradeData.Securities.Monitor[target] = data
 
             if 'None' not in stage:
-                position_ = TradeData.Stocks.Monitor[target]['position']
-                quantity_ = TradeData.Stocks.Monitor[target]['quantity']
+                position_ = TradeData.Securities.Monitor[target]['position']
+                quantity_ = TradeData.Securities.Monitor[target]['quantity']
 
         # New, Cover
         else:
-            if TradeData.Futures.Monitor[target] is not None:
+            if TradeData.Securities.Monitor[target] is not None:
                 quantity = data['order']['quantity']
 
                 if action == 'New':
-                    stage = 'Add|Futures'
+                    stage = 'Add|Target'
                     position *= -1
                     quantity *= -1
                 else:
-                    stage = 'Update|Futures'
+                    stage = 'Update|Target'
 
-                TradeData.Futures.Monitor[target]['position'] -= position
-                TradeData.Futures.Monitor[target]['order']['quantity'] -= quantity
+                TradeData.Securities.Monitor[target]['position'] -= position
+                TradeData.Securities.Monitor[target]['order']['quantity'] -= quantity
             elif action == 'New':
-                stage = 'Add|Futures'
+                stage = 'Add|Target'
 
                 date = TODAY_STR.replace('-', '/')
                 data['contract'] = get_contract(target)
                 data['isDue'] = date == data['contract'].delivery_date
-                TradeData.Futures.Monitor[target] = data
+                TradeData.Securities.Monitor[target] = data
             else:
-                stage = 'None|Futures'
+                stage = 'None|Target'
 
             if 'None' not in stage:
-                position_ = TradeData.Futures.Monitor[target]['position']
-                quantity_ = TradeData.Futures.Monitor[target]['order']['quantity']
+                position_ = TradeData.Securities.Monitor[target]['position']
+                quantity_ = TradeData.Securities.Monitor[target]['order']['quantity']
 
         logging.debug(
             f'[Monitor List]{stage}|{target}|{action}|quantity: {quantity_}; position: {position_}|')
