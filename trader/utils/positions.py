@@ -4,8 +4,7 @@ import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
-from ..config import TODAY_STR, API, Cost
-from . import get_contract
+from ..config import API, StrategyList, Cost
 from .database import db
 from .database.tables import SecurityInfo
 from .time import time_tool
@@ -20,7 +19,8 @@ class WatchListTool:
         self.MatchAccount = SecurityInfo.account == self.account_name
         self.watchlist_file = f'watchlist_{account_name}'
 
-    def append(self, market: str, orderinfo: namedtuple, quotes: dict = 0):
+    def append(self, market: str, orderinfo: namedtuple):
+        # TODO: delete
         '''Add new stock data to watchlist'''
 
         if not db.HAS_DB:
@@ -30,18 +30,16 @@ class WatchListTool:
             # Manual trading
             target = orderinfo
             position = 100
-            cost_price = quotes
             check_quantity = True
         else:
             # Auto trading
             target = orderinfo.target
-            position = abs(orderinfo.pos_target)
-            cost_price = TradeData.Quotes.NowTargets[target]['price']
+            position = 100
             check_quantity = orderinfo.quantity != 0
 
         if db.query(SecurityInfo, SecurityInfo.code == target).empty and check_quantity:
             strategy_pool = TradeData.Securities.Strategy
-            data = {  # TODO: 新增欄位資料
+            data = {
                 'account': self.account_name,
                 'market': market,
                 'code': target,
@@ -66,7 +64,7 @@ class WatchListTool:
 
     def update_position(self, order: namedtuple):
         target = order.target
-        position = order.pos_target
+        position = 100
 
         condition = SecurityInfo.code == target, self.MatchAccount
         watchlist = db.query(SecurityInfo, *condition)
@@ -89,12 +87,15 @@ class WatchListTool:
                 db.delete(
                     SecurityInfo, SecurityInfo.position <= 0, self.MatchAccount)
 
+    def match_target(self, target: str):
+        return SecurityInfo.code == target, SecurityInfo.account == self.account_name
 
-class TradeDataHandler:
-    @staticmethod
-    def check_is_empty(target, market='Stocks'):
-        data = TradeData.Securities.Monitor.get(target, {})
-        quantity = data.get('order', {}).get('quantity', 0)
+    def check_is_empty(self, target: str):
+        '''Check if the target is empty in the monitor list'''
+        condition = self.match_target(target)
+        data = db.query(SecurityInfo, *condition)
+        data = data.to_dict('record')[0] if not data.empty else {}
+        quantity = data.get('quantity', 0)
         position = data.get('position', 0)
 
         is_empty = (quantity <= 0 or position <= 0)
@@ -102,93 +103,89 @@ class TradeDataHandler:
             f'[Monitor List]Check|{target}|{is_empty}|quantity: {quantity}; position: {position}|')
         return is_empty
 
+    def update_monitor(self, action: str, data: dict):
+        '''更新監控庫存(成交回報)'''
+
+        target = data['code']
+        conf = TradeDataHandler.getStrategyConfig(target)
+        condition = self.match_target(target)
+        df = db.query(SecurityInfo, *condition)
+        if not df.empty:
+            quantity = data['order']['quantity']
+
+            if action == 'New':
+                position = int(100*conf.raise_qty/conf.max_qty)
+                position *= -1
+                quantity *= -1
+            else:
+                position = int(100*conf.stop_loss_qty/conf.max_qty)
+
+            df['position'] -= position
+            df['quantity'] -= quantity
+            db.update(SecurityInfo, df.iloc[0].to_dict(), *condition)
+            self.check_remove_monitor(target)
+
+        else:
+            data = dict(
+                account=self.account_name,
+                market='Stocks' if conf.market == 'Stocks' else 'Futures',
+                code=target,
+                action=action,
+                quantity=data['order']['quantity'],
+                cost_price=data['order']['price'],
+                last_price=TradeDataHandler.getQuotesNow(
+                    target).get('price', 0),
+                pnl=0,
+                yd_quantity=0,
+                order_cond=data['order'].get('order_cond', 'Cash'),
+                timestamp=datetime.now(),
+                position=int(100*conf.open_qty/conf.max_qty),
+                strategy=TradeData.Securities.Strategy.get(
+                    target, 'unknown')
+            )
+            db.add_data(SecurityInfo, **data)
+
+    def check_remove_monitor(self, target: str):
+        is_empty = self.check_is_empty(self.account_name, target)
+        if is_empty:
+            logging.debug(f'[Monitor List]Remove|{target}|')
+
+            TradeDataHandler.reset_monitor(target)
+            condition = self.match_target(target)
+            db.delete(SecurityInfo, *condition)
+        return is_empty
+
+
+class TradeDataHandler:
     @staticmethod
-    def reset_monitor(target: str, market='Stocks', day_trade=False):
+    def reset_monitor(target: str):
         TradeData.Securities.Monitor.pop(target, None)
-        if day_trade:
-            logging.debug(f'[Monitor List]Reset|Securities|{target}|')
-            TradeData.Securities.Monitor[target] = None
 
     @staticmethod
-    def update_deal_list(target: str, action_type: str, market='Stocks'):
+    def update_deal_list(target: str, action_type: str):
         '''更新下單暫存清單'''
 
-        logging.debug(f'[Monitor List]{action_type}|{market}|{target}|')
-        if market == 'Stocks':
+        logging.debug(f'[Monitor List]{action_type}|{target}|')
+        if action_type in ['Buy', 'Sell']:
             if action_type == 'Sell' and len(target) == 4 and target not in TradeData.Stocks.Sold:
                 TradeData.Stocks.Sold.append(target)
 
             if action_type == 'Buy' and len(target) == 4 and target not in TradeData.Stocks.Bought:
                 TradeData.Stocks.Bought.append(target)
 
-            if action_type == 'Cancel' and target in TradeData.Stocks.Bought:
-                TradeData.Stocks.Bought.remove(target)
-        elif market == 'Futures':
+        elif action_type in ['New', 'Cover']:
             if action_type == 'New' and target not in TradeData.Futures.Opened:
                 TradeData.Futures.Opened.append(target)
 
             if action_type == 'Cover' and target not in TradeData.Futures.Closed:
                 TradeData.Futures.Closed.append(target)
 
-            if action_type == 'Cancel' and target in TradeData.Futures.Opened:
+        elif action_type == 'Cancel':
+            if target in TradeData.Stocks.Bought:
+                TradeData.Stocks.Bought.remove(target)
+
+            if target in TradeData.Futures.Opened:
                 TradeData.Futures.Opened.remove(target)
-
-    @staticmethod
-    def update_monitor(action: str, data: dict, position: float = 100):
-        '''更新監控庫存(成交回報)'''
-        target = data['code']
-        quantity_ = position_ = 0
-        if action in ['Open', 'Close']:
-            if TradeData.Securities.Monitor[target] is not None:
-                quantity = data['quantity']
-
-                if action == 'New':
-                    stage = 'Add|Target'
-                    position *= -1
-                    quantity *= -1
-                else:
-                    stage = 'Update|Target'
-
-                TradeData.Securities.Monitor[target]['position'] -= position
-                TradeData.Securities.Monitor[target]['quantity'] -= quantity
-            else:
-                stage = 'Add|Target'
-                TradeData.Securities.Monitor[target] = data
-
-            if 'None' not in stage:
-                position_ = TradeData.Securities.Monitor[target]['position']
-                quantity_ = TradeData.Securities.Monitor[target]['quantity']
-
-        # New, Cover
-        else:
-            if TradeData.Securities.Monitor[target] is not None:
-                quantity = data['order']['quantity']
-
-                if action == 'New':
-                    stage = 'Add|Target'
-                    position *= -1
-                    quantity *= -1
-                else:
-                    stage = 'Update|Target'
-
-                TradeData.Securities.Monitor[target]['position'] -= position
-                TradeData.Securities.Monitor[target]['order']['quantity'] -= quantity
-            elif action == 'New':
-                stage = 'Add|Target'
-
-                date = TODAY_STR.replace('-', '/')
-                data['contract'] = get_contract(target)
-                data['isDue'] = date == data['contract'].delivery_date
-                TradeData.Securities.Monitor[target] = data
-            else:
-                stage = 'None|Target'
-
-            if 'None' not in stage:
-                position_ = TradeData.Securities.Monitor[target]['position']
-                quantity_ = TradeData.Securities.Monitor[target]['order']['quantity']
-
-        logging.debug(
-            f'[Monitor List]{stage}|{target}|{action}|quantity: {quantity_}; position: {position_}|')
 
     @staticmethod
     def getQuotesNow(target: str):
@@ -197,6 +194,50 @@ class TradeDataHandler:
         elif target in TradeData.Quotes.NowTargets:
             return TradeData.Quotes.NowTargets[target]
         return -1
+
+    @staticmethod
+    def getStrategyConfig(target: str):
+        strategy = TradeData.Securities.Strategy.get(target)
+        conf = StrategyList.Config.get(strategy)
+        return conf
+
+    @staticmethod
+    def getFuturesQuota():
+        '''更新可開倉的期貨標的數'''
+
+        open_deals = len(TradeData.Futures.Opened)
+        close_deals = len(TradeData.Futures.Closed)
+        df = db.query(SecurityInfo, SecurityInfo.market == 'Futures')
+        quota = TradeData.Futures.Limit-df.shape[0] - open_deals + close_deals
+        return quota
+
+    @staticmethod
+    def getStocksQuota(mode: str):
+        '''更新可開倉的股票標的數'''
+
+        strategies = TradeData.Securities.Strategy
+
+        buy_deals = 0
+        for s in TradeData.Stocks.Bought:
+            strategy = strategies.get(s)
+            conf = StrategyList.Config.get(strategy)
+            if conf.mode == 'long':
+                buy_deals += 1
+
+        sell_deals = 0
+        for s in TradeData.Stocks.Sold:
+            strategy = strategies.get(s)
+            conf = StrategyList.Config.get(strategy)
+            if conf.mode == 'long':
+                sell_deals += 1
+
+        if mode == 'long':
+            quota = abs(TradeData.Stocks.LimitLong) - \
+                TradeData.Stocks.N_Long - buy_deals + sell_deals
+        else:
+            quota = abs(TradeData.Stocks.LimitShort) - \
+                TradeData.Stocks.N_Short + buy_deals - sell_deals
+        return quota
 
 
 class FuturesMargin:

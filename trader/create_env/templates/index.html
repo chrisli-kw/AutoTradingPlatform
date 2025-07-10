@@ -90,38 +90,6 @@
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row">監控的市場</th>
-                        <td>
-                            <select id="inputState" class="form-control" name="MARKET">
-                                <option></option>
-                                <option selected>只有股票</option>
-                                <option>只有期貨</option>
-                                <option>股票 & 期貨</option>
-                            </select>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">加入要監控的清單</th>
-                        <td>
-                            <input name='FILTER_IN' type="text" placeholder="EX: code1:策略1, code2:策略2 沒有就空白"
-                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%'>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">過濾掉不監控的清單</th>
-                        <td>
-                            <input name='FILTER_OUT' type="text" placeholder="EX:code1, code2 沒有就空白"
-                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%'>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">要執行的策略</th>
-                        <td>
-                            <input name='STRATEGY_STOCK' type="text" placeholder="EX: 策略1, 策略2"
-                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%'>
-                        </td>
-                    </tr>
-                    <tr>
                         <th scope="row">部位上限/可委託金額上限</th>
                         <td>
                             <input name='POSITION_LIMIT_LONG' type="number"
@@ -133,58 +101,6 @@
                         <td>
                             <input name='POSITION_LIMIT_SHORT' type="number"
                                 style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=100000 min=0>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">投資組合股票數上限(做多)</th>
-                        <td>
-                            <input name='N_LIMIT_LS' type="number"
-                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=4 min=0>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">投資組合股票數上限(做空)</th>
-                        <td>
-                            <input name='N_LIMIT_SS' type="number"
-                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=4 min=0>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">投資組合股票數上限類型</th>
-                        <td>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="N_STOCK_LIMIT_TYPE"
-                                    id="N_STOCK_LIMIT_TYPE1" value='constant' checked='checked'>
-                                <label class="form-check-label" for="N_STOCK_LIMIT_TYPE1">固定</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="N_STOCK_LIMIT_TYPE"
-                                    id="N_STOCK_LIMIT_TYPE2" value='float'>
-                                <label class="form-check-label" for="N_STOCK_LIMIT_TYPE2">隨大盤環境波動</label>
-                            </div>
-                        </td>
-                    </tr>
-
-                    <tr>
-                        <th scope="row">每次買進的單位(張)</th>
-                        <td>
-                            <input name='BUY_UNIT' type="number"
-                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=1 min=0>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">買進的單位數類型</th>
-                        <td>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="BUY_UNIT_TYPE" id="BUY_UNIT_TYPE1"
-                                    value='constant' checked='checked'>
-                                <label class="form-check-label" for="BUY_UNIT_TYPE1">固定</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="BUY_UNIT_TYPE" id="BUY_UNIT_TYPE2"
-                                    value='float'>
-                                <label class="form-check-label" for="BUY_UNIT_TYPE2">隨淨值等比例增加</label>
-                            </div>
                         </td>
                     </tr>
                     <tr>
@@ -218,14 +134,6 @@
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row">最長持有天數(含六日)</th>
-                        <td>
-                            <input name='HOLD_DAY' type="number"
-                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=4 min=0>
-                        </td>
-                    </tr>
-
-                    <tr>
                         <th scope="row">期貨交易時段設定</th>
                         <td>
                             <select id="inputState" class="form-control" name="TRADING_PERIOD">
@@ -237,61 +145,10 @@
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row">期貨要執行的策略</th>
-                        <td>
-                            <input name='STRATEGY_FUTURES' type="text" placeholder="EX: 策略1, 策略2"
-                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%'>
-                        </td>
-                    </tr>
-                    <tr>
                         <th scope="row">可下單的保證金額上限</th>
                         <td>
                             <input name='MARGIN_LIMIT' type="number"
                                 style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=100000 min=0>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">投資組合期權數上限</th>
-                        <td>
-                            <input name='N_FUTURES_LIMIT' type="number"
-                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=0 min=0>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">期權投資組合期權數上限類型</th>
-                        <td>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="N_FUTURES_LIMIT_TYPE"
-                                    id="N_FUTURES_LIMIT_TYPE1" value='constant' checked='checked'>
-                                <label class="form-check-label" for="N_FUTURES_LIMIT_TYPE1">固定</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="N_FUTURES_LIMIT_TYPE"
-                                    id="N_FUTURES_LIMIT_TYPE2" value='float'>
-                                <label class="form-check-label" for="N_FUTURES_LIMIT_TYPE2">隨大盤環境波動</label>
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">每次期權建倉的單位(口)</th>
-                        <td>
-                            <input name='N_SLOT' type="number"
-                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=0 min=0>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">建倉的口數類型</th>
-                        <td>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="N_SLOT_TYPE" id="N_SLOT_TYPE1"
-                                    value='constant' checked='checked'>
-                                <label class="form-check-label" for="N_SLOT_TYPE1">固定</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="N_SLOT_TYPE" id="N_SLOT_TYPE2"
-                                    value='float'>
-                                <label class="form-check-label" for="N_SLOT_TYPE2">隨淨值等比例增加</label>
-                            </div>
                         </td>
                     </tr>
                 </tbody>

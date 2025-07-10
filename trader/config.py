@@ -1,3 +1,4 @@
+import os
 import logging
 import pandas as pd
 import configparser
@@ -104,16 +105,12 @@ class NotifyConfig:
 
 
 class StrategyNameList:
-    StrategyLongNDT = get_settings('STRATEGY', 'Long', dataType='list')
-    StrategyShortNDT = get_settings('STRATEGY', 'Short', dataType='list')
-    StrategyLongDT = get_settings('STRATEGY', 'LongDT', dataType='list')
-    StrategyShortDT = get_settings('STRATEGY', 'ShortDT', dataType='list')
-
-    All = StrategyLongNDT + StrategyLongDT + StrategyShortNDT + StrategyShortDT
-    Long = StrategyLongNDT + StrategyLongDT
-    Short = StrategyShortNDT + StrategyShortDT
-    DayTrade = StrategyLongDT + StrategyShortDT
-    Code = {stra: f'Strategy{i+1}' for i, stra in enumerate(All)}
+    All = [
+        s.split('.py')[0] for s in os.listdir('./trader/scripts/StrategySet') if '.py' in s]
+    Long = []
+    Short = []
+    # Code = {stra: f'Strategy{i+1}' for i, stra in enumerate(All)}
+    Config = {}
 
 
 # 策略相關
@@ -143,17 +140,5 @@ else:
 TODAY_STR = TODAY.strftime("%Y-%m-%d")
 holidays = get_holidays()
 
-# 選股相關
-SelectMethods = get_settings('SELECT', 'METHODS', dataType='list')
-
 # 爬蟲相關
 ConvertScales = get_settings('CRAWLER', 'SCALES', dataType='list')
-
-# K棒特徵
-KbarFeatures = {
-    '2T': get_settings('KBARFEATURE', 'K2min', dataType='list'),
-    '5T': get_settings('KBARFEATURE', 'K5min', dataType='list'),
-    '15T': get_settings('KBARFEATURE', 'K15min', dataType='list'),
-    '30T': get_settings('KBARFEATURE', 'K30min', dataType='list'),
-    '60T': get_settings('KBARFEATURE', 'K60min', dataType='list'),
-}

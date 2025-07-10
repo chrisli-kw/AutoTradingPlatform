@@ -1,6 +1,5 @@
 import time
 import logging
-from datetime import datetime
 
 from ..config import API
 from .objects.data import TradeData
@@ -9,23 +8,15 @@ from .positions import TradeDataHandler
 
 class CallbackHandler:
     @staticmethod
-    def fDeal(msg: dict):
+    def FuturesDeal(msg: dict):
         code = msg['code']
         delivery_month = msg['delivery_month']
         symbol = code + delivery_month
         if TradeData.Securities.Monitor.get(symbol) is not None:
-            price = msg['price']
-            TradeData.Securities.Monitor[symbol]['cost_price'] = price
+            TradeData.Securities.Monitor[symbol]['cost_price'] = msg['price']
 
     @staticmethod
     def update_stock_msg(msg: dict):
-        msg.update({
-            'position': 100,
-            'yd_quantity': 0,
-            'bst': datetime.now(),
-            'cost_price': msg['price']
-        })
-
         if msg['order_lot'] == 'Common':
             msg['quantity'] *= 1000
         return msg
@@ -35,12 +26,10 @@ class CallbackHandler:
         price = msg['order']['price']
         if price == 0:
             price = TradeDataHandler.getQuotesNow(symbol)['price']
+            msg['order']['price'] = price
         msg.update({
             'symbol': symbol,
             'code': symbol,
-            'cost_price': price,
-            'bst': datetime.now(),
-            'position': 100
         })
         return msg
 

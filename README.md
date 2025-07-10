@@ -122,14 +122,7 @@ TOKEN_MONITOR = your_LINE_Notify_token_for_system_monitor
 TOKEN_INFO = your_LINE_Notify_token_for_trading_monitor
 
 [STRATEGY]
-Long = strategy1     # non-daytrade long strategies
-Short = strateg2     # non-daytrade short strategies
-LongDT = strategy3   # daytrade long strategies
-ShortDT = strategy4  # daytrade short strategies
 MonitorFreq = 5      # monitor frequency (seconds per loop)
-
-[SELECT] # includes stock selection strategy names
-METHODS = StockSelectStrategy1
 
 [CRAWLER] # determine what K-bar frequency data you want for backtest
 SCALES = 1D, 30T, 60T

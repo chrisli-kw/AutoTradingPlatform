@@ -12,6 +12,7 @@ from .objects.data import TradeData
 
 class Simulator:
     def __init__(self, account_name: str) -> None:
+        self.account_name = account_name
         self.order_tool = OrderTool(account_name)
 
     def securityInfo(self, account: str):
@@ -24,6 +25,7 @@ class Simulator:
         return df
 
     def monitor_list_to_df(self, account: str, market='Stocks'):
+        # TODO: delete
         '''Convert stocks/futures monitor list to dataframe'''
 
         data = TradeData.Securities.Monitor
@@ -32,8 +34,9 @@ class Simulator:
         df = {k: v for k, v in data.items() if v}
         df = pd.DataFrame(df).T
         if df.shape[0]:
-            df = df[df.account_id.str.contains('simulate')]
+            # df = df[df.account_id.str.contains('simulate')]
             df['account'] = account
+            df['market'] = market
 
             if market == 'Stocks':
                 df = df.sort_values('code').reset_index()
@@ -49,18 +52,19 @@ class Simulator:
                 df['pnl'] = df.direction.apply(
                     lambda x: 1 if x == 'Buy' else -1)
 
-            now_targets = TradeData.Quotes.NowTargets.copy()
             df['last_price'] = df.code.map(
-                {s: now_targets.get(s, {}).get('price', 0) for s in df.code})
-
+                {s: TradeDataHandler.getQuotesNow(s).get('price', 0) for s in df.code})
             df['pnl'] = df.pnl*(df.last_price - df.cost_price)*df.quantity
+            df['timestamp'] = datetime.now()
+            df['strategy'] = df.code.map(TradeData.Securities.Strategy)
             df = df[TradeData[market].InfoDefault.columns]
         else:
             df = TradeData[market].InfoDefault
 
         return df
 
-    def update_securityInfo(self, account: str, df: pd.DataFrame, market='Stocks'):
+    def update_securityInfo(self, account: str, df: pd.DataFrame):
+        # TODO: delete
         if df.empty:
             return
 
@@ -80,50 +84,32 @@ class Simulator:
                 db.update(SecurityInfo, values, *condition)
 
     def save_securityInfo(self, env, market='Stocks'):
+        # TODO: delete
         '''Save the security info table if running under simulation mode.'''
 
         if (
-            (market == 'Stocks' and not env.can_stock) or
-            (market == 'Futures' and not env.can_futures)
+            (market == 'Stocks' and not TradeData.Stocks.CanTrade) or
+            (market == 'Futures' and not TradeData.Futures.CanTrade)
         ):
             return
 
         df = self.monitor_list_to_df(env.ACCOUNT_NAME, market=market)
-        self.update_securityInfo(env.ACCOUNT_NAME, df, market)
+        self.update_securityInfo(env.ACCOUNT_NAME, df)
 
-    def remove_from_info(self, target: str, account: str, market='Stocks'):
-        if db.HAS_DB:
-            db.delete(
-                SecurityInfo,
-                SecurityInfo.code == target,
-                SecurityInfo.account == account
-            )
-
-    def update_position(self, order: namedtuple, market: str, order_data: dict):
+    def update_monitor(self, order: namedtuple, order_data: dict):
         target = order.target
 
         # update monitor list position
-        if market == 'Stocks':
-            action = order.action
-            order_data.update({
-                'position': order.pos_target,
-                'bst': datetime.now(),
-                'cost_price': abs(order_data['price']),
-                'yd_quantity': 0,
-            })
-        else:
-            action = order.octype
-            order_data.update({
-                'position': order.pos_target,
-                'bst': datetime.now(),
-                'symbol': target,
-                'cost_price': abs(order_data['price']),
-                'order': {
-                    'quantity': self.order_tool.get_sell_quantity(order, market),
-                    'action': order.action
-                }
-            })
+        action = order.octype
+        order_data.update({
+            'code': target,
+            'order': {
+                'quantity': self.order_tool.get_sell_quantity(order),
+                'price': abs(order_data['price']),
+                'order_cond': order_data.get('order_cond', 'Cash'),
+            }
+        })
 
-        TradeDataHandler.update_monitor(
-            action, order_data, order.pos_target)
-        TradeDataHandler.update_deal_list(target, action, market)
+        self.order_tool.WatchListTool.update_monitor(
+            self.account_name, action, order_data)
+        TradeDataHandler.update_deal_list(target, action)

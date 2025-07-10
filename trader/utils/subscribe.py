@@ -10,8 +10,8 @@ from .objects.data import TradeData
 
 
 class Subscriber(KBarTool):
-    def __init__(self, kbar_start_day=''):
-        KBarTool.__init__(self, kbar_start_day)
+    def __init__(self):
+        KBarTool.__init__(self)
         self.lock = Lock()
 
     def _set_target_quote_default(self, targets: list):

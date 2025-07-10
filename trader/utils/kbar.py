@@ -11,7 +11,6 @@ from ..config import (
     PATH,
     TODAY,
     TODAY_STR,
-    KbarFeatures,
     TimeStartStock,
     StrategyList
 )
@@ -23,8 +22,8 @@ from .. import file_handler
 
 
 class KBarTool(TechnicalSignals):
-    def __init__(self, kbar_start_day=''):
-        self.daysdata = self.__set_daysdata(kbar_start_day)
+    def __init__(self):
+        self.daysdata = self.__set_daysdata()
         self.maps = {
             'name': 'first',
             'Open': 'first',
@@ -51,7 +50,7 @@ class KBarTool(TechnicalSignals):
             '60T': False
         }
 
-    def __set_daysdata(self, kbar_start_day):
+    def __set_daysdata(self, kbar_start_day=''):
         '''
         設定觀察K棒數(N個交易日)
         參數 - kbar_start_day: 觀察起始日，格式為 yyyy-mm-dd
@@ -63,7 +62,7 @@ class KBarTool(TechnicalSignals):
         return max((TODAY - kbar_start_day).days, 35)
 
     def _apply_feature_by_scale(self, df: pd.DataFrame, scale: str):
-        for conf in TradeData.StrategyConfig.values():
+        for conf in StrategyList.Config.values():
             if scale in getattr(conf, 'kbarScales', []):
                 df = conf.add_features(df)
         return df
@@ -241,10 +240,6 @@ class KBarTool(TechnicalSignals):
             logging.debug(
                 f'Update {scale} kbar data| from {tb.Time.min()} to {tb.Time.max()}')
             tb = self.convert_kbar(tb, scale=scale)
-
-            for col in KbarFeatures[scale]:
-                tb[col] = None
-
             kbar = self.concatKBars(scale, tb)
             TradeData.KBars.Freq[scale] = self.featureFuncs[scale](kbar)
             self.is_kbar_1t_updated[scale] = False

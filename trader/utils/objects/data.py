@@ -6,6 +6,12 @@ class Leverage:
     Short = {}
 
 
+class Account:
+    Simulate = False
+    DesposalMoney = 0
+    DesposalMargin = 0
+
+
 class Securities:
     InfoDefault = pd.DataFrame(
         columns=[
@@ -16,7 +22,6 @@ class Securities:
             'timestamp', 'position', 'strategy'
         ]
     )
-    Info = pd.DataFrame()
     Strategy = {}
     Monitor = {}
 
@@ -28,6 +33,10 @@ class Stocks:
     Bought = []
     Sold = []
     Dividends = {}
+    LimitLong = 0
+    LimitShort = 0
+    CanTrade = False
+    Punish = []
 
 
 class Futures:
@@ -41,6 +50,8 @@ class Futures:
     Closed = []
     Transferred = {}
     CodeList = {}
+    Limit = 0
+    CanTrade = False
 
 
 class Quotes:
@@ -69,13 +80,15 @@ class KBars:
 
 class DefaultTableMeta(type):
     _data = {
+        'Account': Account,
         'Securities': Securities,
+        'Contracts': {},
         'Stocks': Stocks,
         'Futures': Futures,
         'BidAsk': {},
         'Quotes': Quotes(),
         'KBars': KBars(),
-        'Strategy': {}
+        'StrategyConfig': {}
     }
 
     def __getitem__(cls, key):

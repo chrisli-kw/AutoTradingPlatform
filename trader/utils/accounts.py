@@ -11,6 +11,8 @@ from . import concat_df, get_contract
 from .time import time_tool
 from .crawler import crawler
 from .file import file_handler
+from .database import db
+from .database.tables import SecurityInfo
 from .objects import Margin
 from .objects.env import UserEnv
 from .objects.data import TradeData
@@ -424,53 +426,51 @@ class AccountHandler(AccountInfo):
         super().__init__()
 
         self.env = UserEnv(account_name)
-        self.simulation = self.env.MODE == 'Simulation'
+        TradeData.Account.Simulate = self.env.MODE == 'Simulation'
         self.simulate_amount = np.iinfo(np.int64).max
 
         # Stocks
         self.total_market_value = 0
-        self.desposal_money = 0
 
         # Futures
-        self.desposal_margin = 0
         self.ProfitAccCount = 0  # 權益總值
 
     def _set_trade_risks(self):
         '''設定交易風險值: 可交割金額、總市值'''
 
-        df = TradeData.Securities.Info.copy()
-        df = df[df.market == 'Stocks']
+        df = db.query(SecurityInfo, SecurityInfo.market == 'Stocks')
         cost_value = (df.quantity*df.cost_price).sum()
         pnl = df.pnl.sum()
-        if self.simulation:
+        if TradeData.Account.Simulate:
             account_balance = self.env.INIT_POSITION
             settle_info = pnl
         else:
             account_balance = self.balance()
             settle_info = self.settle_info(mode='info').iloc[1:, 1].sum()
 
-        self.desposal_money = min(
+        TradeData.Account.DesposalMoney = min(
             account_balance+settle_info, self.env.POSITION_LIMIT_LONG)
-        self.total_market_value = self.desposal_money + cost_value + pnl
+        self.total_market_value = TradeData.Account.DesposalMoney + cost_value + pnl
 
         logging.info(
-            f'[AccountInfo] Desposal amount = {self.desposal_money} (limit: {self.env.POSITION_LIMIT_LONG})')
+            f'[AccountInfo] Desposal amount = {TradeData.Account.DesposalMoney} (limit: {self.env.POSITION_LIMIT_LONG})')
 
     def _set_margin_limit(self):
         '''計算可交割的保證金額，不可超過帳戶可下單的保證金額上限'''
-        if self.simulation:
+        if TradeData.Account.Simulate:
             account_balance = 0
-            self.desposal_margin = self.simulate_amount
+            desposal_margin = self.simulate_amount
             self.ProfitAccCount = self.simulate_amount
         else:
             account_balance = self.balance()
             margin = self.get_account_margin()
-            self.desposal_margin = margin.available_margin
+            desposal_margin = margin.available_margin
             self.ProfitAccCount = margin.equity  # 權益總值
-        self.desposal_margin = min(
-            account_balance+self.desposal_margin, self.env.MARGIN_LIMIT)
+
+        TradeData.Account.DesposalMargin = min(
+            account_balance+desposal_margin, self.env.MARGIN_LIMIT)
         logging.info(
-            f'[AccountInfo] Margin: total={self.ProfitAccCount}; available={self.desposal_margin}; limit={self.env.MARGIN_LIMIT}')
+            f'[AccountInfo] Margin: total={self.ProfitAccCount}; available={TradeData.Account.DesposalMargin}; limit={self.env.MARGIN_LIMIT}')
 
     def _set_leverage(self, stockids: list):
         '''
@@ -504,7 +504,8 @@ class AccountHandler(AccountInfo):
 
     def _set_futures_code_list(self):
         '''期貨商品代號與代碼對照表'''
-        if self.env.can_futures:
+
+        if TradeData.Futures.CanTrade:
             logging.debug('Set Futures_Code_List')
             TradeData.Futures.CodeList.update({
                 f.code: f.symbol for m in API.Contracts.Futures for f in m

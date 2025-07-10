@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import timedelta
 from importlib import import_module
 
-from ..config import PATH, TODAY, SelectMethods, StrategyList
+from ..config import PATH, TODAY, StrategyList
 from .time import time_tool
 from .file import file_handler
 from .crawler import readStockList
@@ -56,16 +56,12 @@ class SelectStock:
 
         self.Preprocess = {}
         self.METHODS = {}
-        for m in SelectMethods:
-            if m in StrategyList.All:
-                conf = import_module(
-                    f'trader.scripts.StrategySet.{m}').StrategyConfig
+        for strategy, conf in StrategyList.Config.items():
+            if hasattr(conf, 'select_preprocess'):
+                self.Preprocess[strategy] = getattr(conf, 'select_preprocess')
 
-                if hasattr(conf, 'select_preprocess'):
-                    self.Preprocess[m] = getattr(conf, 'select_preprocess')
-
-                if hasattr(conf, 'select_condition'):
-                    self.METHODS[m] = getattr(conf, 'select_condition')
+            if hasattr(conf, 'select_condition'):
+                self.METHODS[strategy] = getattr(conf, 'select_condition')
 
     def load_and_merge(self, targets):
         if db.HAS_DB:

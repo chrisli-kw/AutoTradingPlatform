@@ -7,13 +7,13 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from .. import tdp
-from ..config import PATH, TODAY, TODAY_STR, SelectMethods, StrategyList
+from ..config import PATH, TODAY, TODAY_STR, StrategyList
 from ..utils import progress_bar
 from ..utils.time import time_tool
 from ..utils.file import file_handler
 from ..utils.orders import OrderTool
 from ..utils.database import db, KBarTables
-from ..utils.database.tables import SelectedStocks
+from ..utils.database.tables import SelectedStocks, TradingStatement
 from .base import convert_statement
 from .backtest import BacktestPerformance
 from .charts import export_figure, convert_encodings, SuplotHandler
@@ -40,6 +40,7 @@ class PerformanceReport(SuplotHandler, OrderTool):
         if report_scripts:
             bts = report_scripts.__dict__
             if self.market == 'Stocks':
+                SelectMethods = []
                 self.Scripts = {
                     k[:-3]: v for k, v in bts.items()
                     if ('T' in k or 'D' in k) and (k[:-3] in SelectMethods)
@@ -50,6 +51,20 @@ class PerformanceReport(SuplotHandler, OrderTool):
                 }
         else:
             self.Scripts = {}
+
+    def read_statement(self, account: str = ''):
+        '''Import trading statement'''
+
+        if db.HAS_DB:
+            df = db.query(
+                TradingStatement,
+                TradingStatement.account_id == account
+            )
+        else:
+            df = self.OrderTable
+
+        df = df.drop_duplicates()
+        return df
 
     def getStrategyList(self, df: pd.DataFrame):
         '''Get strategy list in code order'''
