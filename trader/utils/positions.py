@@ -302,7 +302,7 @@ class Position:
         #     'reason': str  # 建倉、加碼、停損、停利
         # }]
         self.exits = []
-        self.total_qty = 0
+        self.total_qty = {}
         self.total_profit = 0.0
 
         if not sim_trade:
@@ -312,18 +312,21 @@ class Position:
                 PositionTable.strategy == strategy
             )
             self.entries = df.to_dict('records')
-            self.total_qty = df.quantity.sum() if not df.empty else 0
+            self.total_qty = df.groupby(
+                'name').quantity.sum().to_dict() if not df.empty else {}
 
     def open(self, inputs: dict):
         self.entries.append(inputs)
-        self.total_qty += inputs['quantity']
+
+        total_qty = self.total_qty.get(inputs['name'], 0)
+        self.total_qty[inputs['name']] = total_qty + inputs['quantity']
 
         if not self.sim_trade:
             db.add_data(PositionTable, **inputs)
 
     def close(self, inputs: dict):
         price = inputs['price']
-        qty = min(inputs['quantity'], self.total_qty)
+        qty = min(inputs['quantity'], self.total_qty[inputs['name']])
         reason = inputs.get('reason', '平倉')
 
         closed_qty = 0
@@ -354,12 +357,12 @@ class Position:
                 'close_time': inputs['timestamp'],
                 'reason': reason
             })
-        self.total_qty -= closed_qty
+        self.total_qty[inputs['name']] -= closed_qty
         self.total_profit += profit
         return profit
 
-    def is_open(self):
-        return self.total_qty > 0
+    def is_open(self, name: str):
+        return self.total_qty.get(name, 0) > 0
 
     def delete_entries(self, inputs: dict):
         '''Delete entries from the position table'''
