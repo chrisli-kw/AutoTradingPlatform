@@ -1,19 +1,12 @@
 import logging
 import numpy as np
 import pandas as pd
-from importlib import import_module
 
 from .objects import Action
 from ..config import TODAY_STR, StrategyList
 from ..utils.database import db
 from ..utils.database.tables import ExDividendTable
 from ..utils.objects.data import TradeData
-
-
-def import_strategy(account_name: str, strategy: str):
-    module_path = f'trader.scripts.StrategySet.{strategy}'
-    conf = import_module(module_path).StrategyConfig(account_name, strategy)
-    return conf
 
 
 class StrategyTool:

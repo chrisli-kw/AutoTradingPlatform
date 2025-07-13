@@ -3,6 +3,7 @@ import logging
 import pandas as pd
 import configparser
 import shioaji as sj
+from importlib import import_module
 from datetime import datetime, timedelta
 
 
@@ -111,6 +112,24 @@ class StrategyNameList:
     Short = []
     # Code = {stra: f'Strategy{i+1}' for i, stra in enumerate(All)}
     Config = {}
+
+    @staticmethod
+    def import_strategy(account_name: str, strategy: str):
+        module_path = f'trader.scripts.StrategySet.{strategy}'
+        conf = import_module(module_path).StrategyConfig(
+            account_name, strategy)
+        return conf
+
+    def init_config(self, account_name: str):
+        self.Config = {
+            s: self.import_strategy(account_name, s) for s in self.All
+        }
+        self.Long = [
+            s for s, c in self.Config.items() if c.mode == 'long'
+        ]
+        self.Short = [
+            s for s, c in self.Config.items() if c.mode == 'short'
+        ]
 
 
 # 策略相關

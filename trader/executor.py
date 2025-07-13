@@ -26,7 +26,7 @@ from .utils.accounts import AccountHandler
 from .utils.callback import CallbackHandler
 from .utils.objects.data import TradeData
 from .utils.positions import WatchListTool, TradeDataHandler
-from .utils.strategy import StrategyTool, import_strategy
+from .utils.strategy import StrategyTool
 
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -34,17 +34,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 class StrategyExecutor(AccountHandler, Subscriber):
     def __init__(self, account_name: str):
-        # StrategyList.Config
-        StrategyList.Config = {
-            s: import_strategy(account_name, s) for s in StrategyList.All
-        }
-        StrategyList.Long = [
-            s for s, c in StrategyList.Config.items() if c.mode == 'long'
-        ]
-        StrategyList.Short = [
-            s for s, c in StrategyList.Config.items() if c.mode == 'short'
-        ]
-
+        StrategyList.init_config(account_name)
         super().__init__(account_name)
         AccountHandler.__init__(self, account_name)
         Subscriber.__init__(self)

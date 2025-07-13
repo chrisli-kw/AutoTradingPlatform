@@ -328,15 +328,17 @@ class Position:
 
         closed_qty = 0
         profit = 0.0
-        while closed_qty < qty and self.entries:
-            if self.entries[0]['quantity'] > qty:
-                entry = self.entries[0]
+        entries = [e for e in self.entries if e['name'] == inputs['name']]
+        while closed_qty < qty and entries:
+            if entries[0]['quantity'] > qty:
+                entry = entries[0]
                 e_qty = qty
                 entry['quantity'] -= qty
-                self.entries[0] = entry
+                self.entries[self.entries.index(entry)] = entry
                 self.update_entries(entry)
             else:
-                entry = self.entries.pop(0)
+                entry = entries.pop(0)
+                entry = self.entries.pop(self.entries.index(entry))
                 e_qty = entry['quantity']
                 self.delete_entries(entry)
 
