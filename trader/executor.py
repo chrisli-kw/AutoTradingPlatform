@@ -15,7 +15,7 @@ from .config import (
 )
 from .utils import get_contract
 from .utils.database import db
-from .utils.database.tables import SecurityInfo
+from .utils.database.tables import SecurityInfo, PositionTable
 from .utils.time import time_tool
 from .utils.crawler import crawler
 from .utils.notify import notifier
@@ -189,9 +189,21 @@ class StrategyExecutor(AccountHandler, Subscriber):
         # 新增歷史K棒資料
         TradeData.Securities.Monitor.update(info.to_dict('index'))
 
-        for code in TradeData.Securities.Strategy:
+        for code, strategy in TradeData.Securities.Strategy.items():
             if code not in TradeData.Securities.Monitor:
                 TradeData.Securities.Monitor.update({code: None})
+
+            conf = TradeDataHandler.getStrategyConfig(code)
+            if (
+                TradeData.Securities.Monitor.get(code) is None and
+                conf.positions.entries
+            ):
+                db.delete(
+                    PositionTable,
+                    PositionTable.account == self.account_name,
+                    PositionTable.strategy == strategy
+                )
+                StrategyList.Config.get(strategy).positions.entries = []
 
         # 新增歷史K棒資料
         all_targets = list(TradeData.Securities.Monitor)

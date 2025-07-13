@@ -20,33 +20,18 @@ class SQLDatabase:
         self.sessionmaker_ = None
 
         try:
-            self.sql_connect = f"{DBConfig.ENGINE}://{DBConfig.URL}/{DBConfig.NAME}"
-            self.engine = create_engine(
-                self.sql_connect,
-                pool_size=50,
-                pool_recycle=10,
-                pool_timeout=10,
-                pool_pre_ping=True,
-                poolclass=QueuePool,
-                pool_use_lifo=True,
-                echo=False
-            )
-            self.engine.connect().close()
-            DBConfig.HAS_DB = True
-            logging.info("Connected to MySQL.")
+            if DBConfig.ENGINE == "sqlite":
+                self.connect_sqlite()
+            else:
+                self.connect_mysql()
+                logging.info(
+                    f"Connected to MySQL: {DBConfig.ENGINE}://{DBConfig.URL}/{DBConfig.NAME}")
         except Exception as e:
             logging.warning(
                 f"MySQL connection failed, change database to SQLite.")
             try:
-                DBConfig.ENGINE = "sqlite"
-                DBConfig.URL = ""
-                DBConfig.NAME = f"{PATH}/{DBConfig.FALLBACK_NAME}"
-
-                self.sql_connect = f"sqlite:///{PATH}/{DBConfig.FALLBACK_NAME}"
-                self.engine = create_engine(self.sql_connect, echo=False)
-                self.engine.connect().close()
+                self.connect_sqlite()
                 logging.info(f"Fallback to SQLite: {self.sql_connect}")
-                DBConfig.HAS_DB = True
             except Exception as e:
                 logging.error(f"SQLite connection failed: {e}")
                 DBConfig.HAS_DB = False
@@ -54,6 +39,31 @@ class SQLDatabase:
         self.HAS_DB = DBConfig.HAS_DB
         if self.HAS_DB and self.engine:
             self.sessionmaker_ = sessionmaker(bind=self.engine)
+
+    def connect_mysql(self):
+        self.sql_connect = f"{DBConfig.ENGINE}://{DBConfig.URL}/{DBConfig.NAME}"
+        self.engine = create_engine(
+            self.sql_connect,
+            pool_size=50,
+            pool_recycle=10,
+            pool_timeout=10,
+            pool_pre_ping=True,
+            poolclass=QueuePool,
+            pool_use_lifo=True,
+            echo=False
+        )
+        self.engine.connect().close()
+        DBConfig.HAS_DB = True
+
+    def connect_sqlite(self):
+        DBConfig.ENGINE = "sqlite"
+        DBConfig.URL = ""
+        DBConfig.NAME = f"{PATH}/{DBConfig.FALLBACK_NAME}"
+
+        self.sql_connect = f"sqlite:///{PATH}/{DBConfig.FALLBACK_NAME}"
+        self.engine = create_engine(self.sql_connect, echo=False)
+        self.engine.connect().close()
+        DBConfig.HAS_DB = True
 
     def get_session(self):
         return scoped_session(self.sessionmaker_)

@@ -88,7 +88,6 @@ class DefaultTableMeta(type):
         'BidAsk': {},
         'Quotes': Quotes(),
         'KBars': KBars(),
-        'StrategyConfig': {}
     }
 
     def __getitem__(cls, key):

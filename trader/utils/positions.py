@@ -6,7 +6,7 @@ from collections import namedtuple
 
 from ..config import API, StrategyList, Cost
 from .database import db
-from .database.tables import SecurityInfo
+from .database.tables import SecurityInfo, PositionTable
 from .time import time_tool
 from .file import file_handler
 from .objects.data import TradeData
@@ -288,30 +288,57 @@ class FuturesMargin:
 
 
 class Position:
-    def __init__(self):
-        self.entries = []  # [{'price': float, 'time': datetime}]
-        # [{'price': float, 'time': datetime, 'reason': str}]
+    def __init__(self, account_name: str, strategy: str, sim_trade: bool = False):
+        self.account_name = account_name
+        self.strategy = strategy
+        self.sim_trade = sim_trade
+        self.entries = []
+        # [{
+        #     'account': str,
+        #     'name': str,
+        #     'price': float,
+        #     'timestamp': time
+        #     'quantity': int,
+        #     'reason': str  # 建倉、加碼、停損、停利
+        # }]
         self.exits = []
         self.total_qty = 0
         self.total_profit = 0.0
 
-    def open(self, price, time, qty=1):
-        self.entries.append({'price': price, 'time': time, 'qty': qty})
-        self.total_qty += qty
+        if not sim_trade:
+            df = db.query(
+                PositionTable,
+                PositionTable.account == account_name,
+                PositionTable.strategy == strategy
+            )
+            self.entries = df.to_dict('records')
+            self.total_qty = df.quantity.sum() if not df.empty else 0
 
-    def close(self, price, time, reason='', qty=1):
-        qty = min(qty, self.total_qty)
+    def open(self, inputs: dict):
+        self.entries.append(inputs)
+        self.total_qty += inputs['quantity']
+
+        if not self.sim_trade:
+            db.add_data(PositionTable, **inputs)
+
+    def close(self, inputs: dict):
+        price = inputs['price']
+        qty = min(inputs['quantity'], self.total_qty)
+        reason = inputs.get('reason', '平倉')
 
         closed_qty = 0
         profit = 0.0
         while closed_qty < qty and self.entries:
-            if self.entries[0]['qty'] > qty:
+            if self.entries[0]['quantity'] > qty:
                 entry = self.entries[0]
                 e_qty = qty
-                self.entries[0]['qty'] -= qty
+                entry['quantity'] -= qty
+                self.entries[0] = entry
+                self.update_entries(entry)
             else:
                 entry = self.entries.pop(0)
-                e_qty = entry['qty']
+                e_qty = entry['quantity']
+                self.delete_entries(entry)
 
             closed_qty += e_qty
             entry_price = entry['price']
@@ -321,8 +348,8 @@ class Position:
                 'exit_price': price,
                 'profit': profit,
                 'qty': e_qty,
-                'open_time': entry['time'],
-                'close_time': time,
+                'open_time': entry['timestamp'],
+                'close_time': inputs['timestamp'],
                 'reason': reason
             })
         self.total_qty -= closed_qty
@@ -331,3 +358,37 @@ class Position:
 
     def is_open(self):
         return self.total_qty > 0
+
+    def delete_entries(self, inputs: dict):
+        '''Delete entries from the position table'''
+
+        if not db.HAS_DB:
+            return
+
+        if self.sim_trade:
+            return
+
+        condition = (
+            PositionTable.account == inputs['account'],
+            PositionTable.strategy == inputs['strategy'],
+            PositionTable.name == inputs['name'],
+            PositionTable.timestamp == inputs['timestamp']
+        )
+        db.delete(PositionTable, *condition)
+
+    def update_entries(self, inputs: dict):
+        '''Update the position table in the database'''
+
+        if not db.HAS_DB:
+            return
+
+        if self.sim_trade:
+            return
+
+        condition = (
+            PositionTable.account == inputs['account'],
+            PositionTable.strategy == inputs['strategy'],
+            PositionTable.name == inputs['name'],
+            PositionTable.timestamp == inputs['timestamp']
+        )
+        db.update(PositionTable, inputs, *condition)

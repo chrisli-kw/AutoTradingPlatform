@@ -34,6 +34,29 @@ class SecurityInfo(Base):
             setattr(self, property, value)
 
 
+class PositionTable(Base):
+    __tablename__ = 'position_table'
+
+    pk_id = Column(
+        Integer, primary_key=True, autoincrement=True, nullable=False)
+
+    account = Column(String(50), nullable=False, comment='帳戶代號')
+    strategy = Column(String(50), nullable=False, comment='策略名稱')
+    name = Column(String(10), nullable=False, comment='證券名稱')
+    price = Column(FLOAT(2), nullable=False, comment='進場價格')
+    timestamp = Column(
+        TIMESTAMP(fsp=6), server_default=func.now(), comment='進場時間')
+    quantity = Column(Integer, nullable=False, comment='進場數量')
+    reason = Column(String(50), nullable=False, comment='進場原因')
+
+    create_time = Column(
+        TIMESTAMP(fsp=6), nullable=False, server_default=func.now())
+
+    def __init__(self, **kwargs):
+        for property, value in kwargs.items():
+            setattr(self, property, value)
+
+
 class SecurityList(Base):
     __tablename__ = 'security_list'
 

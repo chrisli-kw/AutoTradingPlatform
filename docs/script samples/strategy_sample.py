@@ -86,14 +86,6 @@ class StrategyConfig:
         else:
             self.positions = Position()
 
-    def dump_position(self, positions: Position):
-        '''
-        ===================================================================
-        Dump temp data for the next initialization.
-        ===================================================================
-        '''
-        joblib.dump(positions, self.filepath)
-
     def addFeatures_1D(self, df: pd.DataFrame):
         '''
         ===================================================================
@@ -260,7 +252,6 @@ class StrategyConfig:
         # New position
         if not self.positions.entries and self.examineOpen(K1min, price=price):
             self.positions.open(price, now, qty=self.open_qty)
-            self.dump_position(self.name)
 
             reason, prop = 'open position', 10
             return Action(prop, reason, 'open position', price, action)
@@ -270,7 +261,6 @@ class StrategyConfig:
             raise_qty = min(
                 self.raise_qty, self.max_qty - self.positions.total_qty)
             self.positions.open(price, now, qty=raise_qty)
-            self.dump_position(self.name)
 
             reason, prop = 'raise position', 20
             return Action(prop, reason, 'raise position', price, action)
@@ -295,7 +285,6 @@ class StrategyConfig:
         if self.stop_loss(K1min, entries, price=price):
             self.positions.close(
                 price, now, reason='stop loss', qty=self.stop_loss_qty)
-            self.dump_position(self.name)
 
             reason, prop = 'stop loss', 10
             return Action(prop, reason, 'stop loss', price, action)
@@ -303,7 +292,6 @@ class StrategyConfig:
         elif self.stop_profit(K1min, entries, price=price):
             self.positions.close(
                 price, now, reason='stop profit', qty=self.stop_profit_qty)
-            self.dump_position(self.name)
 
             reason, prop = 'stop profit', 20
             return Action(prop, reason, 'stop profit', price, action)

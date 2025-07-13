@@ -12,7 +12,7 @@ from ..utils.objects.data import TradeData
 
 def import_strategy(account_name: str, strategy: str):
     module_path = f'trader.scripts.StrategySet.{strategy}'
-    conf = import_module(module_path).StrategyConfig(account_name)
+    conf = import_module(module_path).StrategyConfig(account_name, strategy)
     return conf
 
 
