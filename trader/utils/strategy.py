@@ -7,6 +7,7 @@ from ..config import TODAY_STR, StrategyList
 from ..utils.database import db
 from ..utils.database.tables import ExDividendTable
 from ..utils.objects.data import TradeData
+from .positions import TradeDataHandler
 
 
 class StrategyTool:
@@ -106,17 +107,18 @@ class StrategyTool:
         df = df[df.Date == TODAY_STR].set_index('Code').CashDividend.to_dict()
         TradeData.Stocks.Dividends = df
 
-    def get_pos_balance(self, strategy: str, raise_pos=False):
-        if strategy not in StrategyList.Config:
+    def get_pos_balance(self, target: str, raise_pos=False):
+        conf = TradeDataHandler.getStrategyConfig(target)
+        if conf is None:
             return 100
 
-        conf = StrategyList.Config.get(strategy)
         if not hasattr(conf, 'raise_qty'):
             return 100
 
+        max_qty = conf.max_qty.get(target, 1)
         if raise_pos:
-            return 100*(conf.raise_qty/conf.max_qty)
-        return 100*(conf.open_qty/conf.max_qty)
+            return 100*(conf.raise_qty/max_qty)
+        return 100*(conf.open_qty/max_qty)
 
     def transfer_position(self, inputs: dict, **kwargs):
         target = inputs['symbol']
@@ -136,18 +138,20 @@ class StrategyTool:
         conf = StrategyList.Config.get(strategy)
         return getattr(conf, 'DayTrade', False)
 
-    def isRaiseQty(self, strategy: str):
-        if strategy not in StrategyList.Config:
+    def isRaiseQty(self, target: str):
+        conf = TradeDataHandler.getStrategyConfig(target)
+        if conf is None:
             return False
 
-        conf = StrategyList.Config.get(strategy)
         position = conf.positions
-        if not position.entries:
+        entries = [e for e in position.entries if e['name'] == target]
+        if not entries:
             return False
 
         return (
             conf.raiseQuota and
-            conf.raise_qty <= conf.max_qty - position.total_qty
+            conf.raise_qty <= conf.max_qty.get(
+                target) - position.total_qty.get(target, 0)
         )
 
     def export_strategy_data_(self):

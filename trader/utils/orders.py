@@ -340,8 +340,7 @@ class OrderTool(FuturesMargin):
             order['oc_type'] = 'New'
         else:
             order['oc_type'] = 'Cover'
-        self.WatchListTool.update_monitor(
-            self.account_name, order['oc_type'], msg)
+        self.WatchListTool.update_monitor(order['oc_type'], msg)
 
     def StockDeal(self, msg: dict):
         msg = CallbackHandler.update_stock_msg(msg)
@@ -371,5 +370,4 @@ class OrderTool(FuturesMargin):
                 TradeDataHandler.reset_monitor(symbol)
 
         # 更新監控庫存
-        self.WatchListTool.update_monitor(
-            self.account_name, order['oc_type'], msg)
+        self.WatchListTool.update_monitor(order['oc_type'], msg)

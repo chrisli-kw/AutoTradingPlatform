@@ -108,17 +108,18 @@ class WatchListTool:
 
         target = data['code']
         conf = TradeDataHandler.getStrategyConfig(target)
+        max_qty = conf.max_qty.get(target, 1) if conf else 1
         condition = self.match_target(target)
         df = db.query(SecurityInfo, *condition)
         if not df.empty:
             quantity = data['order']['quantity']
 
             if action == 'New':
-                position = int(100*conf.raise_qty/conf.max_qty)
+                position = int(100*conf.raise_qty/max_qty)
                 position *= -1
                 quantity *= -1
             else:
-                position = int(100*conf.stop_loss_qty/conf.max_qty)
+                position = int(100*conf.stop_loss_qty/max_qty)
 
             df['position'] -= position
             df['quantity'] -= quantity
@@ -126,6 +127,7 @@ class WatchListTool:
             self.check_remove_monitor(target)
 
         else:
+            quote = TradeDataHandler.getQuotesNow(target)
             data = dict(
                 account=self.account_name,
                 market='Stocks' if conf.market == 'Stocks' else 'Futures',
@@ -133,15 +135,13 @@ class WatchListTool:
                 action=action,
                 quantity=data['order']['quantity'],
                 cost_price=data['order']['price'],
-                last_price=TradeDataHandler.getQuotesNow(
-                    target).get('price', 0),
+                last_price=quote.get('price', 0),
                 pnl=0,
                 yd_quantity=0,
                 order_cond=data['order'].get('order_cond', 'Cash'),
                 timestamp=datetime.now(),
-                position=int(100*conf.open_qty/conf.max_qty),
-                strategy=TradeData.Securities.Strategy.get(
-                    target, 'unknown')
+                position=int(100*conf.open_qty/max_qty),
+                strategy=TradeData.Securities.Strategy.get(target, 'unknown')
             )
             db.add_data(SecurityInfo, **data)
 
@@ -193,7 +193,7 @@ class TradeDataHandler:
             return TradeData.Quotes.NowIndex[target]
         elif target in TradeData.Quotes.NowTargets:
             return TradeData.Quotes.NowTargets[target]
-        return -1
+        return {}
 
     @staticmethod
     def getStrategyConfig(target: str):
@@ -318,8 +318,9 @@ class Position:
     def open(self, inputs: dict):
         self.entries.append(inputs)
 
-        total_qty = self.total_qty.get(inputs['name'], 0)
-        self.total_qty[inputs['name']] = total_qty + inputs['quantity']
+        name = inputs['name']
+        total_qty = self.total_qty.get(name, 0)
+        self.total_qty[name] = total_qty + inputs['quantity']
 
         if not self.sim_trade:
             db.add_data(PositionTable, **inputs)

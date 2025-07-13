@@ -234,19 +234,20 @@ class StrategyExecutor(AccountHandler, Subscriber):
     def monitor_targets(self, target: str):
         if target in TradeData.Quotes.NowTargets:
             inputs = TradeDataHandler.getQuotesNow(target).copy()
-            data = TradeData.Securities.Monitor.get(target)
+            # data = TradeData.Securities.Monitor.get(target)
+            data = db.query(SecurityInfo, SecurityInfo.code == target)
             strategy = TradeData.Securities.Strategy[target]
-            raise_pos = self.StrategySet.isRaiseQty(strategy)
+            raise_pos = self.StrategySet.isRaiseQty(target)
 
             contract = TradeData.Contracts.get(target)
             is_stock = isinstance(contract, contracts.Stock)
 
             # new position
-            if data is None or (data and raise_pos):
+            if data.empty or (not data.empty and raise_pos):
                 actionType = 'Open'
                 octype = 'New'
                 pos_balance = self.StrategySet.get_pos_balance(
-                    strategy, raise_pos=raise_pos)
+                    target, raise_pos=raise_pos)
                 order_cond, quantity = self.get_quantity(
                     target, raise_pos=raise_pos)
 
@@ -256,18 +257,16 @@ class StrategyExecutor(AccountHandler, Subscriber):
             else:
                 actionType = 'Close'
                 octype = 'Cover'
+
+                data = data.to_dict('records')[0]
                 pos_balance = data['position']
                 order_cond = data.get('order_cond', 'Cash')
+                quantity = data.get('quantity', 0)
 
-                df = db.query(SecurityInfo, SecurityInfo.code == target)
-                if is_stock:
-                    quantity = data['quantity']
+                duration = (datetime.now() - data['timestamp']).total_seconds()
+                if is_stock and duration < 3600*4.5:
+                    order_cond = self.day_trade_cond[order_cond]
 
-                    bst = df['timestamp'].values[0]
-                    if (datetime.now() - bst).total_seconds() < 3600*4.5:
-                        order_cond = self.day_trade_cond[order_cond]
-                else:
-                    quantity = data['order']['quantity']
                 enoughOpen = False
 
             if target in TradeData.Futures.Transferred:
@@ -304,7 +303,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
                     inputs.update(data)
 
                 actionInfo = func(inputs=inputs)
-                if actionInfo.position:
+                if actionInfo.action:
                     if isTransfer:
                         new_contract = f'{target[:3]}{time_tool.GetDueMonth()}'
                         self.Order.transfer_margin(target, new_contract)
@@ -313,7 +312,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
                         TradeData.Futures.Transferred.update({
                             new_contract: {
                                 'quantity': quantity,
-                                'action': data['order']['action']
+                                'action': data['action']
                             }
                         })
                         TradeData.Securities.Strategy[new_contract] = strategy
@@ -386,7 +385,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         inputs = TradeDataHandler.getQuotesNow(target)
         quantity, quantity_limit = quantityFunc(
-            inputs=inputs, raise_pos=raise_pos)
+            inputs=inputs, raise_pos=raise_pos, target=target)
 
         order_cond = self.check_order_cond(target)
         leverage = self.Order.check_leverage(target, order_cond)
@@ -396,7 +395,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         if not isinstance(contract, contracts.Stock):
             # 單位: 口
-            return quantity
+            return quantity, quantity_limit
 
         # 單位: 股
         if order_cond == 'MarginTrading':

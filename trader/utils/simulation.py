@@ -110,6 +110,5 @@ class Simulator:
             }
         })
 
-        self.order_tool.WatchListTool.update_monitor(
-            self.account_name, action, order_data)
+        self.order_tool.WatchListTool.update_monitor(action, order_data)
         TradeDataHandler.update_deal_list(target, action)
