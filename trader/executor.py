@@ -396,7 +396,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         if not isinstance(contract, contracts.Stock):
             # 單位: 口
-            return quantity, quantity_limit
+            return order_cond, quantity
 
         # 單位: 股
         if order_cond == 'MarginTrading':
