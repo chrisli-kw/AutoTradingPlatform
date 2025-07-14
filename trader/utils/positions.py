@@ -94,7 +94,7 @@ class WatchListTool:
         '''Check if the target is empty in the monitor list'''
         condition = self.match_target(target)
         data = db.query(SecurityInfo, *condition)
-        data = data.to_dict('record')[0] if not data.empty else {}
+        data = data.to_dict('records')[0] if not data.empty else {}
         quantity = data.get('quantity', 0)
         position = data.get('position', 0)
 
@@ -146,7 +146,7 @@ class WatchListTool:
             db.add_data(SecurityInfo, **data)
 
     def check_remove_monitor(self, target: str):
-        is_empty = self.check_is_empty(self.account_name, target)
+        is_empty = self.check_is_empty(target)
         if is_empty:
             logging.debug(f'[Monitor List]Remove|{target}|')
 

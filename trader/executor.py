@@ -226,8 +226,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         infos = dict(action_type=action_type, target=target)
         order = self.Order.OrderInfo(**infos)
-        TradeDataHandler.check_remove_monitor(
-            self.account_name, target, action_type)
+        self.WatchList.check_remove_monitor(target)
         self.WatchList.update_position(order)
         self.StrategySet.update_StrategySet_data_(target)
 
@@ -246,6 +245,8 @@ class StrategyExecutor(AccountHandler, Subscriber):
             if data.empty or (not data.empty and raise_pos):
                 actionType = 'Open'
                 octype = 'New'
+
+                data = {}
                 pos_balance = self.StrategySet.get_pos_balance(
                     target, raise_pos=raise_pos)
                 order_cond, quantity = self.get_quantity(

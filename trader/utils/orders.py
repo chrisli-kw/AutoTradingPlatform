@@ -5,6 +5,7 @@ from shioaji import constant, contracts
 from datetime import datetime
 from collections import namedtuple
 from ..config import API, TimeSimTradeStockEnd, StrategyList, Cost
+from . import get_contract
 from .objects.data import TradeData
 from .positions import FuturesMargin, TradeDataHandler, WatchListTool
 from .database import db
@@ -174,7 +175,7 @@ class OrderTool(FuturesMargin):
         return quantity
 
     def get_sell_quantity(self, content: namedtuple):
-        contract = TradeDataHandler.getContract(content.target)
+        contract = get_contract(content.target)
         if content.quantity >= 1000 and isinstance(contract, contracts.Stock):
             return content.quantity/1000
         return content.quantity
