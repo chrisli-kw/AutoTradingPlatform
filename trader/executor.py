@@ -233,7 +233,6 @@ class StrategyExecutor(AccountHandler, Subscriber):
     def monitor_targets(self, target: str):
         if target in TradeData.Quotes.NowTargets:
             inputs = TradeDataHandler.getQuotesNow(target).copy()
-            # data = TradeData.Securities.Monitor.get(target)
             data = db.query(SecurityInfo, SecurityInfo.code == target)
             strategy = TradeData.Securities.Strategy[target]
             raise_pos = self.StrategySet.isRaiseQty(target)
@@ -247,8 +246,6 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 octype = 'New'
 
                 data = {}
-                pos_balance = self.StrategySet.get_pos_balance(
-                    target, raise_pos=raise_pos)
                 order_cond, quantity = self.get_quantity(
                     target, raise_pos=raise_pos)
 
@@ -260,7 +257,6 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 octype = 'Cover'
 
                 data = data.to_dict('records')[0]
-                pos_balance = data['position']
                 order_cond = data.get('order_cond', 'Cash')
                 quantity = data.get('quantity', 0)
 
@@ -294,7 +290,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
             c1 = octype == 'New' and enoughOpen and self.is_trading_time_(
                 inputs['datetime'])
             c2 = octype == 'Cover'
-            if quantity > 0 and pos_balance > 0 and (c1 or c2):
+            if c1 or c2:
                 if isTransfer:
                     func = self.StrategySet.transfer_position
                 else:
@@ -323,15 +319,15 @@ class StrategyExecutor(AccountHandler, Subscriber):
                         action_type=actionType,
                         target=target,
                         action=actionInfo.action,
-                        quantity=quantity,
+                        quantity=actionInfo.quantity,
                         order_cond=order_cond,
                         octype=octype,
-                        reason=actionInfo.msg,
+                        reason=actionInfo.reason,
                     )
-                    self._log_and_notify(actionInfo.msg)
+                    self._log_and_notify(actionInfo.reason)
                     return self.Order.OrderInfo(**infos)
 
-            elif (quantity <= 0 or pos_balance <= 0) and actionType == 'Close':
+            elif quantity <= 0 and actionType == 'Close':
                 self.update_after_interfere(target, actionType)
 
         return self.Order.OrderInfo(target=target)

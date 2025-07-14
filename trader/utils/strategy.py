@@ -5,7 +5,7 @@ import pandas as pd
 from .objects import Action
 from ..config import TODAY_STR, StrategyList
 from ..utils.database import db
-from ..utils.database.tables import ExDividendTable
+from ..utils.database.tables import ExDividendTable, SecurityInfo
 from ..utils.objects.data import TradeData
 from .positions import TradeDataHandler
 
@@ -122,7 +122,14 @@ class StrategyTool:
 
     def transfer_position(self, inputs: dict, **kwargs):
         target = inputs['symbol']
-        return Action(100, '轉倉', f'{target} 轉倉-Cover')
+        df = db.query(
+            SecurityInfo,
+            SecurityInfo.market == 'Futures',
+            SecurityInfo.code == target
+        )
+        action = df.action.values[0]
+        quantity = df.quantity.sum() if not df.empty else 0
+        return Action(action, f'{target} 轉倉-Cover', quantity)
 
     def isLong(self, strategy: str):
         '''Check if a strategy is a long strategy.'''

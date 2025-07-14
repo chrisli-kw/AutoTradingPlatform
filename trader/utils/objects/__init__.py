@@ -8,6 +8,6 @@ class Margin:
 
 Action = namedtuple(
     typename="Action",
-    field_names=['position', 'reason', 'msg', 'price', 'action'],
-    defaults=[0, '', '', 0, '']
+    field_names=['action', 'reason', 'quantity'],
+    defaults=['', 0, '']
 )

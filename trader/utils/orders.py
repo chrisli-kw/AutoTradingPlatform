@@ -70,11 +70,11 @@ class OrderTool(FuturesMargin):
         return cost_price
 
     @staticmethod
-    def content_attr(content: namedtuple, attr: str):
+    def content_attr(content: namedtuple, attr: str, default=None):
         '''Get attribute from content namedtuple or dict'''
         if isinstance(content, dict):
-            return content.get(attr)
-        return getattr(content, attr)
+            return content.get(attr, default)
+        return getattr(content, attr, default)
 
     def _account_id(self, content, market='Stocks'):
         action = self.content_attr(content, 'action')
@@ -94,18 +94,11 @@ class OrderTool(FuturesMargin):
     def generate_data(self, target: str, content: namedtuple):
         market = TradeDataHandler.getStrategyConfig(target).market
         is_real_trade = isinstance(content, dict)
-        action = content['action'] if is_real_trade else content.action
+
         action = self.content_attr(content, 'action')
-
-        if is_real_trade:
-            order_cond = content.get('order_cond', '')
-            op_type = content.get('oc_type', '')
-            price = content.get('price', 0)
-        else:
-            order_cond = content.order_cond
-            op_type = content.octype
-            price = 0
-
+        order_cond = self.content_attr(content, 'order_cond', default='')
+        op_type = self.content_attr(content, 'oc_type', default='')
+        price = content.get('price', 0) if is_real_trade else 0
         if price == 0:
             price = TradeDataHandler.getQuotesNow(target)['price']
 
@@ -135,7 +128,7 @@ class OrderTool(FuturesMargin):
             'order_lot': self._order_lot(content),
             'op_type': op_type,
             'account_id': self._account_id(content, market),
-            'msg': '' if is_real_trade else content.reason
+            'msg': self.content_attr(content, 'reason', default='')
         }
         return order_data
 
@@ -367,8 +360,6 @@ class OrderTool(FuturesMargin):
         if self.is_cancel_order(operation):
             self.deleteOrder(symbol)
             TradeDataHandler.update_deal_list(symbol, 'Cancel')
-            if order['oc_type'] == 'New':
-                TradeDataHandler.reset_monitor(symbol)
 
         # 更新監控庫存
         self.WatchListTool.update_monitor(order['oc_type'], msg)

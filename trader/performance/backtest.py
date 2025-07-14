@@ -19,6 +19,7 @@ from ..utils.time import time_tool
 from ..utils.file import file_handler
 from ..utils.kbar import KBarTool
 from ..utils.crawler import readStockList
+from ..utils.objects import Action
 from ..utils.database import db, KBarTables
 
 
@@ -325,11 +326,6 @@ class BackTester(BacktestPerformance):
         self.balance = self.init_balance
         self.market_value = self.init_balance
         self.buyOrder = 'Close'
-        self.Action = namedtuple(
-            typename="Action",
-            field_names=['position', 'reason', 'msg', 'price', 'action'],
-            defaults=[0, '', '', 0, 'Buy']
-        )
 
     def load_datasets(self, start='', end='', dataPath=''):
         market = self.Script.market
@@ -395,14 +391,13 @@ class BackTester(BacktestPerformance):
 
     def Open(self, inputs: dict, KBars: dict, **kwargs):
         '''檢查進場條件'''
-        return self.Action(100, '進場', 'msg', KBars['1D']['Open'])
+        return Action(kwargs.get('action', ''), '進場', kwargs.get('quantity', 1))
 
     def Close(self, inputs: dict, KBars: dict, **kwargs):
         '''檢查出場條件'''
         if inputs['low'] < inputs['open']:
-            closePrice = inputs['open']
-            return self.Action(100, '出場', 'msg', closePrice)
-        return self.Action()
+            return Action(kwargs.get('action', ''), '出場', kwargs.get('quantity', 1))
+        return Action()
 
     def computeOpenLimit(self, KBars: dict, **kwargs):
         '''計算每日買進股票上限(可做幾支)'''

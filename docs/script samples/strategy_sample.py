@@ -253,8 +253,8 @@ class StrategyConfig:
         if not self.positions.entries and self.examineOpen(K1min, price=price):
             self.positions.open(price, now, qty=self.open_qty)
 
-            reason, prop = 'open position', 10
-            return Action(prop, reason, 'open position', price, action)
+            reason = 'open position'
+            return Action(action, reason, self.open_qty)
 
         # Raise position
         elif self.raise_position(K1min, self.positions, price=price):
@@ -262,8 +262,8 @@ class StrategyConfig:
                 self.raise_qty, self.max_qty - self.positions.total_qty)
             self.positions.open(price, now, qty=raise_qty)
 
-            reason, prop = 'raise position', 20
-            return Action(prop, reason, 'raise position', price, action)
+            reason = 'raise position'
+            return Action(action, reason, raise_qty)
 
         return Action()
 
@@ -286,14 +286,14 @@ class StrategyConfig:
             self.positions.close(
                 price, now, reason='stop loss', qty=self.stop_loss_qty)
 
-            reason, prop = 'stop loss', 10
-            return Action(prop, reason, 'stop loss', price, action)
+            reason = 'stop loss'
+            return Action(action, reason, self.stop_loss_qty)
 
         elif self.stop_profit(K1min, entries, price=price):
             self.positions.close(
                 price, now, reason='stop profit', qty=self.stop_profit_qty)
 
-            reason, prop = 'stop profit', 20
-            return Action(prop, reason, 'stop profit', price, action)
+            reason = 'stop profit'
+            return Action(action, reason, self.stop_profit_qty)
 
         return Action()

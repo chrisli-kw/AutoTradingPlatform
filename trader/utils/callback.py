@@ -9,11 +9,7 @@ from .positions import TradeDataHandler
 class CallbackHandler:
     @staticmethod
     def FuturesDeal(msg: dict):
-        code = msg['code']
-        delivery_month = msg['delivery_month']
-        symbol = code + delivery_month
-        if TradeData.Securities.Monitor.get(symbol) is not None:
-            TradeData.Securities.Monitor[symbol]['cost_price'] = msg['price']
+        pass
 
     @staticmethod
     def update_stock_msg(msg: dict):

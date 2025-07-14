@@ -148,9 +148,6 @@ class WatchListTool:
     def check_remove_monitor(self, target: str):
         is_empty = self.check_is_empty(target)
         if is_empty:
-            logging.debug(f'[Monitor List]Remove|{target}|')
-
-            TradeDataHandler.reset_monitor(target)
             condition = self.match_target(target)
             db.delete(SecurityInfo, *condition)
         return is_empty
@@ -159,7 +156,7 @@ class WatchListTool:
 class TradeDataHandler:
     @staticmethod
     def reset_monitor(target: str):
-        TradeData.Securities.Monitor.pop(target, None)
+        TradeData.Securities.Monitor[target] = None
 
     @staticmethod
     def update_deal_list(target: str, action_type: str):
