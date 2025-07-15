@@ -94,6 +94,13 @@ class UserEnv:
         db.add_data(UserSettings, **env)
         logging.warning(f'User settings saved for {self.ACCOUNT_NAME}')
 
+    def update_env(self, **kwargs):
+        db.update(
+            UserSettings,
+            dict(kwargs),
+            UserSettings.account == self.ACCOUNT_NAME
+        )
+
     def api_key(self) -> str:
         return self.__API_KEY__
 
