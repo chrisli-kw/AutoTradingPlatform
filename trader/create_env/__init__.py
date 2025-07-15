@@ -47,10 +47,6 @@ def _create_env(inputs):
         POSITION_LIMIT_LONG={inputs['POSITION_LIMIT_LONG']}
         POSITION_LIMIT_SHORT={inputs['POSITION_LIMIT_SHORT']}
 
-        # 現股/融資 (Cash/MarginTrading/ShortSelling)
-        ORDER_COND1={inputs['ORDER_COND1']}
-        ORDER_COND2={inputs['ORDER_COND2']}
-
         # ----------------------------------- 期貨設定 ----------------------------------- #
         # 交易時段(Day/Night/Both)
         TRADING_PERIOD={inputs['TRADING_PERIOD']}

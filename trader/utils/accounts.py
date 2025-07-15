@@ -16,6 +16,7 @@ from .database.tables import SecurityInfo
 from .objects import Margin
 from .objects.env import UserEnv
 from .objects.data import TradeData
+from .positions import TradeDataHandler
 
 
 class AccountInfo:
@@ -478,26 +479,31 @@ class AccountHandler(AccountInfo):
         若帳戶設定為不可融資，則全部融資成數為0
         '''
 
-        df = pd.DataFrame([crawler.FromHTML.Leverage(s) for s in stockids])
-        if df.shape[0]:
-            df.columns = df.columns.str.replace(' ', '')
-            df.loc[df.個股融券信用資格 == 'N', '融券成數'] = 100
-            df.代號 = df.代號.astype(str)
-            df.融資成數 /= 100
-            df.融券成數 /= 100
+        def check_leverage(stockid: str):
+            conf = TradeDataHandler.getStrategyConfig(stockid)
+            return len(stockid) == 4 and (
+                getattr(conf, 'ORDER_COND1', 'Cash') != 'Cash' or
+                getattr(conf, 'ORDER_COND2', 'Cash') != 'Cash'
+            )
 
-            if self.env.ORDER_COND1 != 'Cash':
-                TradeData.Stocks.Leverage.Long = df.set_index(
-                    '代號').融資成數.to_dict()
-            else:
-                TradeData.Stocks.Leverage.Long = {code: 0 for code in stockids}
+        targets = [s for s in stockids if check_leverage(s)]
+        df = pd.DataFrame([crawler.FromHTML.Leverage(s) for s in targets])
+        if df.empty:
+            return
 
-            if self.env.ORDER_COND2 != 'Cash':
-                TradeData.Stocks.Leverage.Short = df.set_index(
-                    '代號').融券成數.to_dict()
-            else:
-                TradeData.Stocks.Leverage.Short = {
-                    code: 1 for code in stockids}
+        df.columns = df.columns.str.replace(' ', '')
+        df.loc[df.個股融券信用資格 == 'N', '融券成數'] = 100
+        df.代號 = df.代號.astype(str)
+        df.融資成數 /= 100
+        df.融券成數 /= 100
+        df = df.set_index('代號')
+
+        if TradeData.Stocks.CanTrade:
+            TradeData.Stocks.Leverage.Long = df.融資成數.to_dict()
+            TradeData.Stocks.Leverage.Short = df.融券成數.to_dict()
+        else:
+            TradeData.Stocks.Leverage.Long = {code: 0 for code in targets}
+            TradeData.Stocks.Leverage.Short = {code: 1 for code in targets}
 
         logging.info(f'Long leverages: {TradeData.Stocks.Leverage.Long}')
         logging.info(f'Short leverages: {TradeData.Stocks.Leverage.Short}')

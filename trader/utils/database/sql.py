@@ -20,17 +20,13 @@ class SQLDatabase:
         self.sessionmaker_ = None
 
         try:
-            if DBConfig.ENGINE == "sqlite":
-                self.connect_sqlite()
-            else:
-                self.connect_mysql()
-                logging.info(
-                    f"Connected to MySQL: {DBConfig.ENGINE}://{DBConfig.URL}/{DBConfig.NAME}")
+            self.connect(DBConfig.ENGINE)
+            logging.info(f"Connected to {DBConfig.ENGINE}: {self.sql_connect}")
         except Exception as e:
             logging.warning(
-                f"MySQL connection failed, change database to SQLite.")
+                f"{DBConfig.ENGINE} connection failed, change database to SQLite.")
             try:
-                self.connect_sqlite()
+                self.connect('sqlite')
                 logging.info(f"Fallback to SQLite: {self.sql_connect}")
             except Exception as e:
                 logging.error(f"SQLite connection failed: {e}")
@@ -40,8 +36,12 @@ class SQLDatabase:
         if self.HAS_DB and self.engine:
             self.sessionmaker_ = sessionmaker(bind=self.engine)
 
-    def connect_mysql(self):
-        self.sql_connect = f"{DBConfig.ENGINE}://{DBConfig.URL}/{DBConfig.NAME}"
+    def connect(self, engine: str = DBConfig.ENGINE):
+        if engine == "sqlite":
+            DBConfig.URL = f"/{PATH}"
+            DBConfig.NAME = DBConfig.FALLBACK_NAME
+
+        self.sql_connect = f"{engine}://{DBConfig.URL}/{DBConfig.NAME}"
         self.engine = create_engine(
             self.sql_connect,
             pool_size=50,
@@ -52,16 +52,6 @@ class SQLDatabase:
             pool_use_lifo=True,
             echo=False
         )
-        self.engine.connect().close()
-        DBConfig.HAS_DB = True
-
-    def connect_sqlite(self):
-        DBConfig.ENGINE = "sqlite"
-        DBConfig.URL = ""
-        DBConfig.NAME = f"{PATH}/{DBConfig.FALLBACK_NAME}"
-
-        self.sql_connect = f"sqlite:///{PATH}/{DBConfig.FALLBACK_NAME}"
-        self.engine = create_engine(self.sql_connect, echo=False)
         self.engine.connect().close()
         DBConfig.HAS_DB = True
 

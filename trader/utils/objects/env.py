@@ -23,8 +23,6 @@ class UserEnv:
         self.INIT_POSITION = self.get('INIT_POSITION', 'int')
         self.POSITION_LIMIT_LONG = self.get('POSITION_LIMIT_LONG', 'int')
         self.POSITION_LIMIT_SHORT = self.get('POSITION_LIMIT_SHORT', 'int')
-        self.ORDER_COND1 = self.get('ORDER_COND1')
-        self.ORDER_COND2 = self.get('ORDER_COND2')
         self.STOCK_MODEL_VERSION = self.get(
             'STOCK_MODEL_VERSION', default='1.0.0')
 

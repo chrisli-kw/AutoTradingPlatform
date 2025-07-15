@@ -191,6 +191,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 db.delete(
                     PositionTable,
                     PositionTable.account == self.account_name,
+                    PositionTable.name == code,
                     PositionTable.strategy == strategy
                 )
                 StrategyList.Config.get(strategy).positions.entries = []
@@ -210,7 +211,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         self.StrategySet.set_position_limit()
         self.StrategySet.get_ex_dividends_list()
         # self.punish_list = crawler.FromHTML.PunishList() # TODO ValueError: No tables found
-        self._set_leverage([s for s in all_targets if len(s) == 4])
+        self._set_leverage(all_targets)
         self._set_trade_risks()
         self._set_margin_limit()
         self.margin_table = self.Order.get_margin_table()
