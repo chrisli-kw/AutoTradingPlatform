@@ -5,6 +5,33 @@ from sqlalchemy import Column, Integer, FLOAT, String, BigInteger
 from .sql import Base
 
 
+class UserSettings(Base):
+    __tablename__ = 'user_settings'
+
+    pk_id = Column(
+        Integer, primary_key=True, autoincrement=True, nullable=False)
+
+    account = Column(String(50), nullable=False, comment='帳戶代號')
+    api_key = Column(String(200), nullable=False, comment='API 金鑰')
+    secret_key = Column(String(200), nullable=False, comment='API 密鑰')
+    ca_passwd = Column(String(200), comment='交易憑證密碼')
+    mode = Column(
+        String(10), default='Simulation', comment='交易模式 (Simulation/All)')
+    init_balance = Column(Integer, default=0, comment='帳戶起始資金')
+    marging_trading_amount = Column(Integer, default=0, comment='融資額度')
+    short_selling_amount = Column(Integer, default=0, comment='融券額度')
+    trading_period = Column(
+        String(10), default='Day', comment='交易時段(Day/Night/Both)')
+    margin_amount = Column(Integer, default=0, comment='可下單的保證金額上限')
+
+    create_time = Column(
+        TIMESTAMP(fsp=6), nullable=False, server_default=func.now())
+
+    def __init__(self, **kwargs):
+        for property, value in kwargs.items():
+            setattr(self, property, value)
+
+
 class SecurityInfo(Base):
     __tablename__ = 'security_info'
 

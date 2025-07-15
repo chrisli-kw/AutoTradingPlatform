@@ -13,10 +13,6 @@ from .positions import TradeDataHandler
 class StrategyTool:
     def __init__(self, env=None):
         self.account_name = env.ACCOUNT_NAME
-
-        self.stock_model_version = env.STOCK_MODEL_VERSION
-        self.futures_model_version = env.FUTURES_MODEL_VERSION
-
         self.is_simulation = env.MODE == 'Simulation'
         self.check_can_stock()
         self.check_can_futures()

@@ -1,12 +1,24 @@
+import logging
 import pandas as pd
 from dotenv import dotenv_values
 
 from ..cipher import CipherTool
+from ..database import db
+from ..database.tables import UserSettings
 
 
 class UserEnv:
     def __init__(self, account_name: str):
-        self.CONFIG = dotenv_values(f'./lib/envs/{account_name}.env')
+        config = db.query(UserSettings, UserSettings.account == account_name)
+
+        upload_env = False
+        if config.empty:
+            logging.warning(
+                f'No config found for {account_name}, using local settings.')
+            self.CONFIG = dotenv_values(f'./lib/envs/{account_name}.env')
+            upload_env = True
+        else:
+            self.CONFIG = config.iloc[0].to_dict()
 
         # 交易帳戶設定
         self.ACCOUNT_NAME = self.get('ACCOUNT_NAME', default='unknown')
@@ -14,56 +26,71 @@ class UserEnv:
         self.__SECRET_KEY__ = self.get('SECRET_KEY')
         self.__ACCOUNT_ID__ = self.get('ACCOUNT_ID', 'decrypt')
         self.__CA_PASSWD__ = self.get('CA_PASSWD', 'decrypt')
-
         self.MODE = self.get('MODE')
-        self.can_sell = self.MODE not in ['LongBuy', 'ShortBuy']
-        self.can_buy = self.MODE not in ['LongSell', 'ShortSell']
 
         # 股票使用者設定
-        self.INIT_POSITION = self.get('INIT_POSITION', 'int')
-        self.POSITION_LIMIT_LONG = self.get('POSITION_LIMIT_LONG', 'int')
-        self.POSITION_LIMIT_SHORT = self.get('POSITION_LIMIT_SHORT', 'int')
-        self.STOCK_MODEL_VERSION = self.get(
-            'STOCK_MODEL_VERSION', default='1.0.0')
+        self.INIT_BALANCE = self.get('INIT_BALANCE', 'int')
+        self.MARGING_TRADING_AMOUNT = self.get('MARGING_TRADING_AMOUNT', 'int')
+        self.SHORT_SELLING_AMOUNT = self.get('SHORT_SELLING_AMOUNT', 'int')
 
         # 期貨使用者設定
         self.TRADING_PERIOD = self.get('TRADING_PERIOD')
-        self.MARGIN_LIMIT = self.get('MARGIN_LIMIT', 'int')
-        self.FUTURES_MODEL_VERSION = self.get(
-            'FUTURES_MODEL_VERSION', default='1.0.0')
+        self.MARGIN_AMOUNT = self.get('MARGIN_AMOUNT', 'int')
+
+        if upload_env:
+            self.env_to_db()
 
     def get(self, key: str, type_: str = 'text', default=None):
-        if self.CONFIG:
-            env = self.CONFIG.get(key, default)
+        if type(self.CONFIG) == dict:
+            key = key.lower()
 
-            if type_ == 'int':
-                return int(env)
-            elif type_ == 'list':
-                if 'none' in env.lower():
-                    return []
-                return env.replace(' ', '').split(',')
-            elif type_ == 'dict':
-                envs = {}
-                if env:
-                    for e in env.split(','):
-                        e = e.split(':')
-                        envs.update({e[0]: e[1]})
-                return envs
-            elif type_ == 'date' and env:
-                return pd.to_datetime(env)
-            elif type_ == 'decrypt':
-                if not env or (not env[0].isdigit() and env[1:].isdigit()):
-                    return env
-                ct = CipherTool(decrypt=True, encrypt=False)
-                return ct.decrypt(env)
-            return env
-        elif type_ == 'int':
-            return 0
-        elif type_ == 'list':
-            return []
-        elif type_ == 'dict':
-            return {}
-        return None
+        env = self.CONFIG.get(key, default) if self.CONFIG else None
+
+        if type_ == 'int':
+            try:
+                return int(env or 0)
+            except:
+                return 0
+
+        if type_ == 'list':
+            if not env or 'none' in env.lower():
+                return []
+            return [item.strip() for item in env.split(',')]
+
+        if type_ == 'dict':
+            if not env:
+                return {}
+            return {k.strip(): v.strip() for k, v in (item.split(':') for item in env.split(','))}
+
+        if type_ == 'date':
+            return pd.to_datetime(env) if env else None
+
+        if type_ == 'decrypt':
+            if not env or (not env[0].isdigit() and env[1:].isdigit()):
+                return env
+            return CipherTool(decrypt=True, encrypt=False).decrypt(env)
+
+        return env
+
+    def env_to_db(self, **env):
+        """將環境變數存入資料庫"""
+
+        if not env:
+
+            env = {
+                'account': self.ACCOUNT_NAME,
+                'api_key': self.__API_KEY__,
+                'secret_key': self.__SECRET_KEY__,
+                'mode': self.MODE,
+                'init_balance': self.INIT_BALANCE,
+                'marging_trading_amount': self.MARGING_TRADING_AMOUNT,
+                'short_selling_amount': self.SHORT_SELLING_AMOUNT,
+                'trading_period': self.TRADING_PERIOD,
+                'margin_amount': self.MARGIN_AMOUNT
+            }
+
+        db.add_data(UserSettings, **env)
+        logging.warning(f'User settings saved for {self.ACCOUNT_NAME}')
 
     def api_key(self) -> str:
         return self.__API_KEY__

@@ -468,16 +468,16 @@ class StrategyExecutor(AccountHandler, Subscriber):
         if isinstance(contract, contracts.Stock):
             check_long = (
                 (amount1 <= TradeData.Account.DesposalMoney) &
-                (amount2 <= self.env.POSITION_LIMIT_LONG)
+                (amount2 <= self.env.MARGING_TRADING_AMOUNT)
             )
             if mode == 'long':
                 return check_long
-            return (check_long & (amount3 <= self.env.POSITION_LIMIT_SHORT))
+            return (check_long & (amount3 <= self.env.SHORT_SELLING_AMOUNT))
 
         else:
             return (
                 (amount1 <= TradeData.Account.DesposalMargin) &
-                (amount2 <= self.env.MARGIN_LIMIT)
+                (amount2 <= self.env.MARGIN_AMOUNT)
             )
 
     def is_trading_time_(self, now: datetime):
@@ -539,24 +539,20 @@ class StrategyExecutor(AccountHandler, Subscriber):
             f'[Security position] {db.query(SecurityInfo).shape[0]}')
         logging.info(f'[Stock Position] Long: {TradeData.Stocks.N_Long}')
         logging.info(
-            f'[Stock Position] Limit Long: {self.env.POSITION_LIMIT_LONG}')
+            f'[Stock Position] Limit Long: {self.env.MARGING_TRADING_AMOUNT}')
         logging.info(f'[Stock Position] Short: {TradeData.Stocks.N_Short}')
         logging.info(
-            f'[Stock Position] Limit Short: {self.env.POSITION_LIMIT_SHORT}')
+            f'[Stock Position] Limit Short: {self.env.SHORT_SELLING_AMOUNT}')
         logging.info(
             f'[Stock Portfolio Limit] Long: {TradeData.Stocks.LimitLong}')
         logging.info(
             f'[Stock Portfolio Limit] Short: {TradeData.Stocks.LimitShort}')
-        logging.info(f'[Stock Model Version] {self.env.STOCK_MODEL_VERSION}')
 
         logging.info(f'[Futures portfolio Limit] {TradeData.Futures.Limit}')
-        logging.info(
-            f'[Futures Model Version] {self.env.FUTURES_MODEL_VERSION}')
 
         text = f"\n【開始監控】{self.env.ACCOUNT_NAME} 啟動完成({__version__})"
         text += f"\n【操盤模式】{self.env.MODE}"
         text += f"\n【策略清單】{list(StrategyList.Config.keys())}"
-        text += f"\n【AI版本】Stock-{self.env.STOCK_MODEL_VERSION}; Futures:{self.env.FUTURES_MODEL_VERSION}"
         text += f"\n【數據用量】{usage}MB"
         notifier.send.post(text)
 

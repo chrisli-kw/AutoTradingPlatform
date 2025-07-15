@@ -41,18 +41,18 @@ def _create_env(inputs):
         MODE={modes[inputs['MODE']]}
 
         # 起始部位
-        INIT_POSITION=100000
+        INIT_BALANCE=100000
 
         # 部位上限/可委託金額上限
-        POSITION_LIMIT_LONG={inputs['POSITION_LIMIT_LONG']}
-        POSITION_LIMIT_SHORT={inputs['POSITION_LIMIT_SHORT']}
+        MARGING_TRADING_AMOUNT={inputs['MARGING_TRADING_AMOUNT']}
+        SHORT_SELLING_AMOUNT={inputs['SHORT_SELLING_AMOUNT']}
 
         # ----------------------------------- 期貨設定 ----------------------------------- #
         # 交易時段(Day/Night/Both)
         TRADING_PERIOD={inputs['TRADING_PERIOD']}
 
         # 可下單的保證金額上限
-        MARGIN_LIMIT = {inputs['MARGIN_LIMIT']}
+        MARGIN_AMOUNT = {inputs['MARGIN_AMOUNT']}
 
         """.replace('        ', '')
 

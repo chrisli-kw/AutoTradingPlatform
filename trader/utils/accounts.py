@@ -443,18 +443,18 @@ class AccountHandler(AccountInfo):
         cost_value = (df.quantity*df.cost_price).sum()
         pnl = df.pnl.sum()
         if TradeData.Account.Simulate:
-            account_balance = self.env.INIT_POSITION
+            account_balance = self.env.INIT_BALANCE
             settle_info = pnl
         else:
             account_balance = self.balance()
             settle_info = self.settle_info(mode='info').iloc[1:, 1].sum()
 
         TradeData.Account.DesposalMoney = min(
-            account_balance+settle_info, self.env.POSITION_LIMIT_LONG)
+            account_balance+settle_info, self.env.MARGING_TRADING_AMOUNT)
         self.total_market_value = TradeData.Account.DesposalMoney + cost_value + pnl
 
         logging.info(
-            f'[AccountInfo] Desposal amount = {TradeData.Account.DesposalMoney} (limit: {self.env.POSITION_LIMIT_LONG})')
+            f'[AccountInfo] Desposal amount = {TradeData.Account.DesposalMoney} (limit: {self.env.MARGING_TRADING_AMOUNT})')
 
     def _set_margin_limit(self):
         '''計算可交割的保證金額，不可超過帳戶可下單的保證金額上限'''
@@ -469,9 +469,9 @@ class AccountHandler(AccountInfo):
             self.ProfitAccCount = margin.equity  # 權益總值
 
         TradeData.Account.DesposalMargin = min(
-            account_balance+desposal_margin, self.env.MARGIN_LIMIT)
+            account_balance+desposal_margin, self.env.MARGIN_AMOUNT)
         logging.info(
-            f'[AccountInfo] Margin: total={self.ProfitAccCount}; available={TradeData.Account.DesposalMargin}; limit={self.env.MARGIN_LIMIT}')
+            f'[AccountInfo] Margin: total={self.ProfitAccCount}; available={TradeData.Account.DesposalMargin}; limit={self.env.MARGIN_AMOUNT}')
 
     def _set_leverage(self, stockids: list):
         '''
