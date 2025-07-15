@@ -14,6 +14,7 @@ class UserSettings(Base):
     account = Column(String(50), nullable=False, comment='帳戶代號')
     api_key = Column(String(200), nullable=False, comment='API 金鑰')
     secret_key = Column(String(200), nullable=False, comment='API 密鑰')
+    account_id = Column(String(50), nullable=False, comment='帳戶 ID')
     ca_passwd = Column(String(200), comment='交易憑證密碼')
     mode = Column(
         String(10), default='Simulation', comment='交易模式 (Simulation/All)')

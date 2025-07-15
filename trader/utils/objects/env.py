@@ -81,6 +81,8 @@ class UserEnv:
                 'account': self.ACCOUNT_NAME,
                 'api_key': self.__API_KEY__,
                 'secret_key': self.__SECRET_KEY__,
+                'account_id': self.__ACCOUNT_ID__,
+                'ca_passwd': self.__CA_PASSWD__,
                 'mode': self.MODE,
                 'init_balance': self.INIT_BALANCE,
                 'marging_trading_amount': self.MARGING_TRADING_AMOUNT,
