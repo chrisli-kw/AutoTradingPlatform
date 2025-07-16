@@ -411,8 +411,8 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         conf = TradeDataHandler.getStrategyConfig(target)
         mode = conf.mode
-        margin_trading = getattr(conf, 'margin_trading', False)
-        short_selling = getattr(conf, 'short_selling', False)
+        margin_trading = getattr(conf, 'Margin_Trading', False)
+        short_selling = getattr(conf, 'SHORT_SELLING', False)
 
         if (
             mode == 'long' and

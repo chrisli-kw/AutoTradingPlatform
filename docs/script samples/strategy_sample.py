@@ -1,10 +1,8 @@
-import os
-import joblib
 import logging
 import pandas as pd
 from datetime import datetime
 
-from trader.config import PATH, TODAY_STR
+from trader.config import TODAY_STR
 from trader.utils.objects import Action
 from trader.utils.objects.data import TradeData
 from trader.utils.positions import Position
@@ -61,7 +59,7 @@ class StrategyConfig:
     open_qty = 1
 
     # Quantity for raising a position at a time
-    raise_qty = 2
+    raise_qty = 1
 
     # Quantity for stop loss a position at a time
     stop_loss_qty = 1
@@ -72,43 +70,38 @@ class StrategyConfig:
     # The maximum quantity of the strategy can make
     max_qty = 10
 
+    # The price limit of a single targets, any target's price higher than the
+    # threshold will be filtered out for trading monitor
+    PRICE_THRESHOLD = 99999
+
+    # The targets you want to filter OUT for trading monitor
+    FILTER_OUT = []
+
+    # The targets you want to filter IN for trading monitor
+    Targets = []
+
+    # The maximum amount can be used for MarginTrading/ShortSelling
+    Margin_Trading = 0
+    SHORT_SELLING = 0
+
+    # The stock order condigion (Cash/MarginTrading/ShortSelling)
+    ORDER_COND1 = 'MarginTrading'
+    ORDER_COND2 = 'ShortSelling'
+
+    # The maximum number of targets hold in a position
+    PositionLimit = 0
+
+    # True = This is a day-trade strategy .
+    DayTrade = False
+
     positions = Position()
 
     # Optional: add this attribute if your strategy needs more datssets.
     extraData = dict(dats_source=dats_source)
 
-    def __init__(self, account_name: str, **kwargs):
+    def __init__(self, account_name: str, strategy: str, **kwargs):
         self.account_name = account_name
-        self.filepath = f'{PATH}/stock_pool/{self.account_name}_{self.name}_position.pkl'
-
-        if os.path.exists(self.filepath):
-            self.positions = joblib.load(self.filepath)
-        else:
-            self.positions = Position()
-
-    def addFeatures_1D(self, df: pd.DataFrame):
-        '''
-        ===================================================================
-
-        *****OPTIONAL*****
-
-        Function of adding "Day-frequency" features. Add this function if
-        your backtest strategy needs multi-scale kbar datasets.
-        ===================================================================
-        '''
-        df = self.preprocess_common(df)
-        df = getattr(self, f'preprocess')(df)
-        df = getattr(self, f'addFeatures_1D')(df, 'backtest')
-        return df
-
-    def addFeatures_T(self, df: pd.DataFrame):
-        '''
-        ===================================================================
-        Function of adding "other-frequency" features.
-        ===================================================================
-        '''
-        df = self.add_features(df)
-        return df
+        self.positions = Position(account_name=account_name, strategy=strategy)
 
     def add_features(self):
         '''
@@ -155,18 +148,6 @@ class StrategyConfig:
             df = df.merge(isIn, how='left', on=['date', 'name'])
             TradeData.KBars.Freq[self.scale] = df
 
-    def computeOpenLimit(self, KBars: dict, **kwargs):
-        '''
-        ===================================================================
-        Determine the daily limit to open a position.
-        ===================================================================
-        '''
-        if not hasattr(self, f'openLimit'):
-            return 2000
-
-        func = getattr(self, 'openLimit')
-        return func(KBars, 'backtest')
-
     def Quantity(self, inputs: dict, **kwargs):
         '''
         ===================================================================
@@ -176,7 +157,8 @@ class StrategyConfig:
 
         raise_pos = kwargs.get('raise_pos', False)
         quantity = self.raise_qty if raise_pos else self.open_qty
-        return quantity, self.max_qty
+        target = kwargs.get('target', '')
+        return quantity, self.max_qty.get(target, 0)
 
     @staticmethod
     def examineOpen(trade: dict, price=None) -> bool:
@@ -189,13 +171,13 @@ class StrategyConfig:
         return (open > 100)
 
     @classmethod
-    def raise_position(self, trade: dict, position: Position, price=None):
+    def raise_position(self, trade: dict, entries: list, price=None):
         '''
         ===================================================================
         Set conditions to raise an increase in opened positions.
         ===================================================================
         '''
-        if not position.entries:
+        if not entries:
             logging.warning('Entries list is empty')
             return False
 
@@ -214,7 +196,6 @@ class StrategyConfig:
             logging.warning('Entries list is empty')
             return False
 
-        e = entries[0]
         price = trade['tOpen'] if price is None else price
         atr = trade.get('ATR')
         return (atr < 4)
