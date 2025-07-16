@@ -21,7 +21,7 @@ class UserEnv:
             self.CONFIG = config.iloc[0].to_dict()
 
         # 交易帳戶設定
-        self.ACCOUNT_NAME = self.get('ACCOUNT_NAME', default='unknown')
+        self.ACCOUNT_NAME = self.get('ACCOUNT', default='unknown')
         self.__API_KEY__ = self.get('API_KEY')
         self.__SECRET_KEY__ = self.get('SECRET_KEY')
         self.__ACCOUNT_ID__ = self.get('ACCOUNT_ID', 'decrypt')
