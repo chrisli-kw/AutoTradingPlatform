@@ -41,7 +41,7 @@
                     <tr>
                         <th scope="row">使用者代號（英文）</th>
                         <td>
-                            <input required name='ACCOUNT_NAME' type="text" placeholder="EX: user"
+                            <input required name='ACCOUNT' type="text" placeholder="EX: user"
                                 style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%'>
                         </td>
                     </tr>
@@ -78,59 +78,9 @@
                         <td>
                             <select id="inputState" class="form-control" name="MODE">
                                 <option></option>
-                                <option>作多只賣出</option>
-                                <option>作多只買進</option>
-                                <option selected>作多買進&賣出</option>
-                                <option>作空只賣出</option>
-                                <option>作空只買進</option>
-                                <option>作空買進&賣出</option>
-                                <option>作多且做空, 且可買進也可賣出</option>
+                                <option>實單交易</option>
                                 <option>模擬</option>
                             </select>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">部位上限/可委託金額上限</th>
-                        <td>
-                            <input name='POSITION_LIMIT_LONG' type="number"
-                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=100000 min=0>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">信用交易上限(放空上限)</th>
-                        <td>
-                            <input name='POSITION_LIMIT_SHORT' type="number"
-                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=100000 min=0>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">委託條件：現股/融資(做多)</th>
-                        <td>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="ORDER_COND1" id="ORDER_COND11"
-                                    value='Cash' checked='checked'>
-                                <label class="form-check-label" for="ORDER_COND11">現股</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="ORDER_COND1" id="ORDER_COND12"
-                                    value='MarginTrading'>
-                                <label class="form-check-label" for="ORDER_COND12">融資</label>
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">委託條件：現股/融券(做空)</th>
-                        <td>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="ORDER_COND2" id="ORDER_COND21"
-                                    value='Cash' checked='checked'>
-                                <label class="form-check-label" for="ORDER_COND11">現股</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="ORDER_COND2" id="ORDER_COND22"
-                                    value='ShortSelling'>
-                                <label class="form-check-label" for="ORDER_COND12">融券</label>
-                            </div>
                         </td>
                     </tr>
                     <tr>
@@ -147,7 +97,7 @@
                     <tr>
                         <th scope="row">可下單的保證金額上限</th>
                         <td>
-                            <input name='MARGIN_LIMIT' type="number"
+                            <input name='MARGIN_AMOUNT' type="number"
                                 style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=100000 min=0>
                         </td>
                     </tr>
@@ -155,7 +105,6 @@
             </table>
 
             <p>
-
                 <center><button type="submit" class="btn btn-primary">送出</button></center>
                 <br></br>
         </form>

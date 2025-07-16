@@ -1,75 +1,49 @@
 from flask import Flask, request, render_template
 
-from trader import file_handler
+from trader.utils.objects.env import UserEnv
+from trader.utils.database import db
+from trader.utils.database.tables import UserSettings
 
 
 def _create_env(inputs):
     modes = {
-        '作多只賣出': 'LongSell',
-        '作多只買進': 'LongBuy',
-        '作多買進&賣出': 'LongBoth',
-        '作空只賣出': 'ShortSell',
-        '作空只買進': 'ShortBuy',
-        '作空買進&賣出': 'ShortBoth',
         '作多且做空, 且可買進也可賣出': 'All',
         '模擬': 'Simulation'
     }
 
-    account_name = inputs['ACCOUNT_NAME']
+    account_name = inputs['ACCOUNT']
 
-    users = file_handler.Operate.listdir('./lib/envs', account_name)
-    if users:
-        nth_account = max(users) + 1
-    else:
+    users = db.query(UserSettings, UserSettings.account == account_name)
+    if users.empty:
         nth_account = 1
+    else:
+        nth_account = users.shape[0] + 1
 
     account_name = f'{account_name}_{nth_account}'
-    myBat = open(f"./lib/envs/{account_name}.env", 'w+', encoding='utf-8')
+    env = {
+        'account': account_name,
+        'api_key': inputs['API_KEY'],
+        'secret_key': inputs['SECRET_KEY'],
+        'account_id': inputs['ACCOUNT_ID'],
+        'ca_passwd': inputs['CA_PASSWD'],
+        'mode': modes[inputs['MODE']],
+        'init_balance': 100000,
+        'marging_trading_amount': inputs['MARGING_TRADING_AMOUNT'],
+        'short_selling_amount': inputs['SHORT_SELLING_AMOUNT'],
+        'trading_period': inputs['TRADING_PERIOD'],
+        'margin_amount': inputs['MARGIN_AMOUNT']
+    }
+    UserEnv(account_name).env_to_db(**env)
 
-    content = f"""# 使用者資訊
-        ACCOUNT_NAME={account_name}
-        API_KEY = {inputs['API_KEY']}
-        SECRET_KEY = {inputs['SECRET_KEY']}
-        ACCOUNT_ID = {inputs['ACCOUNT_ID']}
-        CA_PASSWD = {inputs['CA_PASSWD']}
-
-        # 多空模式 (英文)
-        # 作多: LongSell(只賣出), LongBuy(只買進), LongBoth(買進&賣出)
-        # 作空: ShortSell(只賣出), ShortBuy(只買進), ShortBoth(買進&賣出)
-        # All: 作多且做空, 且可買進也可賣出
-        # Simulation: 可做策略監控(多 or 空 or 多策略), 但不下單
-        MODE={modes[inputs['MODE']]}
-
-        # 起始部位
-        INIT_BALANCE=100000
-
-        # 部位上限/可委託金額上限
-        MARGING_TRADING_AMOUNT={inputs['MARGING_TRADING_AMOUNT']}
-        SHORT_SELLING_AMOUNT={inputs['SHORT_SELLING_AMOUNT']}
-
-        # ----------------------------------- 期貨設定 ----------------------------------- #
-        # 交易時段(Day/Night/Both)
-        TRADING_PERIOD={inputs['TRADING_PERIOD']}
-
-        # 可下單的保證金額上限
-        MARGIN_AMOUNT = {inputs['MARGIN_AMOUNT']}
-
-        """.replace('        ', '')
-
-    myBat.write(content)
-    myBat.close()
-    return {account_name: content}
+    return {account_name: env}
 
 
 def _create_bat(account_name):
     myBat = open(f'./lib/schedules/auto_trader_{account_name}.bat', 'w+')
     myBat.write(
-        f"""call C:/Users/%username%/anaconda3/Scripts/activate.bat
-
-        cd /d %~dp0/../..
-
-        set SJ_LOG_PATH=%~dp0/../../logs/shioaji.log
-
+        f"""
+        cd /d %~dp0/../../..
+        set SJ_LOG_PATH=%~dp0/../../../logs/shioaji.log
         python run.py -TASK auto_trader -ACCT {account_name}
         """.replace('        ', ''))
 

@@ -1,3 +1,4 @@
+import os
 import logging
 import pandas as pd
 from dotenv import dotenv_values
@@ -12,13 +13,15 @@ class UserEnv:
         config = db.query(UserSettings, UserSettings.account == account_name)
 
         upload_env = False
-        if config.empty:
+        if not config.empty:
+            self.CONFIG = config.iloc[0].to_dict()
+        elif config.empty and os.path.exists(f'./lib/envs/{account_name}.env'):
             logging.warning(
                 f'No config found for {account_name}, using local settings.')
             self.CONFIG = dotenv_values(f'./lib/envs/{account_name}.env')
             upload_env = True
         else:
-            self.CONFIG = config.iloc[0].to_dict()
+            self.CONFIG = None
 
         # 交易帳戶設定
         self.ACCOUNT_NAME = self.get('ACCOUNT', default='unknown')
@@ -41,6 +44,9 @@ class UserEnv:
             self.env_to_db()
 
     def get(self, key: str, type_: str = 'text', default=None):
+        if self.CONFIG is None:
+            return
+
         if type(self.CONFIG) == dict:
             key = key.lower()
 
@@ -95,6 +101,9 @@ class UserEnv:
         logging.warning(f'User settings saved for {self.ACCOUNT_NAME}')
 
     def update_env(self, **kwargs):
+        if kwargs.get('account') is None:
+            return
+
         db.update(
             UserSettings,
             dict(kwargs),
