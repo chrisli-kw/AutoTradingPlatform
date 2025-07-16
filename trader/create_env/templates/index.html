@@ -29,8 +29,6 @@
         {% block content %}{% endblock %}
 
         <form method='post' action='/account-result'>
-
-
             <table class="table  table-bordered">
                 <thead class="table-info">
                     <tr>
@@ -92,6 +90,20 @@
                                 <option>夜盤</option>
                                 <option>日盤&夜盤</option>
                             </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">融資額度</th>
+                        <td>
+                            <input name='MARGING_TRADING_AMOUNT' type="number"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=100000 min=0>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">融券額度</th>
+                        <td>
+                            <input name='SHORT_SELLING_AMOUNT' type="number"
+                                style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=100000 min=0>
                         </td>
                     </tr>
                     <tr>

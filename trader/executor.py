@@ -314,7 +314,9 @@ class StrategyExecutor(AccountHandler, Subscriber):
                             }
                         })
                         TradeData.Securities.Strategy[new_contract] = strategy
-                        TradeData.Securities.Strategy.pop(target, None)
+                        TradeData.Securities.Monitor[new_contract] = None
+                        TradeData.Securities.Monitor.pop(target, None)
+                        # TradeData.Securities.Strategy.pop(target, None)
                         data = {
                             'account': self.account_name,
                             'strategy': strategy,
@@ -324,8 +326,6 @@ class StrategyExecutor(AccountHandler, Subscriber):
                         }
                         conf = TradeDataHandler.getStrategyConfig(new_contract)
                         conf.positions.close(data)
-
-                        target = new_contract
 
                     infos = dict(
                         action_type=actionType,

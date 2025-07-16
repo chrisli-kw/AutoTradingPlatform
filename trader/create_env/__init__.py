@@ -7,7 +7,7 @@ from trader.utils.database.tables import UserSettings
 
 def _create_env(inputs):
     modes = {
-        '作多且做空, 且可買進也可賣出': 'All',
+        '實單交易': 'All',
         '模擬': 'Simulation'
     }
 
@@ -25,13 +25,13 @@ def _create_env(inputs):
         'api_key': inputs['API_KEY'],
         'secret_key': inputs['SECRET_KEY'],
         'account_id': inputs['ACCOUNT_ID'],
-        'ca_passwd': inputs['CA_PASSWD'],
+        'ca_passwd': inputs.get('CA_PASSWD', ''),
         'mode': modes[inputs['MODE']],
         'init_balance': 100000,
-        'marging_trading_amount': inputs['MARGING_TRADING_AMOUNT'],
-        'short_selling_amount': inputs['SHORT_SELLING_AMOUNT'],
-        'trading_period': inputs['TRADING_PERIOD'],
-        'margin_amount': inputs['MARGIN_AMOUNT']
+        'marging_trading_amount': inputs.get('MARGING_TRADING_AMOUNT', 100000),
+        'short_selling_amount': inputs.get('SHORT_SELLING_AMOUNT', 100000),
+        'trading_period': inputs.get('TRADING_PERIOD', 'Day'),
+        'margin_amount': inputs.get('MARGIN_AMOUNT', 100000),
     }
     UserEnv(account_name).env_to_db(**env)
 
