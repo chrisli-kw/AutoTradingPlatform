@@ -124,6 +124,7 @@ class StrategyTool:
             SecurityInfo.code == target
         )
         action = df.action.values[0]
+        action = 'Sell' if action == 'Buy' else 'Buy'
         quantity = df.quantity.sum() if not df.empty else 0
         return Action(action, f'{target} 轉倉-Cover', quantity)
 

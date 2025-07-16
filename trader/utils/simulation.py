@@ -104,6 +104,7 @@ class Simulator:
         order_data.update({
             'code': target,
             'order': {
+                'action': order.action,
                 'quantity': self.order_tool.get_sell_quantity(order),
                 'price': abs(order_data['price']),
                 'order_cond': order_data.get('order_cond', 'Cash'),

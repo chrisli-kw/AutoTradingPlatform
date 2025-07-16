@@ -315,6 +315,17 @@ class StrategyExecutor(AccountHandler, Subscriber):
                         })
                         TradeData.Securities.Strategy[new_contract] = strategy
                         TradeData.Securities.Strategy.pop(target, None)
+                        data = {
+                            'account': self.account_name,
+                            'strategy': strategy,
+                            'name': target,
+                            'timestamp': datetime.now(),
+                            'price': TradeDataHandler.getQuotesNow(target).get('price', 0)
+                        }
+                        conf = TradeDataHandler.getStrategyConfig(new_contract)
+                        conf.positions.close(data)
+
+                        target = new_contract
 
                     infos = dict(
                         action_type=actionType,

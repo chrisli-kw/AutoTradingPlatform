@@ -103,7 +103,7 @@ class WatchListTool:
             f'[Monitor List]Check|{target}|{is_empty}|quantity: {quantity}; position: {position}|')
         return is_empty
 
-    def update_monitor(self, action: str, data: dict):
+    def update_monitor(self, oc_type: str, data: dict):
         '''更新監控庫存(成交回報)'''
 
         target = data['code']
@@ -114,7 +114,7 @@ class WatchListTool:
         if not df.empty:
             quantity = data['order']['quantity']
 
-            if action == 'New':
+            if oc_type == 'New':
                 position = int(100*conf.raise_qty/max_qty)
                 position *= -1
                 quantity *= -1
@@ -132,7 +132,7 @@ class WatchListTool:
                 account=self.account_name,
                 market='Stocks' if conf.market == 'Stocks' else 'Futures',
                 code=target,
-                action=action,
+                action=data['order']['action'],
                 quantity=data['order']['quantity'],
                 cost_price=data['order']['price'],
                 last_price=quote.get('price', 0),

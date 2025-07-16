@@ -235,8 +235,7 @@ class AccountInfo:
     def compute_margin_amount(self, stocks: pd.DataFrame):
         '''計算融資/融券金額'''
         if stocks.shape[0]:
-            is_leverage = (
-                'MarginTrading' == stocks.order_cond.apply(lambda x: x._value_))
+            is_leverage = ('MarginTrading' == stocks.order_cond)
             leverages = [
                 crawler.FromHTML.Leverage(s)['融資成數']/100 for s in stocks.code]
             return sum(is_leverage*stocks.cost_price*stocks.quantity*leverages)
@@ -367,26 +366,29 @@ class AccountInfo:
     def get_futures_positions(self):
         '''查看期權帳戶持有部位'''
 
-        positions = API.list_positions(API.futopt_account)
-        if not positions:
-            return TradeData.Securities.InfoDefault
+        try:
+            positions = API.list_positions(API.futopt_account)
+            if not positions:
+                return TradeData.Securities.InfoDefault
 
-        df = self._obj_2_df(positions)
-        if df.shape[0]:
-            df = df.rename(columns={
-                'direction': 'action',
-                'price': 'cost_price',
-            })
-            df[['account', 'market']] = [self.account_name, 'Futures']
-            df['yd_quantity'] = df.quantity
-            df['order_cond'] = ''
+            df = self._obj_2_df(positions)
+            if df.shape[0]:
+                df = df.rename(columns={
+                    'direction': 'action',
+                    'price': 'cost_price',
+                })
+                df[['account', 'market']] = [self.account_name, 'Futures']
+                df['yd_quantity'] = df.quantity
+                df['order_cond'] = ''
 
-            df['contract'] = df.code.apply(lambda x: get_contract(x))
-            df['isDue'] = df.contract.apply(
-                lambda x: TODAY_STR.replace('-', '/') == x.delivery_date)
-            df.code = df.contract.apply(lambda x: x.symbol)
-            df['order'] = df[['quantity', 'action']].to_dict('records')
-            return df
+                df['contract'] = df.code.apply(lambda x: get_contract(x))
+                df['isDue'] = df.contract.apply(
+                    lambda x: TODAY_STR.replace('-', '/') == x.delivery_date)
+                df.code = df.contract.apply(lambda x: x.symbol)
+                df['order'] = df[['quantity', 'action']].to_dict('records')
+                return df
+        except:
+            logging.exception('List futures positions failed:')
         return TradeData.Securities.InfoDefault
 
     def get_settle_profitloss(self, start_date: str, end_date: str, market='Stocks'):

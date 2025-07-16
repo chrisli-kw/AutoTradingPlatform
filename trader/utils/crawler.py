@@ -50,7 +50,7 @@ class CrawlFromSJ:
         當 market='Stocks' 且只保留普通股股票且不需要權證: stock_only = True 
         '''
         id_list = [
-            {**id} for exchange in API.Contracts[market] for id in exchange]
+            {**id} for exchange in API.Contracts.get(market) for id in exchange]
         df = pd.DataFrame(id_list)
         df = df[(df.update_date == df.update_date.max())]
 
