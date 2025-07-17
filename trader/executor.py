@@ -184,6 +184,8 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 TradeData.Securities.Monitor.update({code: None})
 
             conf = TradeDataHandler.getStrategyConfig(code)
+
+            # 若遠端無庫存，地端有庫存，刪除地端資料
             if (
                 TradeData.Securities.Monitor.get(code) is None and
                 conf.positions.entries
@@ -195,6 +197,9 @@ class StrategyExecutor(AccountHandler, Subscriber):
                     PositionTable.strategy == strategy
                 )
                 StrategyList.Config.get(strategy).positions.entries = []
+
+            # 若遠端有庫存，地端無庫存，補地端資料
+            # TODO
 
         # 新增歷史K棒資料
         all_targets = list(TradeData.Securities.Monitor)
@@ -565,6 +570,9 @@ class StrategyExecutor(AccountHandler, Subscriber):
         text += f"\n【操盤模式】{self.env.MODE}"
         text += f"\n【策略清單】{list(StrategyList.Config.keys())}"
         text += f"\n【數據用量】{usage}MB"
+        for target, info in TradeData.Securities.Monitor.items():
+            if isinstance(info, dict):
+                text += f"\n【庫存部位】{target}: {info.get('action', '')} - {info.get('quantity', 0)}"
         notifier.send.post(text)
 
         def periodic_check():
