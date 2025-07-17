@@ -148,14 +148,7 @@ class PerformanceReport(SuplotHandler, OrderTool):
 
     def getSelections(self, statement):
         start = time_tool.last_business_day(statement.OpenTime.values[0])
-        if db.HAS_DB:
-            df = db.query(
-                SelectedStocks,
-                SelectedStocks.Time >= start
-            )
-        else:
-            dir_path = f'{PATH}/selections/history'
-            df = file_handler.read_tables_in_folder(dir_path)
+        df = db.query(SelectedStocks, SelectedStocks.Time >= start)
         df = df[
             df.Strategy.isin(statement.Strategy) &
             (df.Time >= start)

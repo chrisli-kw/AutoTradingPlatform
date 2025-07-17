@@ -45,11 +45,6 @@ class StrategyTool:
     def __DoNothing__(self, **kwargs):
         return Action()
 
-    def update_StrategySet_data_(self, target: str):
-        for conf in StrategyList.Config.values():
-            if hasattr(conf, 'update_StrategySet_data'):
-                conf.update_StrategySet_data(target)
-
     def set_position_limit(self):
         if TradeData.Account.Simulate:
             TradeData.Stocks.LimitLong = 3000
@@ -119,6 +114,7 @@ class StrategyTool:
         target = inputs['symbol']
         df = db.query(
             SecurityInfo,
+            SecurityInfo.mode == TradeData.Account.Mode,
             SecurityInfo.market == 'Futures',
             SecurityInfo.code == target
         )

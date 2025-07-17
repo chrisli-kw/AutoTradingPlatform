@@ -20,7 +20,8 @@ from .utils.time import time_tool
 from .utils.crawler import crawler
 from .utils.notify import notifier
 from .utils.file import file_handler
-from .utils.database import redis_tick
+from .utils.database import db, redis_tick
+from .utils.database.tables import SecurityList
 from .utils.objects.env import UserEnv
 from .utils.subscribe import Subscriber
 from .utils.accounts import AccountInfo
@@ -137,7 +138,7 @@ def runCrawlIndexMargin(**kwargs):
 @tasker
 def runShioajiSubscriber(**kwargs):
     # TODO: 讀取要盤中選股的股票池
-    df = file_handler.Process.read_table(f'{PATH}/selections/stock_list.xlsx')
+    df = db.query(SecurityList)
     codes = df[df.exchange.isin(['TSE', 'OTC'])].code.astype(str).values
 
     N = 200

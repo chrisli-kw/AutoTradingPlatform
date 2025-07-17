@@ -58,14 +58,13 @@ class OrderTool(FuturesMargin):
             return -1
         return 1
 
-    @staticmethod
-    def get_cost_price(target: str, price: float, order_cond: str):
+    def get_cost_price(self, target: str, price: float, order_cond: str):
         '''取得股票的進場價'''
 
         if order_cond == 'ShortSelling':
             return price
 
-        df = db.query(SecurityInfo, SecurityInfo.code == target)
+        df = db.query(SecurityInfo, self.WatchListTool.match_target(target))
         cost_price = df.cost_price.values[0] if not df.empty else 0
         return cost_price
 
@@ -331,10 +330,8 @@ class OrderTool(FuturesMargin):
                 TradeDataHandler.update_deal_list(stock, 'Cancel')
 
         # 更新監控庫存
-        if db.query(SecurityInfo, SecurityInfo.code == stock).empty:
-            order['oc_type'] = 'New'
-        else:
-            order['oc_type'] = 'Cover'
+        df = db.query(SecurityInfo, self.WatchListTool.match_target(stock))
+        order['oc_type'] = 'New' if df.empty else 'Cover'
         self.WatchListTool.update_monitor(order['oc_type'], msg)
 
     def StockDeal(self, msg: dict):

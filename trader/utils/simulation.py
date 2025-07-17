@@ -1,6 +1,3 @@
-import logging
-import pandas as pd
-from datetime import datetime
 from collections import namedtuple
 
 from .database import db
@@ -17,7 +14,11 @@ class Simulator:
 
     def securityInfo(self, account: str):
         try:
-            df = db.query(SecurityInfo, SecurityInfo.account == account)
+            df = db.query(
+                SecurityInfo,
+                SecurityInfo.mode == TradeData.Account.Mode,
+                SecurityInfo.account == account
+            )
         except:
             df = TradeData.Securities.InfoDefault
 

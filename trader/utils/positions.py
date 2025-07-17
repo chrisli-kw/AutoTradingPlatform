@@ -16,15 +16,12 @@ class WatchListTool:
 
     def __init__(self, account_name: str):
         self.account_name = account_name
-        self.MatchAccount = SecurityInfo.account == self.account_name
         self.watchlist_file = f'watchlist_{account_name}'
 
     def update_position(self, order: namedtuple):
         target = order.target
         position = 100
-
-        condition = SecurityInfo.code == target, self.MatchAccount
-        watchlist = db.query(SecurityInfo, *condition)
+        watchlist = self.get_match_info(target)
 
         if watchlist.empty and order.action_type == 'Open':
             market = 'Stocks' if not order.octype else 'Futures'
@@ -38,19 +35,29 @@ class WatchListTool:
 
             db_position += position
 
+            condition = self.match_target(target)
             if db_position > 0:
-                db.update(SecurityInfo, {'position': position}, *condition)
+                db.update(SecurityInfo, {'position': position}, condition)
             else:
-                db.delete(
-                    SecurityInfo, SecurityInfo.position <= 0, self.MatchAccount)
+                condition &= SecurityInfo.position <= 0
+                db.delete(SecurityInfo, condition)
 
     def match_target(self, target: str):
-        return SecurityInfo.code == target, SecurityInfo.account == self.account_name
+        condition = SecurityInfo.mode == TradeData.Account.Mode
+        condition &= SecurityInfo.account == self.account_name
+        condition &= SecurityInfo.code == target
+        return condition
+
+    def get_match_info(self, target):
+        '''Get the watchlist info for the target'''
+        condition = self.match_target(target)
+        df = db.query(SecurityInfo, condition)
+        return df
 
     def check_is_empty(self, target: str):
         '''Check if the target is empty in the monitor list'''
-        condition = self.match_target(target)
-        data = db.query(SecurityInfo, *condition)
+
+        data = self.get_match_info(target)
         data = data.to_dict('records')[0] if not data.empty else {}
         quantity = data.get('quantity', 0)
         position = data.get('position', 0)
@@ -66,8 +73,7 @@ class WatchListTool:
         target = data['code']
         conf = TradeDataHandler.getStrategyConfig(target)
         max_qty = conf.max_qty.get(target, 1) if conf else 1
-        condition = self.match_target(target)
-        df = db.query(SecurityInfo, *condition)
+        df = self.get_match_info(target)
         if not df.empty:
             quantity = data['order']['quantity']
 
@@ -80,7 +86,8 @@ class WatchListTool:
 
             df['position'] -= position
             df['quantity'] -= quantity
-            db.update(SecurityInfo, df.iloc[0].to_dict(), *condition)
+            condition = self.match_target(target)
+            db.update(SecurityInfo, df.iloc[0].to_dict(), condition)
             self.check_remove_monitor(target)
 
         else:
@@ -106,7 +113,7 @@ class WatchListTool:
         is_empty = self.check_is_empty(target)
         if is_empty:
             condition = self.match_target(target)
-            db.delete(SecurityInfo, *condition)
+            db.delete(SecurityInfo, condition)
         return is_empty
 
 
@@ -161,7 +168,11 @@ class TradeDataHandler:
 
         open_deals = len(TradeData.Futures.Opened)
         close_deals = len(TradeData.Futures.Closed)
-        df = db.query(SecurityInfo, SecurityInfo.market == 'Futures')
+        df = db.query(
+            SecurityInfo,
+            SecurityInfo.mode == TradeData.Account.Mode,
+            SecurityInfo.market == 'Futures'
+        )
         quota = TradeData.Futures.Limit-df.shape[0] - open_deals + close_deals
         return quota
 
@@ -242,10 +253,10 @@ class FuturesMargin:
 
 
 class Position:
-    def __init__(self, account_name: str, strategy: str, sim_trade: bool = False):
+    def __init__(self, account_name: str, strategy: str, backtest: bool = False):
         self.account_name = account_name
         self.strategy = strategy
-        self.sim_trade = sim_trade
+        self.backtest = backtest
         self.entries = []
         # [{
         #     'account': str,
@@ -259,7 +270,7 @@ class Position:
         self.total_qty = {}
         self.total_profit = 0.0
 
-        if not sim_trade:
+        if not backtest:
             df = db.query(
                 PositionTable,
                 PositionTable.mode == TradeData.Account.Mode,
@@ -277,7 +288,7 @@ class Position:
         total_qty = self.total_qty.get(name, 0)
         self.total_qty[name] = total_qty + inputs['quantity']
 
-        if not self.sim_trade:
+        if not self.backtest:
             db.add_data(PositionTable, **inputs)
 
     def close(self, inputs: dict):
@@ -337,7 +348,7 @@ class Position:
         if not db.HAS_DB:
             return
 
-        if self.sim_trade:
+        if self.backtest:
             return
 
         condition = self.query_condition(inputs)
@@ -349,7 +360,7 @@ class Position:
         if not db.HAS_DB:
             return
 
-        if self.sim_trade:
+        if self.backtest:
             return
 
         condition = self.query_condition(inputs)

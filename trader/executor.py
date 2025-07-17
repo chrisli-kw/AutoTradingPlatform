@@ -225,19 +225,10 @@ class StrategyExecutor(AccountHandler, Subscriber):
         if TradeData.Account.Simulate:
             self.simulator.update_monitor(order, order_data)
 
-    def update_after_interfere(self, target: str, action_type: str):
-        logging.warning(f'[Monitor List]Interfere|{target}|{action_type}|')
-
-        infos = dict(action_type=action_type, target=target)
-        order = self.Order.OrderInfo(**infos)
-        self.WatchList.check_remove_monitor(target)
-        self.WatchList.update_position(order)
-        self.StrategySet.update_StrategySet_data_(target)
-
     def monitor_targets(self, target: str):
         if target in TradeData.Quotes.NowTargets:
             inputs = TradeDataHandler.getQuotesNow(target).copy()
-            data = db.query(SecurityInfo, SecurityInfo.code == target)
+            data = db.query(SecurityInfo, self.WatchList.match_target(target))
             strategy = TradeData.Securities.Strategy[target]
             raise_pos = self.StrategySet.isRaiseQty(target)
 
@@ -321,11 +312,14 @@ class StrategyExecutor(AccountHandler, Subscriber):
                         TradeData.Securities.Monitor.pop(target, None)
                         # TradeData.Securities.Strategy.pop(target, None)
                         data = {
+                            'mode': TradeData.Account.Mode,
                             'account': self.account_name,
                             'strategy': strategy,
                             'name': target,
                             'timestamp': datetime.now(),
-                            'price': TradeDataHandler.getQuotesNow(target).get('price', 0)
+                            'price': TradeDataHandler.getQuotesNow(target).get('price', 0),
+                            'quantity': actionInfo.quantity,
+                            'reason': actionInfo.reason
                         }
                         conf = TradeDataHandler.getStrategyConfig(new_contract)
                         conf.positions.close(data)
@@ -343,7 +337,8 @@ class StrategyExecutor(AccountHandler, Subscriber):
                     return self.Order.OrderInfo(**infos)
 
             elif quantity <= 0 and actionType == 'Close':
-                self.update_after_interfere(target, actionType)
+                logging.warning(f'[Monitor List]Interfere|{target}|Close|')
+                self.WatchList.check_remove_monitor(target)
 
         return self.Order.OrderInfo(target=target)
 

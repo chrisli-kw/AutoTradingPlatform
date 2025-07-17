@@ -436,7 +436,12 @@ class AccountHandler(AccountInfo):
     def _set_trade_risks(self):
         '''設定交易風險值: 可交割金額、總市值'''
 
-        df = db.query(SecurityInfo, SecurityInfo.market == 'Stocks')
+        df = db.query(
+            SecurityInfo,
+            SecurityInfo.mode == TradeData.Account.Mode,
+            SecurityInfo.account == self.env.ACCOUNT_NAME,
+            SecurityInfo.market == 'Stocks'
+        )
         cost_value = (df.quantity*df.cost_price).sum()
         pnl = df.pnl.sum()
         if TradeData.Account.Simulate:

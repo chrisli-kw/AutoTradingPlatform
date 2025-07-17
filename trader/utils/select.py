@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 from datetime import timedelta
-from importlib import import_module
 
 from ..config import PATH, TODAY, StrategyList
 from .time import time_tool

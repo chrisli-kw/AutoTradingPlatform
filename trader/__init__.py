@@ -16,7 +16,7 @@ tdp = TickDataProcesser()
 for f in [PATH, './logs']:
     file_handler.Operate.create_folder(f)
 
-for f in ['daily_info', 'Kbars', 'ticks', 'selections', 'stock_pool']:
+for f in ['daily_info', 'Kbars', 'ticks']:
     file_handler.Operate.create_folder(f'{PATH}/{f}')
 
 for f in ['1D', '60T', '30T', '1T']:
