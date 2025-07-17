@@ -325,7 +325,7 @@ class TechnicalSignals:
         cmf = mfv.rolling(window_size).sum()
         cmf /= df.Volume.rolling(window_size).sum()
 
-        return cmf  # TODO: NaN
+        return cmf
 
     @staticmethod
     def ATR(df: pd.DataFrame, window_size: int = 14):

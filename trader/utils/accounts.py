@@ -146,12 +146,6 @@ class AccountInfo:
         info_futures = self.get_futures_positions()
         return pd.concat([info_stock, info_futures]).reset_index(drop=True)
 
-    def get_profit_loss(self, start: str, end: str):
-        '''查詢已實現損益'''
-        # TODO: delete in the future
-        profitloss = API.list_profit_loss(API.stock_account, start, end)
-        return self._obj_2_df(profitloss)
-
     def query_close(self, stockid: str, date: str):
         '''查證券收盤價'''
         ticks = API.ticks(API.Contracts.Stocks[stockid], date)
@@ -178,7 +172,7 @@ class AccountInfo:
                 if not end:
                     end_ = day
 
-                profitloss = self.get_profit_loss(start_, end_)
+                profitloss = self.get_settle_profitloss(start_, end_)
                 if profitloss.shape[0]:
                     return profitloss.pnl.sum()
                 return 0

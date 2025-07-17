@@ -2,7 +2,7 @@ import re
 import time
 import pandas as pd
 from typing import Union
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 
 from ..config import (
     TODAY_STR,
@@ -82,7 +82,6 @@ class TimeTool:
         計算K棒數量
         scale單位: min
         '''
-        # TODO: 扣除國定假日不開盤 & 收盤期間
 
         if isinstance(start, str):
             start = pd.to_datetime(start)
@@ -96,12 +95,25 @@ class TimeTool:
         m2 = end.minute - (end.minute % scale)
         end = end.replace(minute=m2, second=0, microsecond=0)
 
-        n_kbar = (end - start).total_seconds()/60/scale
+        market_open = time(9, 0)
+        market_close = time(13, 30)
+        all_times = pd.date_range(start=start, end=end, freq=f'{scale}min')
 
-        if start.weekday() == 4 and end.weekday() == 0:
-            n_kbar -= 1440*2/scale
+        valid_times = []
+        for dt in all_times:
+            date = dt.date()
 
-        return n_kbar
+            # 跳過假日
+            if date in holidays:
+                continue
+
+            # 跳過非開盤時間
+            if market_open <= dt.time() < market_close:
+                continue
+
+            valid_times.append(dt)
+
+        return len(valid_times)
 
     def convert_date_format(self, x: str):
         '''轉換民國格式為西元格式'''

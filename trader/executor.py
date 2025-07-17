@@ -171,7 +171,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         # 剔除不堅控的股票
         info = info[~info.code.isin(self._get_filter_out())]
 
-        # 庫存的處理
+        # 庫存的處理 (遠端有庫存，地端無庫存)
         tb = info[~info.code.isin(TradeData.Securities.Strategy.keys())].copy()
         tb['strategy'] = None
         TradeData.Securities.Strategy.update(tb.strategy.to_dict())
@@ -197,9 +197,6 @@ class StrategyExecutor(AccountHandler, Subscriber):
                     PositionTable.strategy == strategy
                 )
                 StrategyList.Config.get(strategy).positions.entries = []
-
-            # 若遠端有庫存，地端無庫存，補地端資料
-            # TODO
 
         # 新增歷史K棒資料
         all_targets = list(TradeData.Securities.Monitor)
