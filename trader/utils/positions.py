@@ -19,49 +19,6 @@ class WatchListTool:
         self.MatchAccount = SecurityInfo.account == self.account_name
         self.watchlist_file = f'watchlist_{account_name}'
 
-    def append(self, market: str, orderinfo: namedtuple):
-        # TODO: delete
-        '''Add new stock data to watchlist'''
-
-        if not db.HAS_DB:
-            return
-
-        if isinstance(orderinfo, str):
-            # Manual trading
-            target = orderinfo
-            position = 100
-            check_quantity = True
-        else:
-            # Auto trading
-            target = orderinfo.target
-            position = 100
-            check_quantity = orderinfo.quantity != 0
-
-        if db.query(SecurityInfo, SecurityInfo.code == target).empty and check_quantity:
-            strategy_pool = TradeData.Securities.Strategy
-            data = {
-                'account': self.account_name,
-                'market': market,
-                'code': target,
-                'timestamp': datetime.now(),
-                'position': position,
-                'strategy': strategy_pool.get(target, 'unknown')
-            }
-
-            db.add_data(SecurityInfo, **data)
-
-    def merge_info(self, tbInfo: pd.DataFrame):
-        # TODO: delete
-
-        watchlist = db.query(SecurityInfo)
-        tbInfo = tbInfo.merge(
-            watchlist,
-            how='left',
-            on=['account', 'market', 'code']
-        )
-        tbInfo.position.fillna(100, inplace=True)
-        return tbInfo
-
     def update_position(self, order: namedtuple):
         target = order.target
         position = 100
