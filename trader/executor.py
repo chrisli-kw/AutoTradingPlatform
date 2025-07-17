@@ -171,7 +171,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         # 剔除不堅控的股票
         info = info[~info.code.isin(self._get_filter_out())]
 
-        # 庫存的處理
+        # 庫存的處理 (遠端有庫存，地端無庫存)
         tb = info[~info.code.isin(TradeData.Securities.Strategy.keys())].copy()
         tb['strategy'] = None
         TradeData.Securities.Strategy.update(tb.strategy.to_dict())
@@ -184,6 +184,8 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 TradeData.Securities.Monitor.update({code: None})
 
             conf = TradeDataHandler.getStrategyConfig(code)
+
+            # 若遠端無庫存，地端有庫存，刪除地端資料
             if (
                 TradeData.Securities.Monitor.get(code) is None and
                 conf.positions.entries
@@ -566,6 +568,9 @@ class StrategyExecutor(AccountHandler, Subscriber):
         text += f"\n【操盤模式】{TradeData.Account.Mode}"
         text += f"\n【策略清單】{list(StrategyList.Config.keys())}"
         text += f"\n【數據用量】{usage}MB"
+        for target, info in TradeData.Securities.Monitor.items():
+            if isinstance(info, dict):
+                text += f"\n【庫存部位】{target}: {info.get('action', '')} - {info.get('quantity', 0)}"
         notifier.send.post(text)
 
         def periodic_check():
