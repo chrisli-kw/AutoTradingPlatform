@@ -17,6 +17,7 @@ from ..utils.database.tables import SelectedStocks, TradingStatement
 from .base import convert_statement
 from .backtest import BacktestPerformance
 from .charts import export_figure, convert_encodings, SuplotHandler
+from ..utils.objects.data import TradeData
 
 
 class FiguresSet:
@@ -58,6 +59,7 @@ class PerformanceReport(SuplotHandler, OrderTool):
         if db.HAS_DB:
             df = db.query(
                 TradingStatement,
+                TradingStatement.mode == TradeData.Account.Mode,
                 TradingStatement.account_id == account
             )
         else:

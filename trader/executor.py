@@ -190,6 +190,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
             ):
                 db.delete(
                     PositionTable,
+                    PositionTable.mode == TradeData.Account.Mode,
                     PositionTable.account == self.account_name,
                     PositionTable.name == code,
                     PositionTable.strategy == strategy
@@ -544,7 +545,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         logging.info(f'Start to monitor, basic settings:')
         logging.info(f'[AccountInfo] Current data usage: {usage}')
-        logging.info(f'[AccountInfo] Mode: {self.env.MODE}')
+        logging.info(f'[AccountInfo] Mode: {TradeData.Account.Mode}')
         logging.info(f'[Security Strategy] {TradeData.Securities.Strategy}')
         logging.info(
             f'[Security position] {db.query(SecurityInfo).shape[0]}')
@@ -562,7 +563,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         logging.info(f'[Futures portfolio Limit] {TradeData.Futures.Limit}')
 
         text = f"\n【開始監控】{self.env.ACCOUNT_NAME} 啟動完成({__version__})"
-        text += f"\n【操盤模式】{self.env.MODE}"
+        text += f"\n【操盤模式】{TradeData.Account.Mode}"
         text += f"\n【策略清單】{list(StrategyList.Config.keys())}"
         text += f"\n【數據用量】{usage}MB"
         notifier.send.post(text)

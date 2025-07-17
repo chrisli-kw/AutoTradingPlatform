@@ -429,6 +429,7 @@ class AccountHandler(AccountInfo):
         super().__init__()
 
         self.env = UserEnv(account_name)
+        TradeData.Account.Mode = self.env.MODE
         TradeData.Account.Simulate = self.env.MODE == 'Simulation'
         self.simulate_amount = np.iinfo(np.int64).max
 

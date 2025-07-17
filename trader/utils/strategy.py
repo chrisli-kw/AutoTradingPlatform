@@ -13,7 +13,6 @@ from .positions import TradeDataHandler
 class StrategyTool:
     def __init__(self, env=None):
         self.account_name = env.ACCOUNT_NAME
-        self.is_simulation = env.MODE == 'Simulation'
         self.check_can_stock()
         self.check_can_futures()
 
@@ -52,7 +51,7 @@ class StrategyTool:
                 conf.update_StrategySet_data(target)
 
     def set_position_limit(self):
-        if self.is_simulation:
+        if TradeData.Account.Simulate:
             TradeData.Stocks.LimitLong = 3000
             TradeData.Stocks.LimitShort = 3000
             TradeData.Futures.Limit = 3000

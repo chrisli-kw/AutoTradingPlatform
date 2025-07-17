@@ -305,6 +305,7 @@ class Position:
         if not sim_trade:
             df = db.query(
                 PositionTable,
+                PositionTable.mode == TradeData.Account.Mode,
                 PositionTable.account == account_name,
                 PositionTable.strategy == strategy
             )
@@ -362,6 +363,17 @@ class Position:
     def is_open(self, name: str):
         return self.total_qty.get(name, 0) > 0
 
+    def query_condition(self, inputs: dict):
+        '''Query condition for the position table in the database'''
+
+        return (
+            PositionTable.mode == inputs['mode'],
+            PositionTable.account == inputs['account'],
+            PositionTable.strategy == inputs['strategy'],
+            PositionTable.name == inputs['name'],
+            PositionTable.timestamp == inputs['timestamp']
+        )
+
     def delete_entries(self, inputs: dict):
         '''Delete entries from the position table'''
 
@@ -371,12 +383,7 @@ class Position:
         if self.sim_trade:
             return
 
-        condition = (
-            PositionTable.account == inputs['account'],
-            PositionTable.strategy == inputs['strategy'],
-            PositionTable.name == inputs['name'],
-            PositionTable.timestamp == inputs['timestamp']
-        )
+        condition = self.query_condition(inputs)
         db.delete(PositionTable, *condition)
 
     def update_entries(self, inputs: dict):
@@ -388,10 +395,5 @@ class Position:
         if self.sim_trade:
             return
 
-        condition = (
-            PositionTable.account == inputs['account'],
-            PositionTable.strategy == inputs['strategy'],
-            PositionTable.name == inputs['name'],
-            PositionTable.timestamp == inputs['timestamp']
-        )
+        condition = self.query_condition(inputs)
         db.update(PositionTable, inputs, *condition)

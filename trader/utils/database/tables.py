@@ -39,6 +39,8 @@ class SecurityInfo(Base):
     pk_id = Column(
         Integer, primary_key=True, autoincrement=True, nullable=False)
 
+    mode = Column(
+        String(10), default='Simulation', comment='交易模式 (Simulation/All)')
     account = Column(String(50), nullable=False, comment='帳戶代號')
     market = Column(String(10), nullable=False, comment='市場別')
     code = Column(String(10), nullable=False, comment='證券代號')
@@ -68,6 +70,8 @@ class PositionTable(Base):
     pk_id = Column(
         Integer, primary_key=True, autoincrement=True, nullable=False)
 
+    mode = Column(
+        String(10), default='Simulation', comment='交易模式 (Simulation/All)')
     account = Column(String(50), nullable=False, comment='帳戶代號')
     strategy = Column(String(50), nullable=False, comment='策略名稱')
     name = Column(String(10), nullable=False, comment='證券名稱')
@@ -274,6 +278,8 @@ class TradingStatement(Base):
 
     Time = Column(
         TIMESTAMP(fsp=6), server_default=func.now(), comment='交易日期')
+    mode = Column(
+        String(10), default='Simulation', comment='交易模式 (Simulation/All)')
     market = Column(String(10), nullable=False, comment='市場別')
     account_id = Column(
         String(50), default='unknown', comment='帳號別')

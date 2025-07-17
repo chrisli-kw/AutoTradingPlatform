@@ -118,6 +118,7 @@ class OrderTool(FuturesMargin):
 
         order_data = {
             'Time': datetime.now(),
+            'mode': TradeData.Account.Mode,
             'market': market,
             'code': target,
             'action': action,
