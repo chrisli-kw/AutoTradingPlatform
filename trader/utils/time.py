@@ -2,7 +2,8 @@ import re
 import time
 import pandas as pd
 from typing import Union
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta
+from datetime import time as timetime
 
 from ..config import (
     TODAY_STR,
@@ -95,8 +96,8 @@ class TimeTool:
         m2 = end.minute - (end.minute % scale)
         end = end.replace(minute=m2, second=0, microsecond=0)
 
-        market_open = time(9, 0)
-        market_close = time(13, 30)
+        market_open = timetime(9, 0)
+        market_close = timetime(13, 30)
         all_times = pd.date_range(start=start, end=end, freq=f'{scale}min')
 
         valid_times = []

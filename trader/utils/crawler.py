@@ -469,7 +469,8 @@ class CrawlFromHTML:
             return
 
         df_old = db.query(ExDividendTable)
-        df = df[df.Date > df_old.Date.max()].copy()
+        if not df_old.empty:
+            df = df[df.Date > df_old.Date.max()].copy()
 
         db.dataframe_to_DB(df, ExDividendTable)
 
