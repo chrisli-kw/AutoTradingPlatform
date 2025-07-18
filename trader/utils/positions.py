@@ -205,6 +205,52 @@ class TradeDataHandler:
                 TradeData.Stocks.N_Short + buy_deals - sell_deals
         return quota
 
+    @staticmethod
+    def unify_monitor_data(account_name: str):
+        for code, strategy in TradeData.Securities.Strategy.items():
+            if code not in TradeData.Securities.Monitor:
+                TradeData.Securities.Monitor.update({code: None})
+
+            conf = TradeDataHandler.getStrategyConfig(code)
+
+            # 若遠端無庫存，地端有庫存，刪除地端資料
+            if (
+                TradeData.Securities.Monitor.get(code) is None and
+                conf.positions.entries
+            ):
+                db.delete(
+                    PositionTable,
+                    PositionTable.mode == TradeData.Account.Mode,
+                    PositionTable.account == account_name,
+                    PositionTable.name == code,
+                    PositionTable.strategy == strategy
+                )
+                StrategyList.Config.get(strategy).positions.entries = []
+
+            # 若遠端有庫存，地端無庫存，補地端資料
+            elif (
+                TradeData.Securities.Monitor.get(code) is not None and
+                not conf.positions.entries and
+                code not in getattr(conf, 'FILTER_OUT', [])
+            ):
+                data = TradeData.Securities.Monitor.get(code)
+
+                data.update({
+                    'mode': TradeData.Account.Mode,
+                    'timestamp': datetime.now(),
+                    'position': int(
+                        100*data.get('quantity')/conf.max_qty.get(code, 1)),
+                    'strategy': strategy,
+                })
+                db.add_data(SecurityInfo, **data)
+
+                data.update({
+                    'name': code,
+                    'price': data.get('cost_price', 0),
+                    'reason': '同步庫存'
+                })
+                conf.positions.open(data)
+
 
 class FuturesMargin:
     def __init__(self) -> None:

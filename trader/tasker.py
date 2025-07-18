@@ -2,6 +2,7 @@ import time
 import logging
 import pandas as pd
 from datetime import datetime
+from importlib import import_module
 from concurrent.futures import as_completed
 
 from . import exec, picker, tdp
@@ -12,7 +13,8 @@ from .config import (
     TODAY_STR,
     ACCOUNTS,
     TimeEndStock,
-    ConvertScales
+    ConvertScales,
+    NotifyConfig
 )
 from .create_env import app
 from .utils import tasker, get_contract
@@ -27,12 +29,6 @@ from .utils.subscribe import Subscriber
 from .utils.accounts import AccountInfo
 from .utils.callback import CallbackHandler
 from .executor import StrategyExecutor
-
-try:
-    from .scripts.TaskList import customTasks
-except:
-    logging.exception(f'Importing customTasks failed:')
-    customTasks = {}
 
 
 @tasker
@@ -156,6 +152,11 @@ def runAutoTrader(account: str):
     try:
         se = StrategyExecutor(account)
         se.init_account()
+
+        # 啟動 Telegram 控制 bot
+        bot = se.telegram_bot(token=NotifyConfig.TELEGRAM_TOKEN)
+
+        # 執行監控（會根據 pause_flag / stop_flag 決定行為）
         se.run()
     except KeyboardInterrupt:
         notifier.send.post(
@@ -257,17 +258,9 @@ def thread_subscribe(user: str, targets: list):
     return "Task completed"
 
 
-Tasks = {
+baseTasks = {
     'create_env': [runCreateENV],
     'account_info': [runAccountInfo],
-    'update_and_select_stock': [
-        # runCrawlStockData,
-        # runSelectStock,
-        runCrawlPutCallRatio,
-        runCrawlExDividendList,
-        runCrawlFuturesTickData,
-        runCrawlIndexMargin
-    ],
     'crawl_stock_data': [runCrawlStockData],
     'select_stock': [runSelectStock],
     'crawl_put_call_ratio': [runCrawlPutCallRatio],
@@ -278,8 +271,17 @@ Tasks = {
     'subscribe': [runShioajiSubscriber],
 }
 
-for taskName, tasks in customTasks.items():
-    if taskName in Tasks:
-        Tasks[taskName] += tasks
-    else:
-        Tasks[taskName] = tasks
+
+def get_tasks():
+    try:
+        customTasks = import_module('trader.scripts.TaskList').customTasks
+    except ModuleNotFoundError as e:
+        logging.error(e)
+        customTasks = {}
+
+    for taskName, tasks in customTasks.items():
+        if taskName in baseTasks:
+            baseTasks[taskName] += tasks
+        else:
+            baseTasks[taskName] = tasks
+    return baseTasks
