@@ -93,6 +93,7 @@ class WatchListTool:
         else:
             quote = TradeDataHandler.getQuotesNow(target)
             data = dict(
+                mode=TradeData.Account.Mode,
                 account=self.account_name,
                 market='Stocks' if conf.market == 'Stocks' else 'Futures',
                 code=target,

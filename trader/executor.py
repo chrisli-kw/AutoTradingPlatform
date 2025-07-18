@@ -34,10 +34,10 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 class StrategyExecutor(AccountHandler, Subscriber):
     def __init__(self, account_name: str):
-        StrategyList.init_config(account_name)
         super().__init__(account_name)
         AccountHandler.__init__(self, account_name)
         Subscriber.__init__(self)
+        StrategyList.init_config(account_name)
 
         self.Order = OrderTool(account_name)
         self.simulator = Simulator(account_name)
@@ -198,6 +198,29 @@ class StrategyExecutor(AccountHandler, Subscriber):
                     PositionTable.strategy == strategy
                 )
                 StrategyList.Config.get(strategy).positions.entries = []
+
+            # 若遠端有庫存，地端無庫存，補地端資料
+            elif (
+                TradeData.Securities.Monitor.get(code) is not None and
+                not conf.positions.entries
+            ):
+                data = TradeData.Securities.Monitor.get(code)
+
+                data.update({
+                    'mode': TradeData.Account.Mode,
+                    'timestamp': datetime.now(),
+                    'position': int(
+                        100*data.get('quantity')/conf.max_qty.get(code, 1)),
+                    'strategy': strategy,
+                })
+                db.add_data(SecurityInfo, **data)
+
+                data.update({
+                    'name': code,
+                    'price': data.get('cost_price', 0),
+                    'reason': '同步庫存'
+                })
+                conf.positions.open(data)
 
         # 新增歷史K棒資料
         all_targets = list(TradeData.Securities.Monitor)
