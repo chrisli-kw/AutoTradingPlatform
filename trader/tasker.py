@@ -261,8 +261,8 @@ Tasks = {
     'create_env': [runCreateENV],
     'account_info': [runAccountInfo],
     'update_and_select_stock': [
-        runCrawlStockData,
-        runSelectStock,
+        # runCrawlStockData,
+        # runSelectStock,
         runCrawlPutCallRatio,
         runCrawlExDividendList,
         runCrawlFuturesTickData,
