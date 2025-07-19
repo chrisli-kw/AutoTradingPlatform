@@ -7,7 +7,6 @@ from logging.handlers import RotatingFileHandler
 from trader import __version__ as ver
 from trader.config import TODAY_STR, holidays, LOG_LEVEL
 from trader.tasker import get_tasks
-from trader.utils.bot import TelegramBot
 
 
 def parse_args():
@@ -56,9 +55,6 @@ logging.info('—'*100)
 logging.info(f'Current trader version is {ver}')
 
 if __name__ == "__main__":
-    # 啟動 Telegram 控制 bot
-    bot = TelegramBot(account)
-
     Tasks = get_tasks()
     date = pd.to_datetime(TODAY_STR)
     if task in [

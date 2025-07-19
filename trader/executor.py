@@ -27,7 +27,7 @@ from .utils.callback import CallbackHandler
 from .utils.objects.data import TradeData
 from .utils.positions import WatchListTool, TradeDataHandler
 from .utils.strategy import StrategyTool
-from .utils.bot import stop_flag, pause_flag
+from .utils.bot import TelegramBot
 
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -559,7 +559,11 @@ class StrategyExecutor(AccountHandler, Subscriber):
                     self._log_and_notify(
                         f"【連線異常】{self.env.ACCOUNT_NAME} 無法查詢餘額")
 
+        # 啟動 Telegram 控制 bot
+        bot = TelegramBot([self.account_name])
+
         # 開始監控
+        stop_flag, pause_flag = bot.get_flags(self.account_name)
         while not stop_flag.is_set():
             self.loop_pause()
             now = datetime.now()
