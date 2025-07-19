@@ -42,7 +42,18 @@ class AccountInfo:
                 '總部位現值(不含融資金額)',
                 '結算現值'
             ])
-        self.HAS_FUTOPT_ACCOUNT = False
+
+    def set_default_account(self, nth_account: int = 1):
+        if self.account_name[-1].isdigit():
+            nth_account = int(self.account_name[-1])
+
+        if nth_account > 1:
+            accounts = API.list_accounts()
+            accounts = [a for a in accounts if isinstance(a, StockAccount)]
+            if len(accounts) > 1:
+                API.set_default_account(accounts[nth_account-1])
+            else:
+                logging.warning('The number of stock accounts of this ID is 1')
 
     def login_(self, env):
         self.account_name = env.ACCOUNT_NAME
@@ -61,22 +72,7 @@ class AccountInfo:
                 n += 1
                 time.sleep(5)
 
-        if not self.account_name[-1].isdigit():
-            nth_account = 1
-        else:
-            nth_account = int(self.account_name[-1])
-
-        if nth_account > 1:
-            accounts = API.list_accounts()
-            accounts = [a for a in accounts if isinstance(a, StockAccount)]
-            if len(accounts) > 1:
-                API.set_default_account(accounts[nth_account-1])
-            else:
-                logging.warning('The number of accounts of this ID is 1')
-
-        if API.futopt_account:
-            self.HAS_FUTOPT_ACCOUNT = True
-
+        self.set_default_account()
         time.sleep(0.05)
         logging.info(f'【{self.account_name}】log-in successful!')
 

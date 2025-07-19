@@ -72,12 +72,12 @@
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row">股票交易模式設定</th>
+                        <th scope="row">交易模式設定</th>
                         <td>
                             <select id="inputState" class="form-control" name="MODE">
                                 <option></option>
-                                <option>實單交易</option>
-                                <option>模擬</option>
+                                <option value="All">實單交易</option>
+                                <option value="Simulation">模擬</option>
                             </select>
                         </td>
                     </tr>
@@ -86,9 +86,9 @@
                         <td>
                             <select id="inputState" class="form-control" name="TRADING_PERIOD">
                                 <option></option>
-                                <option selected>日盤</option>
-                                <option>夜盤</option>
-                                <option>日盤&夜盤</option>
+                                <option value="Day" selected>日盤</option>
+                                <option value="Night">夜盤</option>
+                                <option value="Both">日盤&夜盤</option>
                             </select>
                         </td>
                     </tr>
@@ -107,7 +107,7 @@
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row">可下單的保證金額上限</th>
+                        <th scope="row">期貨保證金額度上限</th>
                         <td>
                             <input name='MARGIN_AMOUNT' type="number"
                                 style='border: 0.5px solid #bbe2e2; border-radius: 5px; width:100%' value=100000 min=0>

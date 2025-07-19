@@ -18,7 +18,7 @@ from .config import (
 )
 from .utils import get_contract
 from .utils.database import db
-from .utils.database.tables import SecurityInfo, PositionTable
+from .utils.database.tables import SecurityInfo
 from .utils.time import time_tool
 from .utils.crawler import crawler
 from .utils.notify import notifier
@@ -98,7 +98,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         logging.info(
             f'[AccountInfo] Stock account ID: {API.stock_account.account_id}')
 
-        if self.HAS_FUTOPT_ACCOUNT:
+        if API.futopt_account:
             self._set_futures_code_list()
             logging.info(
                 f'[AccountInfo] Futures account ID: {API.futopt_account.account_id}')

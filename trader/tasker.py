@@ -70,8 +70,7 @@ def runAccountInfo(**kwargs):
             tables[acct] = tb
 
             # 推播訊息
-            account_id = API.stock_account.account_id
-            notifier.post_account_info(account_id, row)
+            notifier.post_account_info(API.stock_account.account_id, info=row)
         elif hasattr(df, 'sheet_names') and account.account_name in df.sheet_names:
             tables[acct] = pd.read_excel(df, sheet_name=env)
         else:

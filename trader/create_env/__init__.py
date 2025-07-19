@@ -5,39 +5,6 @@ from trader.utils.database import db
 from trader.utils.database.tables import UserSettings
 
 
-def _create_env(inputs):
-    modes = {
-        '實單交易': 'All',
-        '模擬': 'Simulation'
-    }
-
-    account_name = inputs['ACCOUNT']
-
-    users = db.query(UserSettings, UserSettings.account == account_name)
-    if users.empty:
-        nth_account = 1
-    else:
-        nth_account = users.shape[0] + 1
-
-    account_name = f'{account_name}_{nth_account}'
-    env = {
-        'account': account_name,
-        'api_key': inputs['API_KEY'],
-        'secret_key': inputs['SECRET_KEY'],
-        'account_id': inputs['ACCOUNT_ID'],
-        'ca_passwd': inputs.get('CA_PASSWD', ''),
-        'mode': modes[inputs['MODE']],
-        'init_balance': 100000,
-        'marging_trading_amount': inputs.get('MARGING_TRADING_AMOUNT', 100000),
-        'short_selling_amount': inputs.get('SHORT_SELLING_AMOUNT', 100000),
-        'trading_period': inputs.get('TRADING_PERIOD', 'Day'),
-        'margin_amount': inputs.get('MARGIN_AMOUNT', 100000),
-    }
-    UserEnv(account_name).env_to_db(**env)
-
-    return {account_name: env}
-
-
 def _create_bat(account_name):
     myBat = open(f'./lib/schedules/auto_trader_{account_name}.bat', 'w+')
     myBat.write(
@@ -75,11 +42,31 @@ def account():
 @app.route("/account-result", methods=['POST'])
 def account_result():
 
-    data = request.form
-    result = _create_env(data)
+    inputs = request.form
 
-    # # 新增個人bat檔
-    account_name = list(result)[0]
+    account_name = inputs['ACCOUNT']
+    users = db.query(UserSettings, UserSettings.account == account_name)
+
+    if not users.empty:
+        result = {'msg': '帳號已存在'}
+        return render_template('account_result.html', result=result)
+
+    env = {
+        'account': account_name,
+        'api_key': inputs['API_KEY'],
+        'secret_key': inputs['SECRET_KEY'],
+        'account_id': inputs['ACCOUNT_ID'],
+        'ca_passwd': inputs.get('CA_PASSWD', ''),
+        'mode': inputs['MODE'],
+        'init_balance': 100000,
+        'marging_trading_amount': inputs.get('MARGING_TRADING_AMOUNT', 100000),
+        'short_selling_amount': inputs.get('SHORT_SELLING_AMOUNT', 100000),
+        'trading_period': inputs.get('TRADING_PERIOD', 'Day'),
+        'margin_amount': inputs.get('MARGIN_AMOUNT', 100000),
+    }
+    UserEnv(account_name).env_to_db(**env)
+
+    # 新增個人bat檔
     _create_bat(account_name)
 
     # # 加入個人bat檔執行指令
