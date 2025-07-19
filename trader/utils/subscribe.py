@@ -3,10 +3,10 @@ import pandas as pd
 from typing import Union
 from threading import Lock
 
-from ..config import API
 from . import get_contract
 from .kbar import KBarTool
 from .objects.data import TradeData
+from ..config import API
 
 
 class Subscriber(KBarTool):

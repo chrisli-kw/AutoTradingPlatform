@@ -19,6 +19,7 @@ When using AutoTradingPlatform, users can execute trades with multiple strategie
       - [4. Stock selection](#4-stock-selection)
       - [5. Historical backtesting (to be updated)](#5-historical-backtesting-to-be-updated)
       - [6. Full automation](#6-full-automation)
+      - [7. Telegram Bot interactions](#7-telegram-bot-interactions)
   - [Required packages](#required-packages)
   - [Project Structure](#project-structure)
   - [Prepareation](#prepareation)
@@ -49,6 +50,9 @@ Using historical data and the customizable strategy function of the trading fram
 
 #### 6. Full automation
 Once everything is set up, you can schedule and achieve fully automated trading.
+
+#### 7. Telegram Bot interactions
+Read [TelegramBot.md](./TelegramBot.md) for more instructions.
 
 ## Required packages
 Install shioaji and other packages at a time

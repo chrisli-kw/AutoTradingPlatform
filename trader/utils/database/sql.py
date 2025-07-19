@@ -7,8 +7,8 @@ from sqlalchemy import asc, desc, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, scoped_session, load_only
 
-from ...config import PATH, DBConfig
 from ..file import file_handler
+from ...config import PATH, DBConfig
 
 
 Base = declarative_base()

@@ -4,12 +4,12 @@ import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
-from ..config import API, StrategyList, Cost
 from .database import db
 from .database.tables import SecurityInfo, PositionTable
 from .time import time_tool
 from .file import file_handler
 from .objects.data import TradeData
+from ..config import API, StrategyList, Cost
 
 
 class WatchListTool:

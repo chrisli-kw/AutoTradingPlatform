@@ -14,11 +14,11 @@ from ..config import (
     TimeStartStock,
     StrategyList
 )
-from ..indicators.signals import TechnicalSignals
 from . import get_contract, concat_df
 from .time import time_tool
 from .objects.data import TradeData
 from .. import file_handler
+from ..indicators.signals import TechnicalSignals
 
 
 class KBarTool(TechnicalSignals):

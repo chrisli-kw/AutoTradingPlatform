@@ -3,8 +3,8 @@ from collections import namedtuple
 from .database import db
 from .database.tables import SecurityInfo
 from .orders import OrderTool
-from .positions import TradeDataHandler
 from .objects.data import TradeData
+from .positions import TradeDataHandler
 
 
 class Simulator:

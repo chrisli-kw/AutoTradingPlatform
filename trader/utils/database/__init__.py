@@ -1,9 +1,9 @@
 import logging
 from sqlalchemy import create_engine
 
+from .tables import *
 from .sql import SQLDatabase
 from .redis import RedisTools
-from .tables import *
 from ...config import DBConfig
 
 

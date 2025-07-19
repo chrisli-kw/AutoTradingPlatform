@@ -3,11 +3,11 @@ import numpy as np
 import pandas as pd
 
 from .objects import Action
+from .positions import TradeDataHandler
 from ..config import TODAY_STR, StrategyList
 from ..utils.database import db
 from ..utils.database.tables import ExDividendTable, SecurityInfo
 from ..utils.objects.data import TradeData
-from .positions import TradeDataHandler
 
 
 class StrategyTool:

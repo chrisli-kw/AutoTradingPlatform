@@ -2,12 +2,12 @@ import numpy as np
 import pandas as pd
 from datetime import timedelta
 
-from ..config import PATH, TODAY, StrategyList
 from .time import time_tool
 from .file import file_handler
 from .crawler import readStockList
 from .database import db, KBarTables
 from .database.tables import SelectedStocks
+from ..config import PATH, TODAY, StrategyList
 
 
 class SelectStock:
