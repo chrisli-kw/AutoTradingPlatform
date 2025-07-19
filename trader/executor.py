@@ -1,11 +1,9 @@
 import ssl
 import time
 import logging
-from threading import Event
 from collections import namedtuple
 from shioaji import constant, contracts
 from datetime import datetime, timedelta
-from telegram.ext import Updater, MessageHandler, Filters
 
 from . import __version__, picker, exec
 from .config import (
@@ -14,7 +12,6 @@ from .config import (
     MonitorFreq,
     TimeTransferFutures,
     StrategyList,
-    NotifyConfig
 )
 from .utils import get_contract
 from .utils.database import db
@@ -30,11 +27,10 @@ from .utils.callback import CallbackHandler
 from .utils.objects.data import TradeData
 from .utils.positions import WatchListTool, TradeDataHandler
 from .utils.strategy import StrategyTool
+from .utils.bot import stop_flag, pause_flag
 
 
 ssl._create_default_https_context = ssl._create_unverified_context
-stop_flag = Event()     # 表示「是否要停止」
-pause_flag = Event()    # 表示「是否暫停」→ 暫停就 wait
 
 
 class StrategyExecutor(AccountHandler, Subscriber):
@@ -602,47 +598,3 @@ class StrategyExecutor(AccountHandler, Subscriber):
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''
         self.StrategySet.export_strategy_data_()
-
-    def telegram_bot(self, token):
-        updater = Updater(token=token, use_context=True)
-        dispatcher = updater.dispatcher
-
-        def handle_msg(update, context):
-            msg = update.message.text.strip()
-            chat_id = NotifyConfig.TELEGRAM_CHAT_ID
-
-            logging.warning(f'[Message Received] {msg}')
-            if self.account_name not in msg:
-                return
-
-            if "暫停交易" in msg or "暫停監控" in msg:
-                pause_flag.set()
-                context.bot.send_message(chat_id=chat_id, text="🛑 已暫停監控")
-            elif "繼續交易" in msg or "繼續監控" in msg:
-                pause_flag.clear()
-                context.bot.send_message(chat_id=chat_id, text="✅ 已恢復監控")
-            elif "停止交易" in msg or "停止監控" in msg:
-                stop_flag.set()
-                context.bot.send_message(chat_id=chat_id, text="❌ 程式即將停止")
-            elif "監控狀態" in msg:
-                if stop_flag.is_set():
-                    status = "❌ 已關閉"
-                elif pause_flag.is_set():
-                    status = "🛑 暫停交易中"
-                else:
-                    status = "✅ 交易中"
-                context.bot.send_message(
-                    chat_id=chat_id, text=f"📊 當前狀態：{status}")
-            elif "目前部位" in msg or "當前部位" in msg:
-                position = db.query(
-                    SecurityInfo,
-                    SecurityInfo.mode == TradeData.Account.Mode,
-                    SecurityInfo.account == self.account_name
-                )[['code', 'quantity']]
-                position = position.groupby('code').quantity.sum().to_dict()
-                context.bot.send_message(chat_id=chat_id, text=f'{position}')
-
-        dispatcher.add_handler(
-            MessageHandler(Filters.text & ~Filters.command, handle_msg))
-        updater.start_polling()
-        return updater

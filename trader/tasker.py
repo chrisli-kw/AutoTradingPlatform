@@ -14,7 +14,6 @@ from .config import (
     ACCOUNTS,
     TimeEndStock,
     ConvertScales,
-    NotifyConfig
 )
 from .create_env import app
 from .utils import tasker, get_contract
@@ -151,11 +150,6 @@ def runAutoTrader(account: str):
     try:
         se = StrategyExecutor(account)
         se.init_account()
-
-        # 啟動 Telegram 控制 bot
-        bot = se.telegram_bot(token=NotifyConfig.TELEGRAM_TOKEN)
-
-        # 執行監控（會根據 pause_flag / stop_flag 決定行為）
         se.run()
     except KeyboardInterrupt:
         notifier.send.post(
