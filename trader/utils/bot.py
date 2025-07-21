@@ -1,6 +1,7 @@
 import logging
 from threading import Event
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram.error import Conflict
 
 from ..config import NotifyConfig
 from .objects.data import TradeData
@@ -18,23 +19,35 @@ WHITELIST = {NotifyConfig.TELEGRAM_CHAT_ID}
 class TelegramBot:
     def __init__(self, account_names: list):
         self.account_names = account_names
-        self.updater = Updater(
-            token=NotifyConfig.TELEGRAM_TOKEN, use_context=True)
-        dispatcher = self.updater.dispatcher
-
-        # Bot commant dispatcher
-        dispatcher.add_handler(CommandHandler("pause", self.cmd_pause))
-        dispatcher.add_handler(CommandHandler("resume", self.cmd_resume))
-        dispatcher.add_handler(CommandHandler("stop", self.cmd_stop))
-        dispatcher.add_handler(CommandHandler("status", self.cmd_status))
-        dispatcher.add_handler(CommandHandler("position", self.cmd_position))
-
-        # 後備文字處理器（防漏掉）
-        dispatcher.add_handler(MessageHandler(
-            Filters.text & ~Filters.command, self.handle_text))
-
-        self.updater.start_polling()
         self._init_flags()
+
+        if NotifyConfig.TELEGRAM_TOKEN is None:
+            return
+
+        try:
+            self.updater = Updater(
+                token=NotifyConfig.TELEGRAM_TOKEN, use_context=True)
+            dispatcher = self.updater.dispatcher
+
+            # Bot commant dispatcher
+            dispatcher.add_handler(CommandHandler("pause", self.cmd_pause))
+            dispatcher.add_handler(CommandHandler("resume", self.cmd_resume))
+            dispatcher.add_handler(CommandHandler("stop", self.cmd_stop))
+            dispatcher.add_handler(CommandHandler("status", self.cmd_status))
+            dispatcher.add_handler(CommandHandler(
+                "position", self.cmd_position))
+
+            # 後備文字處理器（防漏掉）
+            dispatcher.add_handler(MessageHandler(
+                Filters.text & ~Filters.command, self.handle_text))
+
+            self.updater.start_polling()
+        except Conflict as e:
+            logging.error(f'{e}')
+            self.updater = None
+        except:
+            logging.exception('Initialize telegram updater failed:')
+            self.updater = None
 
     def _init_flags(self):
         for name in self.account_names:

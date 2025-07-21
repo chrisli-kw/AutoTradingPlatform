@@ -101,8 +101,8 @@ class NotifyConfig:
     '''Configuration regarding notifications'''
     PLATFORM = get_settings('NOTIFY', 'PLATFORM')
     LINE_TOKEN = get_settings('NOTIFY', 'LINE_TOKEN')
-    TELEGRAM_TOKEN = get_settings('NOTIFY', 'TELEGRAM_TOKEN')
-    TELEGRAM_CHAT_ID = get_settings('NOTIFY', 'TELEGRAM_CHAT_ID')
+    TELEGRAM_TOKEN = get_settings('NOTIFY', 'TELEGRAM_TOKEN', default=None)
+    TELEGRAM_CHAT_ID = get_settings('NOTIFY', 'TELEGRAM_CHAT_ID', default='')
 
 
 class StrategyNameList:

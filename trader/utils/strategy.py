@@ -53,7 +53,12 @@ class StrategyTool:
 
         for conf in StrategyList.Config.values():
             targets = getattr(conf, 'Targets', [])
-            limit = getattr(conf, 'PositionLimit', len(targets))
+
+            default_limit = len(targets)
+            if getattr(conf, 'raiseQuota', False):
+                default_limit += 1
+
+            limit = getattr(conf, 'PositionLimit', default_limit)
 
             if conf.market == 'Stocks' and conf.mode == 'long':
                 TradeData.Stocks.LimitLong += limit

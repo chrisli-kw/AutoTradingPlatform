@@ -67,7 +67,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
             ) or
             (
                 stat == constant.OrderState.FuturesOrder and
-                msg['order']['account']['account_id'] == API.futopt_account.account_id
+                msg['order']['account']['account_id'] != API.futopt_account.account_id
             )
         ):
             return

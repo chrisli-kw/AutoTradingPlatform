@@ -283,7 +283,7 @@ class OrderTool(FuturesMargin):
                     daytrade_short=content.daytrade_short,
                 )
                 result = API.place_order(contract, order)
-                self.check_order_status(result.contract, is_stock)
+                # self.check_order_status(result, is_stock)
                 quantity -= q
 
     def StockOrder(self, msg: dict):
