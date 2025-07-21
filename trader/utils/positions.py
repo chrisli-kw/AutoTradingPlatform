@@ -238,6 +238,7 @@ class TradeDataHandler:
             # 若遠端有庫存，地端無庫存，補地端資料
             elif TradeData.Securities.Monitor.get(code) is not None:
                 data = TradeData.Securities.Monitor.get(code)
+                quantity_ = data.get('quantity', 0)
 
                 if (
                     not conf.positions.entries and
@@ -259,20 +260,20 @@ class TradeDataHandler:
                         'reason': '同步庫存'
                     })
                     conf.positions.open(data)
-                elif data.get('quantity', 0) != df.iloc[0].quantity:
+                elif (
+                    quantity_ != df.iloc[0].quantity and
+                    conf.positions.entries
+                ):
                     data_ = {
-                        'quantity': data.get('quantity', 0),
+                        'quantity': quantity_,
                         'yd_quantity': data.get('yd_quantity', 0),
                         'pnl': data.get('pnl', 0)
                     }
                     db.update(SecurityInfo, data_, *condition_info)
 
                     df = db.query(PositionTable, *condition_table)
-                    if (
-                        data.get('quantity', 0) > df.quantity.sum() and
-                        conf.positions.entries
-                    ):
-                        quantity = data.get('quantity', 0) - df.quantity.sum()
+                    if quantity_ > df.quantity.sum():
+                        quantity = quantity_ - df.quantity.sum()
                         data.update({
                             'name': code,
                             'price': data.get('cost_price', 0),
@@ -280,11 +281,8 @@ class TradeDataHandler:
                             'reason': '同步庫存'
                         })
                         conf.positions.open(data)
-                    elif (
-                        data.get('quantity', 0) < df.quantity.sum() and
-                        conf.positions.entries
-                    ):
-                        quantity = df.quantity.sum() - data.get('quantity', 0)
+                    else:
+                        quantity = df.quantity.sum() - quantity_
                         data.update({
                             'name': code,
                             'price': data.get('cost_price', 0),
