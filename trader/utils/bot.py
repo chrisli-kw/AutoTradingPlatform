@@ -1,7 +1,8 @@
 import logging
 from threading import Event
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from telegram.error import Conflict
+from telegram.error import TelegramError
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
 from ..config import NotifyConfig
 from .objects.data import TradeData
@@ -40,6 +41,7 @@ class TelegramBot:
             # 後備文字處理器（防漏掉）
             dispatcher.add_handler(MessageHandler(
                 Filters.text & ~Filters.command, self.handle_text))
+            dispatcher.add_error_handler(self.error_handler)
 
             self.updater.start_polling()
         except Conflict as e:
@@ -54,17 +56,30 @@ class TelegramBot:
             stop_flags[name] = Event()
             pause_flags[name] = Event()
 
+    def error_handler(self, update, context):
+        try:
+            raise context.error
+        except TelegramError as e:
+            if "terminated by other getUpdates request" in str(e):
+                logging.warning("⚠️ Bot polling 被其他實例中斷，停止 updater polling")
+                context.bot_data["should_shutdown"] = True
+            else:
+                logging.error("🚨 發生未預期錯誤")
+
     def post(self, update, msg: str):
         update.message.reply_text(text=msg)
 
     def _check_permission(self, update):
-        if update.message is None:
-            return False
+        try:
+            if update.message is None:
+                return False
 
-        chat_id = str(update.effective_chat.id)
-        msg = update.message.text.strip()
-        logging.warning(f'[TEXT MESSAGE][{chat_id}] {msg}')
-        return chat_id in WHITELIST
+            chat_id = str(update.effective_chat.id)
+            msg = update.message.text.strip()
+            logging.warning(f'[TEXT MESSAGE][{chat_id}] {msg}')
+            return chat_id in WHITELIST
+        except Conflict:
+            return False
 
     def _parse_args(self, update):
         try:
