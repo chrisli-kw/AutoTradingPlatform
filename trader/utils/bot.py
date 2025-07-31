@@ -2,12 +2,14 @@ import logging
 from threading import Event
 from telegram.error import Conflict
 from telegram.error import TelegramError
+from telegram.utils.request import Request
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
 from ..config import NotifyConfig
 from .objects.data import TradeData
 from .database import db
 from .database.tables import SecurityInfo
+
 
 # Status flag: supports multiple accounts
 stop_flags = {}
@@ -27,7 +29,10 @@ class TelegramBot:
 
         try:
             self.updater = Updater(
-                token=NotifyConfig.TELEGRAM_TOKEN, use_context=True)
+                token=NotifyConfig.TELEGRAM_TOKEN,
+                request_kwargs={'connect_timeout': 300, 'read_timeout': 300},
+                use_context=True
+            )
             dispatcher = self.updater.dispatcher
 
             # Bot commant dispatcher
