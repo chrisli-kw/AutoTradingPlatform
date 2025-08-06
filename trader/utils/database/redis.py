@@ -4,8 +4,8 @@ import pickle
 import logging
 from typing import Iterable
 
-from ...config import RedisConfig
 from .. import progress_bar
+from ...config import RedisConfig
 
 
 class RedisTools:

@@ -95,10 +95,10 @@ def tasker(func):
         try:
             func(**kwargs)
         except KeyboardInterrupt:
-            notifier.post(f"\n【Interrupt】【{name}】已手動關閉", msgType='Tasker')
+            notifier.send.post(f"\n【Interrupt】【{name}】已手動關閉")
         except:
             logging.exception('Catch an exception:')
-            notifier.post(f"\n【Error】【{name}】發生異常", msgType='Tasker')
+            notifier.send.post(f"\n【Error】【{name}】發生異常")
         finally:
             logging.info(f'API log out: {API.logout()}')
     return wrapper

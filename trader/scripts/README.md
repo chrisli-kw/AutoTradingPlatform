@@ -1,86 +1,33 @@
 # Script Design Instructions
 
-Overall, this framework is divided into 3 main parts: the target selection system, the trading system and the backtesting system. Whether it's the selection, trading or backtesting system, they consist at least one of three main components:
-1. Indicator Features
-2. Target Selection
-3. Open/Close Positions
-
-![](https://cdn.discordapp.com/attachments/1085014224192929905/1145027926480404520/2023-08-27_12.12.00.png)
-
-Therefore, when writing scripts, they can be categorized into these three types. Whether you are running the trading system or the backtesting system, these three types of scripts will be invoked to form a complete trading strategy.
-
-- [Script Design Instructions](#script-design-instructions)
-  - [Indicator Features](#indicator-features)
-    - [Step 1: add file](#step-1-add-file)
-    - [Step 2: add feature scripts](#step-2-add-feature-scripts)
-  - [Target Selection](#target-selection)
-    - [Step 1: add file](#step-1-add-file-1)
-    - [Step 2: add selection scripts](#step-2-add-selection-scripts)
-  - [Open/Close Positions](#openclose-positions)
-    - [Step 1: add files](#step-1-add-files)
-    - [Step 2: add strategy scripts](#step-2-add-strategy-scripts)
-  - [Backtesting Script Example](#backtesting-script-example)
+For traders who use this trading framework, they only have to create 1 script for trading, which contains the following parts:
+1. Strategy settings
+2. Adding featrues for trading
+3. Adding featrues for stock selection
+4. Calculate the quantity for open, raise, close positions
+5. Conditions for checking Open/Close Positions
 
 
-## Indicator Features
-After developing your trading strategies, you should also develop a feature script file to generate features (or technical indicators) for each strategy. Otherwise, the system would run with errors (lack of features). Sometimes, some of the features are only used for backtesting and are not used for trading. You can further divide the feature script into 2 kinds of versions: one is for trading and the other is for backtesting.
-
-### Step 1: add file
-Add ```features.py``` to ```./trader/scripts/```.
+## Where to put the script file 
+For each trading strategy, the script settings are located in ```/trader/scripts/StrategySet```. For example:
 
 ```lua
 .
   |-- trader
     |-- scripts
-      |-- features.py <--
+      |-- StrategySet
+        |-- Strategy1.py
+        |-- Strategy2.py
+        |-- Strategy3.py
+        |-- ...
 ```
 
-### Step 2: add feature scripts
-The script should be an class object, see the [sample code](../../docs/script%20samples/features.py) for more details.
+### How to create a strategy script
+The script should be an class object, see the [strategy_sample.py](../../docs/script%20samples/strategy_sample.py) for more details.
 
 
-## Target Selection
-Target selection is also an important part of auto-trading, since traders cannot trade without target securities. You can also define your own scripts only by 2 steps:
+## How to start the trading strategy
+1. For user envs: Update the values of STRATEGY_STOCK, STRATEGY_FUTURES
+2. For system configs: Update update the [STRATEGY] section in the ```config.ini```
+3. If there's a stock selection condition for the strategy, update the [SELECT] section in the ```config.ini```
 
-### Step 1: add file
-Add ```conditions.py``` to ```./trader/scripts/```.
-
-```lua
-.
-  |-- trader
-    |-- scripts
-      |-- conditions.py <--
-```
-
-### Step 2: add selection scripts
-The script should be an class object, see the [sample code](../../docs/script%20samples/conditions.py) for more details.
-
-
-## Open/Close Positions
-In thsi part, the open/close script can not only have conditions to open/close a position, but also have other conditions for portfolio limit, trading quantity, ..., etc. Similar to [Indicator Features](#indicator-features), feature scripts is added by 2 steps:
-
-### Step 1: add files
-Add ```StrategySet.py``` to ```./trader/scripts/``` as a strategy module.
-
-```lua
-.
-  |-- trader
-    |-- scripts
-      |-- StrategySet.py  <--
-```
-
-### Step 2: add strategy scripts
-The script should be an class object, see the [sample code](../../docs/script%20samples/StrategySet.py) for more details.
-
-<u>Be sure to update self.STRATEGIES_STOCK/self.STRATEGIES_FUTURES, self.Funcs, and self.QuantityFunc (if exists) within the object before running AutoTradingPlatform</u>
-
-
-
-## Backtesting Script Example
-```lua
-.  
-  |-- trader
-    |-- scripts
-      |-- backtest_config.py   <---
-```
-Create a python file named ```backtest_config.py``` and then integrade the above 3 kinds of scripts to it. For detailed script writing instructions, please refer to the [sample backtesting script](../../docs/script%20samples/backtest_sample.py)

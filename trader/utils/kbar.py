@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from typing import List, Dict
+from typing import List
 from datetime import datetime, timedelta
 
 from ..config import (
@@ -11,26 +11,19 @@ from ..config import (
     PATH,
     TODAY,
     TODAY_STR,
-    KbarFeatures,
     TimeStartStock,
-    TimeEndStock,
+    StrategyList
 )
-from ..indicators.signals import TechnicalSignals
 from . import get_contract, concat_df
 from .time import time_tool
 from .objects.data import TradeData
 from .. import file_handler
-try:
-    from ..scripts.features import KBarFeatureTool
-except:
-    logging.warning('Cannot import KBar Scripts from package.')
-    KBarFeatureTool = None
+from ..indicators.signals import TechnicalSignals
 
 
 class KBarTool(TechnicalSignals):
-    def __init__(self, kbar_start_day=''):
-        self.set_kbar_scripts(KBarFeatureTool)
-        self.daysdata = self.__set_daysdata(kbar_start_day)
+    def __init__(self):
+        self.daysdata = self.__set_daysdata()
         self.maps = {
             'name': 'first',
             'Open': 'first',
@@ -49,7 +42,6 @@ class KBarTool(TechnicalSignals):
             '60T': self.add_K60min_feature,
             '1D': self.add_KDay_feature,
         }
-
         self.is_kbar_1t_updated = {
             '2T': False,
             '5T': False,
@@ -58,11 +50,9 @@ class KBarTool(TechnicalSignals):
             '60T': False
         }
 
-    def __set_daysdata(self, kbar_start_day):
+    def __set_daysdata(self, kbar_start_day=''):
         '''
         設定觀察K棒數(N個交易日)
-        若有設定最近崩盤日, 則觀察K棒數 = 上次崩盤日開始算N個交易日
-        若沒有設最近崩盤日, 則觀察K棒數 = 35
         參數 - kbar_start_day: 觀察起始日，格式為 yyyy-mm-dd
         '''
 
@@ -71,67 +61,32 @@ class KBarTool(TechnicalSignals):
 
         return max((TODAY - kbar_start_day).days, 35)
 
-    def add_KDay_feature(self, df: pd.DataFrame):
+    def _apply_feature_by_scale(self, df: pd.DataFrame, scale: str):
+        for conf in StrategyList.Config.values():
+            if scale in getattr(conf, 'kbarScales', []):
+                df = conf.add_features(df)
         return df
+
+    def add_KDay_feature(self, df: pd.DataFrame):
+        return self._apply_feature_by_scale(df, '1D')
 
     def add_K60min_feature(self, df: pd.DataFrame):
-        return df
+        return self._apply_feature_by_scale(df, '60T')
 
     def add_K30min_feature(self, df: pd.DataFrame):
-        return df
+        return self._apply_feature_by_scale(df, '30T')
 
     def add_K15min_feature(self, df: pd.DataFrame):
-        return df
+        return self._apply_feature_by_scale(df, '15T')
 
     def add_K5min_feature(self, df: pd.DataFrame):
-        return df
+        return self._apply_feature_by_scale(df, '5T')
 
     def add_K2min_feature(self, df: pd.DataFrame):
-        return df
+        return self._apply_feature_by_scale(df, '2T')
 
     def add_K1min_feature(self, df: pd.DataFrame):
-        return df
-
-    def on_set_feature_function(self, kbar_scripts, attrName):
-        def wrapper(func):
-            if hasattr(kbar_scripts, attrName):
-                setattr(self, attrName, func)
-            return func
-        return wrapper
-
-    def set_kbar_scripts(self, kbar_scripts: object = None):
-        '''設定K線特徵腳本'''
-
-        if kbar_scripts:
-            kbar_scripts = kbar_scripts()
-
-            @self.on_set_feature_function(kbar_scripts, 'add_K1min_feature')
-            def _add_K1min_feature(df):
-                return kbar_scripts.add_K1min_feature(df)
-
-            @self.on_set_feature_function(kbar_scripts, 'add_K2min_feature')
-            def _add_K2min_feature(df):
-                return kbar_scripts.add_K2min_feature(df)
-
-            @self.on_set_feature_function(kbar_scripts, 'add_K5min_feature')
-            def _add_K5min_feature(df):
-                return kbar_scripts.add_K5min_feature(df)
-
-            @self.on_set_feature_function(kbar_scripts, 'add_K15min_feature')
-            def _add_K15min_feature(df):
-                return kbar_scripts.add_K15min_feature(df)
-
-            @self.on_set_feature_function(kbar_scripts, 'add_K30min_feature')
-            def _add_K30min_feature(df):
-                return kbar_scripts.add_K30min_feature(df)
-
-            @self.on_set_feature_function(kbar_scripts, 'add_K60min_feature')
-            def _add_K60min_feature(df):
-                return kbar_scripts.add_K60min_feature(df)
-
-            @self.on_set_feature_function(kbar_scripts, 'add_KDay_feature')
-            def _add_KDay_feature(df):
-                return kbar_scripts.add_KDay_feature(df)
+        return self._apply_feature_by_scale(df, '1T')
 
     def _scale_converter(self, scale: str):
         '''Convert scale format from str to int'''
@@ -285,10 +240,6 @@ class KBarTool(TechnicalSignals):
             logging.debug(
                 f'Update {scale} kbar data| from {tb.Time.min()} to {tb.Time.max()}')
             tb = self.convert_kbar(tb, scale=scale)
-
-            for col in KbarFeatures[scale]:
-                tb[col] = None
-
             kbar = self.concatKBars(scale, tb)
             TradeData.KBars.Freq[scale] = self.featureFuncs[scale](kbar)
             self.is_kbar_1t_updated[scale] = False

@@ -6,7 +6,7 @@ from logging.handlers import RotatingFileHandler
 
 from trader import __version__ as ver
 from trader.config import TODAY_STR, holidays, LOG_LEVEL
-from trader.tasker import Tasks
+from trader.tasker import get_tasks
 
 
 def parse_args():
@@ -55,6 +55,7 @@ logging.info('—'*100)
 logging.info(f'Current trader version is {ver}')
 
 if __name__ == "__main__":
+    Tasks = get_tasks()
     date = pd.to_datetime(TODAY_STR)
     if task in [
         'account_info',

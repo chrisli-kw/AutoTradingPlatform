@@ -7,21 +7,17 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from .. import tdp
-from ..config import PATH, TODAY, TODAY_STR, SelectMethods, StrategyNameList
+from ..config import PATH, TODAY, TODAY_STR, StrategyList
 from ..utils import progress_bar
 from ..utils.time import time_tool
 from ..utils.file import file_handler
 from ..utils.orders import OrderTool
 from ..utils.database import db, KBarTables
-from ..utils.database.tables import SelectedStocks
+from ..utils.database.tables import SelectedStocks, TradingStatement
 from .base import convert_statement
 from .backtest import BacktestPerformance
 from .charts import export_figure, convert_encodings, SuplotHandler
-try:
-    from ..scripts import backtest_config
-except:
-    logging.warning('Cannot import test scripts from package.')
-    backtest_config = None
+from ..utils.objects.data import TradeData
 
 
 class FiguresSet:
@@ -32,7 +28,7 @@ class PerformanceReport(SuplotHandler, OrderTool):
     def __init__(self, account: str, market: str):
         self.account = account
         self.market = market
-        self.set_report_scripts(backtest_config)
+        self.set_report_scripts()  # TODO: backtest_config
         self.TablesFile = f'{PATH}/daily_info/{TODAY_STR[:-3]}-{market}-performance-{account}.xlsx'
         self.Tables = namedtuple(
             typename='Tables',
@@ -45,6 +41,7 @@ class PerformanceReport(SuplotHandler, OrderTool):
         if report_scripts:
             bts = report_scripts.__dict__
             if self.market == 'Stocks':
+                SelectMethods = []
                 self.Scripts = {
                     k[:-3]: v for k, v in bts.items()
                     if ('T' in k or 'D' in k) and (k[:-3] in SelectMethods)
@@ -56,10 +53,25 @@ class PerformanceReport(SuplotHandler, OrderTool):
         else:
             self.Scripts = {}
 
+    def read_statement(self, account: str = ''):
+        '''Import trading statement'''
+
+        if db.HAS_DB:
+            df = db.query(
+                TradingStatement,
+                TradingStatement.mode == TradeData.Account.Mode,
+                TradingStatement.account_id == account
+            )
+        else:
+            df = self.OrderTable
+
+        df = df.drop_duplicates()
+        return df
+
     def getStrategyList(self, df: pd.DataFrame):
         '''Get strategy list in code order'''
 
-        strategies = pd.DataFrame([StrategyNameList.Code]).T.reset_index()
+        strategies = pd.DataFrame([StrategyList.Code]).T.reset_index()
         strategies.columns = ['name', 'code']
         strategies = strategies[strategies.name.isin(df.Strategy)].name.values
         return strategies
@@ -136,14 +148,7 @@ class PerformanceReport(SuplotHandler, OrderTool):
 
     def getSelections(self, statement):
         start = time_tool.last_business_day(statement.OpenTime.values[0])
-        if db.HAS_DB:
-            df = db.query(
-                SelectedStocks,
-                SelectedStocks.Time >= start
-            )
-        else:
-            dir_path = f'{PATH}/selections/history'
-            df = file_handler.read_tables_in_folder(dir_path)
+        df = db.query(SelectedStocks, SelectedStocks.Time >= start)
         df = df[
             df.Strategy.isin(statement.Strategy) &
             (df.Time >= start)
@@ -271,7 +276,7 @@ class PerformanceReport(SuplotHandler, OrderTool):
                     f'Cannot plot candlesticks chart if {len(self.strategies)} strategies')
 
         for stra, color in zip(self.strategies, colors):
-            name = StrategyNameList.Code[stra]
+            name = StrategyList.Code[stra]
 
             # 累積獲利
             init_position = int(df_config.loc[0, stra].replace(',', ''))
@@ -362,7 +367,7 @@ class PerformanceReport(SuplotHandler, OrderTool):
             tb3 = df_summary.iloc[i, :]
             fig.add_trace(
                 go.Bar(
-                    x=[StrategyNameList.Code[s] for s in tb3[1:].index],
+                    x=[StrategyList.Code[s] for s in tb3[1:].index],
                     y=tb3[1:],
                     showlegend=False,
                     marker_color=c,

@@ -19,13 +19,13 @@ When using AutoTradingPlatform, users can execute trades with multiple strategie
       - [4. Stock selection](#4-stock-selection)
       - [5. Historical backtesting (to be updated)](#5-historical-backtesting-to-be-updated)
       - [6. Full automation](#6-full-automation)
+      - [7. Telegram Bot interactions](#7-telegram-bot-interactions)
   - [Required packages](#required-packages)
   - [Project Structure](#project-structure)
   - [Prepareation](#prepareation)
       - [Step 1: Create system settings (config.ini)](#step-1-create-system-settings-configini)
-      - [Step 2: Create user settings (.env file)](#step-2-create-user-settings-env-file)
-      - [Step 3: Create long/short stragety](#step-3-create-longshort-stragety)
-      - [Step 4: Create your own K-bar features](#step-4-create-your-own-k-bar-features)
+      - [Step 2: Create user settings (user env settings)](#step-2-create-user-settings-user-env-settings)
+      - [Step 3: Create stragety scripts](#step-3-create-stragety-scripts)
   - [Execute Commands](#execute-commands)
       - [1. Auto trader](#1-auto-trader)
       - [2. Stock selection](#2-stock-selection)
@@ -50,6 +50,9 @@ Using historical data and the customizable strategy function of the trading fram
 
 #### 6. Full automation
 Once everything is set up, you can schedule and achieve fully automated trading.
+
+#### 7. Telegram Bot interactions
+Read [TelegramBot.md](./TelegramBot.md) for more instructions.
 
 ## Required packages
 Install shioaji and other packages at a time
@@ -117,37 +120,29 @@ DB_USER = your_DB_user_name
 DB_PWD = your_DB_password
 DB_NAME = your_DB_schema_name
 
-[LINENOTIFY] # optional, can be left blank
-TOKEN_MONITOR = your_LINE_Notify_token_for_system_monitor
-TOKEN_INFO = your_LINE_Notify_token_for_trading_monitor
+[NOTIFY] # optional, can be left blank, PLATFORM = Telegram/Line
+PLATFORM = Telegram
+TELEGRAM_TOKEN = your_Telegram_Notify_token
+TELEGRAM_CHAT_ID = your_Telegram_Chat_ID
+LINE_TOKEN = your_LINE_Notify_token
 
 [STRATEGY]
-Long = strategy1     # non-daytrade long strategies
-Short = strateg2     # non-daytrade short strategies
-LongDT = strategy3   # daytrade long strategies
-ShortDT = strategy4  # daytrade short strategies
 MonitorFreq = 5      # monitor frequency (seconds per loop)
-
-[SELECT] # includes stock selection strategy names
-METHODS = StockSelectStrategy1
 
 [CRAWLER] # determine what K-bar frequency data you want for backtest
 SCALES = 1D, 30T, 60T
 ```
 
-#### Step 2: Create user settings (.env file)
-It is necessary to create an env file for a whole-new AutoTradingPlatform. Firstly, run the following command in a terminal:  
+#### Step 2: Create user settings (user env settings)
+It is necessary to create an env settings set for a whole-new AutoTradingPlatform. Firstly, run the following command in a terminal:  
 ```
 python run.py -TASK create_env
 ```  
 
-Then, go to http://127.0.0.1:8090/. Press the "Submit" button after filling out the forms, an env file will be created in ```./lib/envs```
+Then, go to http://127.0.0.1:8090/. Press the "Submit" button after filling out the forms, the account env settings will be created in the ```user_settings``` database table.
 
-#### Step 3: Create long/short stragety
-Go to ```./trader/scripts``` and follow the [instructions](./trader/scripts/readme.md#longshort-strategies) to create your own trading strategy before starting the auto-trader.
-
-#### Step 4: Create your own K-bar features
-Go to ```./trader/scripts``` and follow the [instructions](./trader/scripts/readme.md#k-bar-features) to create k-bar feature scripts before starting the auto-trader.
+#### Step 3: Create stragety scripts
+Go to ```./trader/scripts``` and follow the [instructions](./trader/scripts/readme.md) to create your own trading strategy before starting the auto-trader.
 
 
 ## Execute Commands
@@ -160,7 +155,7 @@ python run.py -TASK auto_trader -ACCT YourAccountName
 ```
 
 #### 2. Stock selection  
-This task will run stock data crawler (using API) and then select stock. Details of establishing selection scripts see the [instructions](./trader/scripts/readme.md#stock-selection).
+This task will run stock data crawler (using API) and then select stock. Details of establishing selection scripts see the [instructions](./trader/scripts/readme.md).
 ```
 python run.py -TASK update_and_select_stock
 ```

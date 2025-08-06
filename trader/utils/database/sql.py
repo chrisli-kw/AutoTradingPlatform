@@ -7,8 +7,8 @@ from sqlalchemy import asc, desc, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, scoped_session, load_only
 
-from ...config import DBConfig
 from ..file import file_handler
+from ...config import PATH, DBConfig
 
 
 Base = declarative_base()
@@ -16,32 +16,57 @@ Base = declarative_base()
 
 class SQLDatabase:
     def __init__(self):
+        self.engine = None
+        self.sessionmaker_ = None
+
+        try:
+            self.connect(DBConfig.ENGINE)
+            logging.info(f"Connected to {DBConfig.ENGINE}: {self.sql_connect}")
+        except Exception as e:
+            logging.warning(
+                f"{DBConfig.ENGINE} connection failed, change database to SQLite.")
+            try:
+                self.connect('sqlite')
+                logging.info(f"Fallback to SQLite: {self.sql_connect}")
+            except Exception as e:
+                logging.error(f"SQLite connection failed: {e}")
+                DBConfig.HAS_DB = False
+
         self.HAS_DB = DBConfig.HAS_DB
-        if self.HAS_DB:
-            self.sql_connect = f"{DBConfig.ENGINE}://{DBConfig.URL}/{DBConfig.NAME}"
-            self.engine = create_engine(
-                self.sql_connect,
-                pool_size=50,
-                # max_overflow=max_overflow,
-                pool_recycle=10,
-                pool_timeout=10,
-                pool_pre_ping=True,
-                poolclass=QueuePool,
-                pool_use_lifo=True,
-                echo=False
-            )
+        if self.HAS_DB and self.engine:
             self.sessionmaker_ = sessionmaker(bind=self.engine)
+
+    def connect(self, engine: str = DBConfig.ENGINE):
+        if engine == "sqlite":
+            DBConfig.URL = f"/{PATH}"
+            DBConfig.NAME = DBConfig.FALLBACK_NAME
+
+        self.sql_connect = f"{engine}://{DBConfig.URL}/{DBConfig.NAME}"
+        self.engine = create_engine(
+            self.sql_connect,
+            pool_size=50,
+            pool_recycle=10,
+            pool_timeout=10,
+            pool_pre_ping=True,
+            poolclass=QueuePool,
+            pool_use_lifo=True,
+            echo=False
+        )
+        self.engine.connect().close()
+        DBConfig.HAS_DB = True
 
     def get_session(self):
         return scoped_session(self.sessionmaker_)
 
     def create_table(self, table):
-        engine = create_engine(self.sql_connect)
-        table
-        Base.metadata.create_all(engine)
+        if self.engine:
+            Base.metadata.create_all(self.engine)
 
     def query(self, table, *filterBy, **conditions):
         '''Get data from DB'''
+
+        if not self.HAS_DB:
+            return pd.DataFrame()
 
         session = self.get_session()
         query = session.query(table).filter(*filterBy)
@@ -69,6 +94,9 @@ class SQLDatabase:
     def update(self, table, update_content: dict, *filterBy):
         '''Update data in table'''
 
+        if not self.HAS_DB:
+            return
+
         session = self.get_session()
         session.execute(
             update(table).where(*filterBy).values(update_content)
@@ -78,6 +106,9 @@ class SQLDatabase:
 
     def delete(self, table, *args):
         '''Delete data in table'''
+
+        if not self.HAS_DB:
+            return
 
         session = self.get_session()
         query_data = session.query(table).filter(*args).all()
@@ -97,6 +128,9 @@ class SQLDatabase:
 
     def dataframe_to_DB(self, df: pd.DataFrame, table):
         '''Import dataframe to DB'''
+
+        if not self.HAS_DB:
+            return
 
         # 轉換時間格式
         for col in df.columns:

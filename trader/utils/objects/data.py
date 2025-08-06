@@ -6,46 +6,53 @@ class Leverage:
     Short = {}
 
 
-class Stocks:
+class Account:
+    Mode = 'Simulation'  # 'Simulation' or 'All'
+    Simulate = False
+    DesposalMoney = 0
+    DesposalMargin = 0
+
+
+class Securities:
     InfoDefault = pd.DataFrame(
         columns=[
             'account', 'market',
-            'code', 'order_cond', 'action', 'pnl',
-            'cost_price', 'quantity', 'yd_quantity', 'last_price'
+            'code', 'action', 'quantity', 'cost_price',
+            'last_price', 'pnl',
+            'yd_quantity', 'order_cond', 'order',
+            'timestamp', 'position', 'strategy'
         ]
     )
-    Info = pd.DataFrame()
     Strategy = {}
     Monitor = {}
+
+
+class Stocks:
     N_Long = 0
     N_Short = 0
     Leverage = Leverage()
     Bought = []
     Sold = []
     Dividends = {}
+    LimitLong = 0
+    LimitShort = 0
+    CanTrade = False
+    Punish = []
 
 
 class Futures:
-    InfoDefault = pd.DataFrame(
-        columns=[
-            'account', 'market',
-            'code', 'action', 'quantity', 'cost_price',
-            'last_price', 'pnl'
-        ]
-    )
     SettleDefault = pd.DataFrame(
         columns=[
             'date', 'code', 'quantity', 'dseq', 'fee', 'tax', 'currency',
             'direction', 'entry_price', 'cover_price', 'pnl', 'profit'
         ]
     )
-    Info = pd.DataFrame()
-    Strategy = {}
-    Monitor = {}
     Opened = []
     Closed = []
     Transferred = {}
     CodeList = {}
+    Limit = 0
+    CanTrade = False
 
 
 class Quotes:
@@ -74,6 +81,9 @@ class KBars:
 
 class DefaultTableMeta(type):
     _data = {
+        'Account': Account,
+        'Securities': Securities,
+        'Contracts': {},
         'Stocks': Stocks,
         'Futures': Futures,
         'BidAsk': {},

@@ -1,29 +1,18 @@
-import logging
 import numpy as np
 import pandas as pd
 from datetime import timedelta
 
-from ..config import PATH, TODAY_STR, TODAY, SelectMethods
 from .time import time_tool
 from .file import file_handler
 from .crawler import readStockList
 from .database import db, KBarTables
 from .database.tables import SelectedStocks
-try:
-    from ..scripts.conditions import SelectConditions
-except:
-    logging.warning('Cannot import select scripts from package.')
-    SelectConditions = None
-try:
-    from ..scripts.features import FeaturesSelect
-except:
-    logging.warning('Cannot import feature scripts from package.')
-    FeaturesSelect = None
+from ..config import PATH, TODAY, StrategyList
 
 
 class SelectStock:
     def __init__(self, scale='1D'):
-        self.set_select_scripts(SelectConditions, FeaturesSelect)
+        self.set_select_scripts()
         self.scale = scale
         self.categories = {
             1: '水泥工業',
@@ -61,24 +50,17 @@ class SelectStock:
             80: '管理股票'
         }
 
-    def set_select_scripts(self, select_scripts: object = None, feature_scripts: object = None):
+    def set_select_scripts(self):
         '''Set preprocess & stock selection scripts'''
 
-        if select_scripts and feature_scripts:
-            feature_scripts = feature_scripts()
-            self.Preprocess = {
-                m: getattr(feature_scripts, f'preprocess_{m}') for m in SelectMethods}
+        self.Preprocess = {}
+        self.METHODS = {}
+        for strategy, conf in StrategyList.Config.items():
+            if hasattr(conf, 'select_preprocess'):
+                self.Preprocess[strategy] = getattr(conf, 'select_preprocess')
 
-            if hasattr(feature_scripts, 'preprocess_common'):
-                self.Preprocess.update({
-                    'preprocess_common': feature_scripts.preprocess_common})
-
-            select_scripts = select_scripts()
-            self.METHODS = {
-                m: getattr(select_scripts, f'condition_{m}') for m in SelectMethods}
-        else:
-            self.Preprocess = {}
-            self.METHODS = {}
+            if hasattr(conf, 'select_condition'):
+                self.METHODS[strategy] = getattr(conf, 'select_condition')
 
     def load_and_merge(self, targets):
         if db.HAS_DB:
@@ -105,9 +87,6 @@ class SelectStock:
             df.loc[
                 (df.name == '6548') & (df.Time < '2019-09-09'), col] /= 10
 
-        if 'preprocess_common' in self.Preprocess:
-            df = self.Preprocess['preprocess_common'](df)
-
         return df
 
     def pick(self, *args):
@@ -116,8 +95,7 @@ class SelectStock:
         df = self.preprocess(df)
 
         for m, func in self.Preprocess.items():
-            if m != 'preprocess_common':
-                df = func(df)
+            df = func(df)
 
         for i, (m, func) in enumerate(self.METHODS.items()):
             df.insert(i+2, m, func(df, *args))
@@ -159,29 +137,19 @@ class SelectStock:
         return df
 
     def export(self, df: pd.DataFrame):
-        if db.HAS_DB:
-            db.dataframe_to_DB(df, SelectedStocks)
-        else:
-            file_handler.Process.save_table(df, f'{PATH}/selections/all.csv')
+        db.dataframe_to_DB(df, SelectedStocks)
 
     def get_selection_files(self):
         '''取得選股清單'''
 
         day = time_tool.last_business_day()
+        df = db.query(SelectedStocks, SelectedStocks.Time == day)
 
-        if db.HAS_DB:
-            df = db.query(SelectedStocks, SelectedStocks.Time == day)
-        else:
-            df = file_handler.Process.read_table(
-                filename=f'{PATH}/selections/all.csv',
-                df_default=pd.DataFrame(columns=[
-                    'code', 'company_name', 'category', 'Time',
-                    'Open', 'High', 'Low', 'Close',
-                    'Volume', 'Amount', 'Strategy'
-                ])
-            )
-            df.Time = pd.to_datetime(df.Time)
-            df.code = df.code.astype(str)
-            df = df[df.Time == day]
+        if df.empty:
+            df = pd.DataFrame(columns=[
+                'code', 'company_name', 'category', 'Time',
+                'Open', 'High', 'Low', 'Close',
+                'Volume', 'Amount', 'Strategy'
+            ])
 
         return df

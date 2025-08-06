@@ -1,7 +1,9 @@
+import os
 import logging
 import pandas as pd
 import configparser
 import shioaji as sj
+from importlib import import_module
 from datetime import datetime, timedelta
 
 
@@ -92,25 +94,42 @@ class DBConfig:
     NAME = get_settings('DB', 'DB_NAME')
     HAS_DB = all(x for x in [HOST, NAME, PORT, PWD, USER])
     URL = f'{USER}:{PWD}@{HOST}:{PORT}' if HAS_DB else ''
+    FALLBACK_NAME = "AutoTradingPlatform.db"
 
 
-class Tokens:
-    '''LINE notify tokens'''
-    MONITOR = get_settings('LINENOTIFY', 'TOKEN_MONITOR')
-    INFO = get_settings('LINENOTIFY', 'TOKEN_INFO')
+class NotifyConfig:
+    '''Configuration regarding notifications'''
+    PLATFORM = get_settings('NOTIFY', 'PLATFORM')
+    LINE_TOKEN = get_settings('NOTIFY', 'LINE_TOKEN')
+    TELEGRAM_TOKEN = get_settings('NOTIFY', 'TELEGRAM_TOKEN', default=None)
+    TELEGRAM_CHAT_ID = get_settings('NOTIFY', 'TELEGRAM_CHAT_ID', default='')
 
 
 class StrategyNameList:
-    StrategyLongNDT = get_settings('STRATEGY', 'Long', dataType='list')
-    StrategyShortNDT = get_settings('STRATEGY', 'Short', dataType='list')
-    StrategyLongDT = get_settings('STRATEGY', 'LongDT', dataType='list')
-    StrategyShortDT = get_settings('STRATEGY', 'ShortDT', dataType='list')
+    All = [
+        s.split('.py')[0] for s in os.listdir('./trader/scripts/StrategySet') if '.py' in s]
+    Long = []
+    Short = []
+    # Code = {stra: f'Strategy{i+1}' for i, stra in enumerate(All)}
+    Config = {}
 
-    All = StrategyLongNDT + StrategyLongDT + StrategyShortNDT + StrategyShortDT
-    Long = StrategyLongNDT + StrategyLongDT
-    Short = StrategyShortNDT + StrategyShortDT
-    DayTrade = StrategyLongDT + StrategyShortDT
-    Code = {stra: f'Strategy{i+1}' for i, stra in enumerate(All)}
+    @staticmethod
+    def import_strategy(account_name: str, strategy: str):
+        module_path = f'trader.scripts.StrategySet.{strategy}'
+        conf = import_module(module_path).StrategyConfig(
+            account_name, strategy)
+        return conf
+
+    def init_config(self, account_name: str):
+        self.Config = {
+            s: self.import_strategy(account_name, s) for s in self.All
+        }
+        self.Long = [
+            s for s, c in self.Config.items() if c.mode == 'long'
+        ]
+        self.Short = [
+            s for s, c in self.Config.items() if c.mode == 'short'
+        ]
 
 
 # 策略相關
@@ -140,17 +159,5 @@ else:
 TODAY_STR = TODAY.strftime("%Y-%m-%d")
 holidays = get_holidays()
 
-# 選股相關
-SelectMethods = get_settings('SELECT', 'METHODS', dataType='list')
-
 # 爬蟲相關
 ConvertScales = get_settings('CRAWLER', 'SCALES', dataType='list')
-
-# K棒特徵
-KbarFeatures = {
-    '2T': get_settings('KBARFEATURE', 'K2min', dataType='list'),
-    '5T': get_settings('KBARFEATURE', 'K5min', dataType='list'),
-    '15T': get_settings('KBARFEATURE', 'K15min', dataType='list'),
-    '30T': get_settings('KBARFEATURE', 'K30min', dataType='list'),
-    '60T': get_settings('KBARFEATURE', 'K60min', dataType='list'),
-}

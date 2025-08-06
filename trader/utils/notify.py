@@ -2,39 +2,37 @@ import logging
 import requests
 import pandas as pd
 
-from ..config import API, Tokens, LOG_LEVEL
+from ..config import API, NotifyConfig, LOG_LEVEL
 
 
-class Notification:
-    NotifyURL = "https://notify-api.line.me/api/notify"
-    order_cond = {
-        'Cash': '現股',
-        'MarginTrading': '融資',
-        'ShortSelling': '融券'
-    }
-    order_lot = {
-        'Common': '張',
-        'IntradayOdd': '股'
-    }
-    oc_type = {
-        'New': '新倉',
-        'Cover': '平倉'
-    }
+class TelegramNotify:
+    def __init__(self, token: str, chat_id: str):
+        self.NotifyURL = 'https://api.telegram.org'
+        self._token_ = token
+        self._chat_id_ = chat_id
 
-    def headers(self, msgType: str):
-        '''LINE notify推播header設定'''
-        if msgType in ['Order', 'Deal', 'AccountInfo', 'Monitor', 'Tasker', 'Crawler']:
-            return {"Authorization": f"Bearer {Tokens.MONITOR}"} if Tokens.MONITOR else {}
-        return {"Authorization": f"Bearer {Tokens.INFO}"} if Tokens.INFO else {}
+    def post(self, message: str, image_name=None):
+        if not self._token_ or not self._chat_id_:
+            return
 
-    def post(self, message: str, image_name=None, msgType: str = 'price'):
+        url = f'{self.NotifyURL}/bot{self._token_}/sendMessage'
+        data = {'chat_id': self._chat_id_, 'text': message}
+        requests.post(url, data=data)
+
+
+class LineNotify:
+    def __init__(self, token: str):
+        self.NotifyURL = "https://notify-api.line.me/api/notify"
+        self._token_ = token
+
+    def post(self, message: str, image_name=None):
         '''Line Notify 推播，可傳送文字或圖片訊息'''
 
-        data = {'message': message}
-        headers = self.headers(msgType)
-
-        if not headers:
+        if not self._token_:
             return
+
+        data = {'message': message}
+        headers = {"Authorization": f"Bearer {self._token_}"}
 
         if image_name:
             image = open(image_name, 'rb')
@@ -47,6 +45,31 @@ class Notification:
             )
         else:
             requests.post(self.NotifyURL, headers=headers, data=data)
+
+
+class Notification:
+    def __init__(self, config: NotifyConfig):
+        if config.PLATFORM == 'Line':
+            self.send = LineNotify(token=config.LINE_TOKEN)
+        else:
+            self.send = TelegramNotify(
+                token=config.TELEGRAM_TOKEN,
+                chat_id=config.TELEGRAM_CHAT_ID
+            )
+
+        self.order_cond = {
+            'Cash': '現股',
+            'MarginTrading': '融資',
+            'ShortSelling': '融券'
+        }
+        self.order_lot = {
+            'Common': '張',
+            'IntradayOdd': '股'
+        }
+        self.oc_type = {
+            'New': '新倉',
+            'Cover': '平倉'
+        }
 
     def post_tftOrder(self, stat, msg: dict):
         '''發送推播-股票委託'''
@@ -65,15 +88,15 @@ class Notification:
         if operation['op_code'] == '00':
             if operation['op_type'] == 'Cancel':
                 text = f"\n【刪單成功】{name}-{stock}\n【帳號】{account}\n【{cond}】{order['action']} {order['quantity']}{lot}"
-                self.post(text, msgType='Order')
+                self.send.post(text)
 
             elif operation['op_msg'] == '':
                 text = f"\n【委託成功】{name}-{stock}\n【帳號】{account}\n【{cond}】{order['action']} {order['quantity']}{lot}"
-                self.post(text, msgType='Order')
+                self.send.post(text)
 
         if operation['op_code'] == '88':
             text = f"\n【委託失敗】{name}-{stock}\n【帳號】{account}\n【{operation['op_msg']}】"
-            self.post(text, msgType='Order')
+            self.send.post(text)
 
     def post_tftDeal(self, stat, msg: dict):
         '''發送推播-股票成交'''
@@ -86,7 +109,7 @@ class Notification:
         lot = self.order_lot[msg['order_lot']]
         price = msg['price']
         text = f"\n【成交】{name}-{stock}\n【帳號】{account}\n【{cond}】{msg['action']} {msg['quantity']}{lot} {price}元"
-        self.post(text, msgType='Deal')
+        self.send.post(text)
 
     def post_fOrder(self, stat, msg: dict):
         '''發送推播-期貨委託'''
@@ -107,14 +130,14 @@ class Notification:
         if operation['op_code'] == '00':
             if operation['op_type'] == 'Cancel':
                 text = f"\n【刪單成功】{name}({code+delivery_month})\n【帳號】{account}\n【{oc_type}】{order['action']} {quantity}口"
-                self.post(text, msgType='Order')
+                self.send.post(text)
 
             elif operation['op_msg'] == '':
                 text = f"\n【委託成功】{name}({code+delivery_month})\n【帳號】{account}\n【{oc_type}】{order['action']} {quantity}口"
-                self.post(text, msgType='Order')
+                self.send.post(text)
         else:
             text = f"\n【委託失敗】{name}({code+delivery_month})\n【帳號】{account}\n【{operation['op_msg']}】"
-            self.post(text, msgType='Order')
+            self.send.post(text)
 
     def post_fDeal(self, stat, msg: dict):
         '''發送推播-期貨成交'''
@@ -136,7 +159,7 @@ class Notification:
         price = msg['price']
         quantity = msg['quantity']
         text = f"\n【成交】{name}({code+delivery_month})\n【帳號】{account}\n【{msg['action']}】{quantity}口 {price}元"
-        self.post(text, msgType='Deal')
+        self.send.post(text)
 
     def post_put_call_ratio(self, df_pcr: pd.DataFrame):
         '''發送推播-Put/Call Ratio'''
@@ -147,7 +170,7 @@ class Notification:
             put_call_ratio = '查無資料'
 
         text = f"\n【本日Put/Call Ratio】 {put_call_ratio}"
-        self.post(text, msgType='Msg')
+        self.send.post(text)
 
     def post_account_info(self, account_id: str, info: dict):
         '''發送推播-每日帳務'''
@@ -160,7 +183,7 @@ class Notification:
             text = '查無資訊'
 
         text = f"\n【盤後帳務資訊】{text}"
-        self.post(text, msgType='AccountInfo')
+        self.send.post(text)
 
     def post_stock_selection(self, df: pd.DataFrame):
         '''發送推播-每日選股清單'''
@@ -184,7 +207,7 @@ class Notification:
             text = '無'
 
         text = f"\n【本日選股清單】{text}"
-        self.post(text, msgType='StockSelect')
+        self.send.post(text)
 
 
-notifier = Notification()
+notifier = Notification(config=NotifyConfig)

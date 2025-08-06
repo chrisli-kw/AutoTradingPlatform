@@ -2,6 +2,7 @@ import time
 import logging
 import pandas as pd
 from datetime import datetime
+from importlib import import_module
 from concurrent.futures import as_completed
 
 from . import exec, picker, tdp
@@ -12,7 +13,7 @@ from .config import (
     TODAY_STR,
     ACCOUNTS,
     TimeEndStock,
-    ConvertScales
+    ConvertScales,
 )
 from .create_env import app
 from .utils import tasker, get_contract
@@ -20,18 +21,13 @@ from .utils.time import time_tool
 from .utils.crawler import crawler
 from .utils.notify import notifier
 from .utils.file import file_handler
-from .utils.database import redis_tick
+from .utils.database import db, redis_tick
+from .utils.database.tables import SecurityList
 from .utils.objects.env import UserEnv
 from .utils.subscribe import Subscriber
 from .utils.accounts import AccountInfo
 from .utils.callback import CallbackHandler
 from .executor import StrategyExecutor
-
-try:
-    from .scripts.TaskList import customTasks
-except:
-    logging.exception(f'Importing customTasks failed:')
-    customTasks = {}
 
 
 @tasker
@@ -73,8 +69,7 @@ def runAccountInfo(**kwargs):
             tables[acct] = tb
 
             # 推播訊息
-            account_id = API.stock_account.account_id
-            notifier.post_account_info(account_id, row)
+            notifier.post_account_info(API.stock_account.account_id, info=row)
         elif hasattr(df, 'sheet_names') and account.account_name in df.sheet_names:
             tables[acct] = pd.read_excel(df, sheet_name=env)
         else:
@@ -137,7 +132,7 @@ def runCrawlIndexMargin(**kwargs):
 @tasker
 def runShioajiSubscriber(**kwargs):
     # TODO: 讀取要盤中選股的股票池
-    df = file_handler.Process.read_table(f'{PATH}/selections/stock_list.xlsx')
+    df = db.query(SecurityList)
     codes = df[df.exchange.isin(['TSE', 'OTC'])].code.astype(str).values
 
     N = 200
@@ -151,51 +146,28 @@ def runShioajiSubscriber(**kwargs):
         logging.info(future.result())
 
 
-@tasker
-def runSimulationChecker(**kwargs):
-    for account in ACCOUNTS:
-        config = UserEnv(account)
-
-        if config.MODE == 'Simulation':
-            se = StrategyExecutor(account)
-
-            # check stock pool size
-            watchlist = se.watchlist[se.watchlist.market == 'Stocks']
-            stocks = se.get_securityInfo('Stocks')
-            is_same_shape = watchlist.shape[0] == stocks.shape[0]
-            if not is_same_shape:
-                text = f'\n【{account} 庫存不一致】'
-                text += f'\nSize: watchlist {watchlist.shape[0]}; stocks: {stocks.shape[0]}'
-                text += f'\nwatchlist day start: {watchlist.buyday.min()}'
-                text += f'\nwatchlist day end: {watchlist.buyday.max()}'
-                text += f'\nwatchlist - stocks: {set(watchlist.code) - set(stocks.code)}'
-                text += f'\nstocks - watchlist: {set(stocks.code) - set(watchlist.code)}'
-
-                notifier.post(text, msgType='Monitor')
-
-
 def runAutoTrader(account: str):
     try:
         se = StrategyExecutor(account)
         se.init_account()
         se.run()
     except KeyboardInterrupt:
-        notifier.post(
-            f"\n【Interrupt】【下單機監控】{se.account_name}已手動關閉", msgType='Tasker')
+        notifier.send.post(
+            f"\n【Interrupt】【下單機監控】{se.account_name}已手動關閉")
     except:
         logging.exception('Catch an exception:')
-        notifier.post(
-            f"\n【Error】【下單機監控】{se.account_name}發生異常", msgType='Tasker')
+        notifier.send.post(
+            f"\n【Error】【下單機監控】{se.account_name}發生異常")
     finally:
         try:
             se.output_files()
         except:
             logging.exception('Catch an exception (output_files):')
-            notifier.post(
-                f"\n【Error】【下單機監控】{se.account_name}資料儲存失敗", msgType='Tasker')
+            notifier.send.post(
+                f"\n【Error】【下單機監控】{se.account_name}資料儲存失敗")
 
         logging.info(f'API log out: {API.logout()}')
-        notifier.post(f"\n【停止監控】{se.account_name}關閉程式並登出", msgType='Tasker')
+        notifier.send.post(f"\n【停止監控】{se.account_name}關閉程式並登出")
 
     del se
 
@@ -234,10 +206,10 @@ def runCrawlStockData(account: str, start=None, end=None):
         crawler.FromSJ.merge_daily_data(TODAY_STR, '1T', save=True)
 
     except KeyboardInterrupt:
-        notifier.post(f"\n【Interrupt】【爬蟲程式】已手動關閉", msgType='Tasker')
+        notifier.send.post(f"\n【Interrupt】【爬蟲程式】已手動關閉")
     except:
         logging.exception('Catch an exception:')
-        notifier.post(f"\n【Error】【爬蟲程式】股價爬蟲發生異常", msgType='Tasker')
+        notifier.send.post(f"\n【Error】【爬蟲程式】股價爬蟲發生異常")
         if len(crawler.FromSJ.StockData):
             df = pd.concat(crawler.FromSJ.StockData)
             filename = f'{crawler.FromSJ.folder_path}/stock_data_1T.pkl'
@@ -279,17 +251,9 @@ def thread_subscribe(user: str, targets: list):
     return "Task completed"
 
 
-Tasks = {
+baseTasks = {
     'create_env': [runCreateENV],
-    'account_info': [runAccountInfo, runSimulationChecker],
-    'update_and_select_stock': [
-        runCrawlStockData,
-        runSelectStock,
-        runCrawlPutCallRatio,
-        runCrawlExDividendList,
-        runCrawlFuturesTickData,
-        runCrawlIndexMargin
-    ],
+    'account_info': [runAccountInfo],
     'crawl_stock_data': [runCrawlStockData],
     'select_stock': [runSelectStock],
     'crawl_put_call_ratio': [runCrawlPutCallRatio],
@@ -300,8 +264,17 @@ Tasks = {
     'subscribe': [runShioajiSubscriber],
 }
 
-for taskName, tasks in customTasks.items():
-    if taskName in Tasks:
-        Tasks[taskName] += tasks
-    else:
-        Tasks[taskName] = tasks
+
+def get_tasks():
+    try:
+        customTasks = import_module('trader.scripts.TaskList').customTasks
+    except ModuleNotFoundError as e:
+        logging.error(e)
+        customTasks = {}
+
+    for taskName, tasks in customTasks.items():
+        if taskName in baseTasks:
+            baseTasks[taskName] += tasks
+        else:
+            baseTasks[taskName] = tasks
+    return baseTasks

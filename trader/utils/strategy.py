@@ -1,119 +1,73 @@
 import logging
+import numpy as np
 import pandas as pd
-from datetime import datetime
-from collections import namedtuple
 
-from .. import file_handler
-from ..config import PATH, TODAY_STR, StrategyList
+from .objects import Action
+from .positions import TradeDataHandler
+from ..config import TODAY_STR, StrategyList
 from ..utils.database import db
-from ..utils.database.tables import ExDividendTable
+from ..utils.database.tables import ExDividendTable, SecurityInfo
 from ..utils.objects.data import TradeData
 
 
 class StrategyTool:
     def __init__(self, env=None):
-        self.set_config(env)
-        self.Action = namedtuple(
-            typename="Action",
-            field_names=['position', 'reason', 'msg', 'price', 'action'],
-            defaults=[0, '', '', 0, 'Buy']
-        )
-        self.STRATEGIES_STOCK = pd.DataFrame(
-            columns=['name', 'long_weight', 'short_weight']
-        )
-        self.STRATEGIES_FUTURES = pd.DataFrame(
-            columns=['name', 'long_weight', 'short_weight']
-        )
-        self.Funcs = {
-            'Open': {  # action
-                '當沖': {},  # tradeType
-                '非當沖': {}
-            },
-            'Close': {
-                '當沖': {},
-                '非當沖': {}
-            }
-        }
-        self.QuantityFunc = {}
-        self.revert_action = {}
-        self.n_categories = None
-
-    def set_config(self, env):
         self.account_name = env.ACCOUNT_NAME
+        self.check_can_stock()
+        self.check_can_futures()
 
-        self.stock_limit_type = env.N_STOCK_LIMIT_TYPE
-        self.stock_limit_long = env.N_LIMIT_LS
-        self.stock_limit_short = env.N_LIMIT_SS
-        self.stock_model_version = env.STOCK_MODEL_VERSION
+    def check_can_stock(self):
+        markets = [conf.market for conf in StrategyList.Config.values()]
+        TradeData.Stocks.CanTrade = any(x == 'Stocks' for x in markets)
 
-        self.futures_limit_type = env.N_FUTURES_LIMIT_TYPE
-        self.futures_limit = env.N_FUTURES_LIMIT
-        self.futures_model_version = env.FUTURES_MODEL_VERSION
+    def check_can_futures(self):
+        markets = [conf.market for conf in StrategyList.Config.values()]
+        TradeData.Futures.CanTrade = any(x == 'Futures' for x in markets)
 
-        self.is_simulation = env.MODE == 'Simulation'
+    def mapFunction(self, action: str, strategy: str):
+        if strategy in StrategyList.Config:
+            conf = StrategyList.Config.get(strategy)
+            return getattr(conf, action)
 
-    def mapFunction(self, action: str, tradeType: str, strategy: str):
-        has_action = action in self.Funcs
-        has_tradeType = tradeType in self.Funcs[action]
-        has_strategy = strategy in self.Funcs[action][tradeType]
-        if has_action and has_tradeType and has_strategy:
-            return self.Funcs[action][tradeType][strategy]
         return self.__DoNothing__
 
     def mapQuantities(self, strategy: str):
 
         def default_quantity(**kwargs):
-            # return target_quantity, quantity_limit
+            # (target_quantity, quantity_limit)
             return 1, 499
 
-        if strategy in self.QuantityFunc:
-            return self.QuantityFunc[strategy]
+        if strategy in StrategyList.Config:
+            return StrategyList.Config[strategy].Quantity
 
         return default_quantity
 
     def __DoNothing__(self, **kwargs):
-        return self.Action()
+        return Action()
 
-    def update_indicators(self, now: datetime, KBars: dict):
-        pass
+    def set_position_limit(self):
+        if TradeData.Account.Simulate:
+            TradeData.Stocks.LimitLong = 3000
+            TradeData.Stocks.LimitShort = 3000
+            TradeData.Futures.Limit = 3000
 
-    def update_StrategySet_data(self, target: str):
-        pass
+        for conf in StrategyList.Config.values():
+            targets = getattr(conf, 'Targets', [])
 
-    def setNStockLimitLong(self, **kwargs):
-        '''
-        Set the number limit of securities of a portfolio can hold
-        for a long strategy
-        '''
+            default_limit = len(targets)
+            if getattr(conf, 'raiseQuota', False):
+                default_limit += 1
 
-        if self.is_simulation:
-            limit = 3000
-        elif self.stock_limit_type != 'constant':
-            limit = self.stock_limit_long
-        else:
-            limit = self.stock_limit_long
-        self.stock_limit_long = limit
-        return limit
+            limit = getattr(conf, 'PositionLimit', default_limit)
 
-    def setNStockLimitShort(self, **kwargs):
-        '''
-        Set the number limit of securities of a portfolio can hold
-        for a short strategy
-        '''
+            if conf.market == 'Stocks' and conf.mode == 'long':
+                TradeData.Stocks.LimitLong += limit
 
-        if self.is_simulation:
-            limit = 3000
-        elif self.stock_limit_type != 'constant':
-            limit = self.stock_limit_short
-        else:
-            limit = self.stock_limit_short
-        self.stock_limit_short = limit
-        return limit
+            if conf.market == 'Stocks' and conf.mode == 'short':
+                TradeData.Stocks.LimitShort += limit
 
-    def setNFuturesLimit(self, **kwargs):
-        '''Set the number limit of securities of a portfolio can hold'''
-        self.futures_limit = 0
-        return 0
+            if conf.market == 'Futures':
+                TradeData.Futures.Limit += limit
 
     def _get_value(self, data: pd.DataFrame, stockid: str, col: str):
         if isinstance(data, pd.DataFrame):
@@ -143,27 +97,36 @@ class StrategyTool:
         if db.HAS_DB:
             df = db.query(ExDividendTable)
         else:
-            try:
-                df = file_handler.Process.read_table(f'{PATH}/exdividends.csv')
-                df.Code = df.Code.astype(str).str.zfill(4)
-            except:
-                logging.warning(
-                    '==========exdividends.csv不存在，無除權息股票清單==========')
-                df = pd.DataFrame(columns=['Date', 'Code', 'CashDividend'])
+            df = pd.DataFrame(columns=['Date', 'Code', 'CashDividend'])
 
         df = df[df.Date == TODAY_STR].set_index('Code').CashDividend.to_dict()
         TradeData.Stocks.Dividends = df
 
-    def get_strategy_list(self, market='Stocks'):
-        if market == 'Stocks':
-            strategies = self.STRATEGIES_STOCK.copy()
-        else:
-            strategies = self.STRATEGIES_FUTURES.copy()
-        return strategies.sort_values(ascending=False).name.to_list()
+    def get_pos_balance(self, target: str, raise_pos=False):
+        conf = TradeDataHandler.getStrategyConfig(target)
+        if conf is None:
+            return 100
+
+        if not hasattr(conf, 'raise_qty'):
+            return 100
+
+        max_qty = conf.max_qty.get(target, 1)
+        if raise_pos:
+            return 100*(conf.raise_qty/max_qty)
+        return 100*(conf.open_qty/max_qty)
 
     def transfer_position(self, inputs: dict, **kwargs):
         target = inputs['symbol']
-        return self.Action(100, '轉倉', f'{target} 轉倉-Cover')
+        df = db.query(
+            SecurityInfo,
+            SecurityInfo.mode == TradeData.Account.Mode,
+            SecurityInfo.market == 'Futures',
+            SecurityInfo.code == target
+        )
+        action = df.action.values[0]
+        action = 'Sell' if action == 'Buy' else 'Buy'
+        quantity = df.quantity.sum() if not df.empty else 0
+        return Action(action, f'{target} 轉倉-Cover', quantity)
 
     def isLong(self, strategy: str):
         '''Check if a strategy is a long strategy.'''
@@ -175,13 +138,33 @@ class StrategyTool:
 
     def isDayTrade(self, strategy: str):
         '''Check if a strategy is a day-trade strategy.'''
-        return strategy in StrategyList.DayTrade
 
-    def isRaiseQty(self, strategy: str):
-        return False
+        conf = StrategyList.Config.get(strategy)
+        return getattr(conf, 'DayTrade', False)
 
-    def export_strategy_data(self):
-        pass
+    def isRaiseQty(self, target: str):
+        conf = TradeDataHandler.getStrategyConfig(target)
+        if conf is None:
+            return False
 
-    def append_monitor_list(self, monitor_list: list):
-        return monitor_list
+        position = conf.positions
+        entries = [e for e in position.entries if e['name'] == target]
+        if not entries:
+            return False
+
+        return (
+            conf.raiseQuota and
+            conf.raise_qty <= conf.max_qty.get(
+                target) - position.total_qty.get(target, 0)
+        )
+
+    def export_strategy_data_(self):
+        for conf in StrategyList.Config.values():
+            if hasattr(conf, 'export_strategy_data'):
+                conf.export_strategy_data()
+
+    def append_monitor_list_(self, monitor_list: list):
+        for conf in StrategyList.Config.values():
+            if hasattr(conf, 'append_monitor_list'):
+                monitor_list = conf.append_monitor_list(monitor_list)
+        return np.unique(monitor_list).tolist()

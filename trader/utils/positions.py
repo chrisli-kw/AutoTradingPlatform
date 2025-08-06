@@ -4,264 +4,150 @@ import pandas as pd
 from datetime import datetime
 from collections import namedtuple
 
-from ..config import PATH, TODAY_STR, API, Cost
-from . import get_contract, concat_df
+from .database import db
+from .database.tables import SecurityInfo, PositionTable
 from .time import time_tool
 from .file import file_handler
 from .objects.data import TradeData
-from .database import db
-from .database.tables import Watchlist
+from ..config import API, StrategyList, Cost
 
 
 class WatchListTool:
 
     def __init__(self, account_name: str):
         self.account_name = account_name
-        self.MatchAccount = Watchlist.account == self.account_name
         self.watchlist_file = f'watchlist_{account_name}'
-        self.watchlist = self.get_watchlist()
 
-    def get_watchlist(self):
-        """Load watchlist data"""
-        if db.HAS_DB:
-            df = db.query(Watchlist, Watchlist.account == self.account_name)
-            return df
+    def update_position(self, order: namedtuple):
+        target = order.target
+        position = 100
+        watchlist = self.get_match_info(target)
 
-        df = file_handler.Process.read_table(
-            filename=f'{PATH}/stock_pool/{self.watchlist_file}.csv',
-            df_default=pd.DataFrame(columns=[
-                'account', 'market', 'code', 'buyday',
-                'bsh', 'position', 'strategy'
-            ])
-        )
-        df.code = df.code.astype(str)
-        df.buyday = pd.to_datetime(df.buyday.astype(str))
-        df.position = df.position.fillna(100)
-        df.strategy = df.strategy.fillna('Unknown')
+        if watchlist.empty and order.action_type == 'Open':
+            market = 'Stocks' if not order.octype else 'Futures'
+            self.append(market, order)
+
+        elif not watchlist.empty:
+            db_position = watchlist.position.values[0]
+
+            if order.action_type != 'Open':
+                position *= -1
+
+            db_position += position
+
+            condition = self.match_target(target)
+            if db_position > 0:
+                db.update(SecurityInfo, {'position': position}, condition)
+            else:
+                condition &= SecurityInfo.position <= 0
+                db.delete(SecurityInfo, condition)
+
+    def match_target(self, target: str):
+        condition = SecurityInfo.mode == TradeData.Account.Mode
+        condition &= SecurityInfo.account == self.account_name
+        condition &= SecurityInfo.code == target
+        return condition
+
+    def get_match_info(self, target):
+        '''Get the watchlist info for the target'''
+        condition = self.match_target(target)
+        df = db.query(SecurityInfo, condition)
         return df
 
-    def _append_watchlist(self, market: str, orderinfo: namedtuple, quotes: dict = 0):
-        '''Add new stock data to watchlist'''
-        if isinstance(orderinfo, str):
-            # Manual trading
-            target = orderinfo
-            position = 100
-            cost_price = quotes
-            check_quantity = True
-        else:
-            # Auto trading
-            target = orderinfo.target
-            position = abs(orderinfo.pos_target)
-            cost_price = TradeData.Quotes.NowTargets[target]['price']
-            check_quantity = orderinfo.quantity != 0
+    def check_is_empty(self, target: str):
+        '''Check if the target is empty in the monitor list'''
 
-        if target not in self.watchlist.code.values and check_quantity:
-            if market == 'Stocks':
-                strategy_pool = TradeData.Stocks.Strategy
-            else:
-                strategy_pool = TradeData.Futures.Strategy
-            data = {
-                'account': self.account_name,
-                'market': market,
-                'code': target,
-                'buyday': datetime.now(),
-                'bsh': cost_price,
-                'position': position,
-                'strategy': strategy_pool.get(target, 'unknown')
-            }
-            self.watchlist = concat_df(self.watchlist, pd.DataFrame([data]))
-
-            if db.HAS_DB:
-                db.add_data(Watchlist, **data)
-
-    def init_watchlist(self, stocks: pd.DataFrame):
-        stocks = stocks[~stocks.code.isin(self.watchlist.code)].code.values
-
-        # Add stocks to watchlist if it is empty.
-        if not self.watchlist.shape[0] and stocks.shape[0]:
-            for stock in stocks:
-                cost_price = get_contract(stock).reference
-                self._append_watchlist('Stocks', stock, cost_price)
-
-    def update_watchlist(self, codeList: list):
-        '''Update watchlist data when trading time is closed'''
-
-        # Update watchlist position if there's any stock both exists
-        # in stock account and watchlist but position <= 0.
-        condi1 = self.watchlist.code.isin(codeList)
-        condi2 = (self.watchlist.position <= 0)
-        self.watchlist.loc[~condi1 | condi2, 'position'] = 0
-        self.watchlist.loc[condi1 & condi2, 'position'] = 100
-
-        if db.HAS_DB:
-            code1 = self.watchlist[~condi1 | condi2].code.values
-            condition = Watchlist.code.in_(code1), self.MatchAccount
-            db.update(Watchlist, {'position': 0}, *condition)
-
-            code2 = self.watchlist[condi1 & condi2].code.values
-            condition = Watchlist.code.in_(code2), self.MatchAccount
-            db.update(Watchlist, {'position': 100}, condition)
-
-        self.remove_from_watchlist()
-
-    def merge_info(self, tbInfo: pd.DataFrame):
-        tbInfo = tbInfo.merge(
-            self.watchlist,
-            how='left',
-            on=['account', 'market', 'code']
-        )
-        tbInfo.position.fillna(100, inplace=True)
-        return tbInfo
-
-    def remove_from_watchlist(self):
-        '''Delete Watchlist data where position <= 0.'''
-
-        self.watchlist = self.watchlist[self.watchlist.position > 0]
-        if db.HAS_DB:
-            db.delete(Watchlist, Watchlist.position <= 0, self.MatchAccount)
-
-    def update_watchlist_position(self, order: namedtuple):
-        target = order.target
-        position = order.pos_target
-
-        if target in self.watchlist.code.values:
-            condition = self.watchlist.code == target
-            if order.action_type == 'Open':
-                self.watchlist.loc[condition, 'position'] += position
-            else:
-                self.watchlist.loc[condition, 'position'] -= position
-
-            if db.HAS_DB and condition.sum():
-                position = self.watchlist.loc[condition, 'position'].values[0]
-                condition = Watchlist.code.in_([target]), self.MatchAccount
-                db.update(Watchlist, {'position': position}, *condition)
-
-            self.remove_from_watchlist()
-        elif order.action_type == 'Open':
-            market = 'Stocks' if not order.octype else 'Futures'
-            self._append_watchlist(market, order)
-
-    def save_watchlist(self, df: pd.DataFrame):
-        if db.HAS_DB:
-            codes = db.query(Watchlist.code, self.MatchAccount).code.values
-            tb = df[~df.code.isin(codes)]
-            db.dataframe_to_DB(tb, Watchlist)
-        else:
-            file_handler.Process.save_table(
-                df=df,
-                filename=f'{PATH}/stock_pool/{self.watchlist_file}.csv',
-                saveEmpty=True
-            )
-
-
-class TradeDataHandler:
-    @staticmethod
-    def check_is_empty(target, market='Stocks'):
-        if market == 'Stocks':
-            data = TradeData.Stocks.Monitor.get(target, {})
-        else:
-            data = TradeData.Futures.Monitor.get(target, {})
-        quantity = data.get('order', {}).get('quantity', 0)
+        data = self.get_match_info(target)
+        data = data.to_dict('records')[0] if not data.empty else {}
+        quantity = data.get('quantity', 0)
         position = data.get('position', 0)
 
         is_empty = (quantity <= 0 or position <= 0)
         logging.debug(
-            f'[Monitor List]Check|{market}|{target}|{is_empty}|quantity: {quantity}; position: {position}|')
+            f'[Monitor List]Check|{target}|{is_empty}|quantity: {quantity}; position: {position}|')
         return is_empty
 
-    @staticmethod
-    def reset_monitor(target: str, market='Stocks', day_trade=False):
-        if market == 'Stocks':
-            TradeData.Stocks.Monitor.pop(target, None)
-            if day_trade:
-                logging.debug(f'[Monitor List]Reset|Stocks|{target}|')
-                TradeData.Stocks.Monitor[target] = None
+    def update_monitor(self, oc_type: str, data: dict):
+        '''更新監控庫存(成交回報)'''
+
+        target = data['code']
+        conf = TradeDataHandler.getStrategyConfig(target)
+        max_qty = conf.max_qty.get(target, 1) if conf else 1
+        df = self.get_match_info(target)
+        if not df.empty:
+            quantity = data['order']['quantity']
+
+            if oc_type == 'New':
+                position = int(100*conf.raise_qty/max_qty)
+                position *= -1
+                quantity *= -1
+            else:
+                position = int(100*conf.stop_loss_qty/max_qty)
+
+            df['position'] -= position
+            df['quantity'] -= quantity
+            condition = self.match_target(target)
+            db.update(SecurityInfo, df.iloc[0].to_dict(), condition)
+            self.check_remove_monitor(target)
+
         else:
-            TradeData.Futures.Monitor.pop(target, None)
-            if day_trade:
-                logging.debug(f'[Monitor List]Reset|Futures|{target}|')
-                TradeData.Futures.Monitor[target] = None
+            quote = TradeDataHandler.getQuotesNow(target)
+            data = dict(
+                mode=TradeData.Account.Mode,
+                account=self.account_name,
+                market='Stocks' if conf.market == 'Stocks' else 'Futures',
+                code=target,
+                action=data['order']['action'],
+                quantity=data['order']['quantity'],
+                cost_price=data['order']['price'],
+                last_price=quote.get('price', 0),
+                pnl=0,
+                yd_quantity=0,
+                order_cond=data['order'].get('order_cond', 'Cash'),
+                timestamp=datetime.now(),
+                position=int(100*conf.open_qty/max_qty),
+                strategy=TradeData.Securities.Strategy.get(target, 'unknown')
+            )
+            db.add_data(SecurityInfo, **data)
+
+    def check_remove_monitor(self, target: str):
+        is_empty = self.check_is_empty(target)
+        if is_empty:
+            condition = self.match_target(target)
+            db.delete(SecurityInfo, condition)
+        return is_empty
+
+
+class TradeDataHandler:
+    @staticmethod
+    def reset_monitor(target: str):
+        TradeData.Securities.Monitor[target] = None
 
     @staticmethod
-    def update_deal_list(target: str, action_type: str, market='Stocks'):
+    def update_deal_list(target: str, action_type: str):
         '''更新下單暫存清單'''
 
-        logging.debug(f'[Monitor List]{action_type}|{market}|{target}|')
-        if market == 'Stocks':
+        logging.debug(f'[Monitor List]{action_type}|{target}|')
+        if action_type in ['Buy', 'Sell']:
             if action_type == 'Sell' and len(target) == 4 and target not in TradeData.Stocks.Sold:
                 TradeData.Stocks.Sold.append(target)
 
             if action_type == 'Buy' and len(target) == 4 and target not in TradeData.Stocks.Bought:
                 TradeData.Stocks.Bought.append(target)
 
-            if action_type == 'Cancel' and target in TradeData.Stocks.Bought:
-                TradeData.Stocks.Bought.remove(target)
-        elif market == 'Futures':
+        elif action_type in ['New', 'Cover']:
             if action_type == 'New' and target not in TradeData.Futures.Opened:
                 TradeData.Futures.Opened.append(target)
 
             if action_type == 'Cover' and target not in TradeData.Futures.Closed:
                 TradeData.Futures.Closed.append(target)
 
-            if action_type == 'Cancel' and target in TradeData.Futures.Opened:
+        elif action_type == 'Cancel':
+            if target in TradeData.Stocks.Bought:
+                TradeData.Stocks.Bought.remove(target)
+
+            if target in TradeData.Futures.Opened:
                 TradeData.Futures.Opened.remove(target)
-
-    @staticmethod
-    def update_monitor(action: str, data: dict, position: float = 100):
-        '''更新監控庫存(成交回報)'''
-        target = data['code']
-        quantity_ = position_ = 0
-        if action in ['Open', 'Close']:
-            if TradeData.Stocks.Monitor[target] is not None:
-                quantity = data['quantity']
-
-                if action == 'New':
-                    stage = 'Add|Stocks'
-                    position *= -1
-                    quantity *= -1
-                else:
-                    stage = 'Update|Stocks'
-
-                TradeData.Stocks.Monitor[target]['position'] -= position
-                TradeData.Stocks.Monitor[target]['quantity'] -= quantity
-            else:
-                stage = 'Add|Stocks'
-                TradeData.Stocks.Monitor[target] = data
-
-            if 'None' not in stage:
-                position_ = TradeData.Stocks.Monitor[target]['position']
-                quantity_ = TradeData.Stocks.Monitor[target]['quantity']
-
-        # New, Cover
-        else:
-            if TradeData.Futures.Monitor[target] is not None:
-                quantity = data['order']['quantity']
-
-                if action == 'New':
-                    stage = 'Add|Futures'
-                    position *= -1
-                    quantity *= -1
-                else:
-                    stage = 'Update|Futures'
-
-                TradeData.Futures.Monitor[target]['position'] -= position
-                TradeData.Futures.Monitor[target]['order']['quantity'] -= quantity
-            elif action == 'New':
-                stage = 'Add|Futures'
-
-                date = TODAY_STR.replace('-', '/')
-                data['contract'] = get_contract(target)
-                data['isDue'] = date == data['contract'].delivery_date
-                TradeData.Futures.Monitor[target] = data
-            else:
-                stage = 'None|Futures'
-
-            if 'None' not in stage:
-                position_ = TradeData.Futures.Monitor[target]['position']
-                quantity_ = TradeData.Futures.Monitor[target]['order']['quantity']
-
-        logging.debug(
-            f'[Monitor List]{stage}|{target}|{action}|quantity: {quantity_}; position: {position_}|')
 
     @staticmethod
     def getQuotesNow(target: str):
@@ -269,7 +155,141 @@ class TradeDataHandler:
             return TradeData.Quotes.NowIndex[target]
         elif target in TradeData.Quotes.NowTargets:
             return TradeData.Quotes.NowTargets[target]
-        return -1
+        return {}
+
+    @staticmethod
+    def getStrategyConfig(target: str):
+        strategy = TradeData.Securities.Strategy.get(target)
+        conf = StrategyList.Config.get(strategy)
+        return conf
+
+    @staticmethod
+    def getFuturesQuota():
+        '''更新可開倉的期貨標的數'''
+
+        open_deals = len(TradeData.Futures.Opened)
+        close_deals = len(TradeData.Futures.Closed)
+        df = db.query(
+            SecurityInfo,
+            SecurityInfo.mode == TradeData.Account.Mode,
+            SecurityInfo.market == 'Futures'
+        )
+        quota = TradeData.Futures.Limit-df.shape[0] - open_deals + close_deals
+        return quota
+
+    @staticmethod
+    def getStocksQuota(mode: str):
+        '''更新可開倉的股票標的數'''
+
+        strategies = TradeData.Securities.Strategy
+
+        buy_deals = 0
+        for s in TradeData.Stocks.Bought:
+            strategy = strategies.get(s)
+            conf = StrategyList.Config.get(strategy)
+            if conf.mode == 'long':
+                buy_deals += 1
+
+        sell_deals = 0
+        for s in TradeData.Stocks.Sold:
+            strategy = strategies.get(s)
+            conf = StrategyList.Config.get(strategy)
+            if conf.mode == 'long':
+                sell_deals += 1
+
+        if mode == 'long':
+            quota = abs(TradeData.Stocks.LimitLong) - \
+                TradeData.Stocks.N_Long - buy_deals + sell_deals
+        else:
+            quota = abs(TradeData.Stocks.LimitShort) - \
+                TradeData.Stocks.N_Short + buy_deals - sell_deals
+        return quota
+
+    @staticmethod
+    def unify_monitor_data(account_name: str):
+        for code, strategy in TradeData.Securities.Strategy.items():
+            if code not in TradeData.Securities.Monitor:
+                TradeData.Securities.Monitor.update({code: None})
+
+            conf = TradeDataHandler.getStrategyConfig(code)
+
+            condition_info = (
+                SecurityInfo.mode == TradeData.Account.Mode,
+                SecurityInfo.account == account_name,
+                SecurityInfo.code == code
+            )
+            condition_table = (
+                PositionTable.mode == TradeData.Account.Mode,
+                PositionTable.account == account_name,
+                PositionTable.name == code,
+                PositionTable.strategy == strategy
+            )
+
+            df = db.query(SecurityInfo, *condition_info)
+
+            # 若遠端無庫存，地端有庫存，刪除地端資料
+            if (
+                TradeData.Securities.Monitor.get(code) is None and
+                conf.positions.entries
+            ):
+                db.delete(PositionTable, *condition_table)
+                StrategyList.Config.get(strategy).positions.entries = []
+
+            # 若遠端有庫存，地端無庫存，補地端資料
+            elif TradeData.Securities.Monitor.get(code) is not None:
+                data = TradeData.Securities.Monitor.get(code)
+                quantity_ = data.get('quantity', 0)
+
+                if (
+                    not conf.positions.entries and
+                    code not in getattr(conf, 'FILTER_OUT', [])
+                ):
+
+                    data.update({
+                        'mode': TradeData.Account.Mode,
+                        'timestamp': datetime.now(),
+                        'position': int(
+                            100*data.get('quantity')/conf.max_qty.get(code, 1)),
+                        'strategy': strategy,
+                    })
+                    db.add_data(SecurityInfo, **data)
+
+                    data.update({
+                        'name': code,
+                        'price': data.get('cost_price', 0),
+                        'reason': '同步庫存'
+                    })
+                    conf.positions.open(data)
+                elif (
+                    quantity_ != df.iloc[0].quantity and
+                    conf.positions.entries
+                ):
+                    data_ = {
+                        'quantity': quantity_,
+                        'yd_quantity': data.get('yd_quantity', 0),
+                        'pnl': data.get('pnl', 0)
+                    }
+                    db.update(SecurityInfo, data_, *condition_info)
+
+                    df = db.query(PositionTable, *condition_table)
+                    if quantity_ > df.quantity.sum():
+                        quantity = quantity_ - df.quantity.sum()
+                        data.update({
+                            'name': code,
+                            'price': data.get('cost_price', 0),
+                            'quantity': quantity,
+                            'reason': '同步庫存'
+                        })
+                        conf.positions.open(data)
+                    else:
+                        quantity = df.quantity.sum() - quantity_
+                        data.update({
+                            'name': code,
+                            'price': data.get('cost_price', 0),
+                            'quantity': quantity,
+                            'reason': '同步庫存'
+                        })
+                        conf.positions.close(data)
 
 
 class FuturesMargin:
@@ -320,30 +340,64 @@ class FuturesMargin:
 
 
 class Position:
-    def __init__(self):
-        self.entries = []  # [{'price': float, 'time': datetime}]
-        # [{'price': float, 'time': datetime, 'reason': str}]
+    def __init__(self, account_name: str, strategy: str, backtest: bool = False):
+        self.account_name = account_name
+        self.strategy = strategy
+        self.backtest = backtest
+        self.entries = []
+        # [{
+        #     'account': str,
+        #     'name': str,
+        #     'price': float,
+        #     'timestamp': time
+        #     'quantity': int,
+        #     'reason': str  # 建倉、加碼、停損、停利
+        # }]
         self.exits = []
-        self.total_qty = 0
+        self.total_qty = {}
         self.total_profit = 0.0
 
-    def open(self, price, time, qty=1):
-        self.entries.append({'price': price, 'time': time, 'qty': qty})
-        self.total_qty += qty
+        if not backtest:
+            df = db.query(
+                PositionTable,
+                PositionTable.mode == TradeData.Account.Mode,
+                PositionTable.account == account_name,
+                PositionTable.strategy == strategy
+            )
+            self.entries = df.to_dict('records')
+            self.total_qty = df.groupby(
+                'name').quantity.sum().to_dict() if not df.empty else {}
 
-    def close(self, price, time, reason='', qty=1):
-        qty = min(qty, self.total_qty)
+    def open(self, inputs: dict):
+        self.entries.append(inputs)
+
+        name = inputs['name']
+        total_qty = self.total_qty.get(name, 0)
+        self.total_qty[name] = total_qty + inputs['quantity']
+
+        if not self.backtest:
+            db.add_data(PositionTable, **inputs)
+
+    def close(self, inputs: dict):
+        price = inputs['price']
+        qty = min(inputs['quantity'], self.total_qty[inputs['name']])
+        reason = inputs.get('reason', '平倉')
 
         closed_qty = 0
         profit = 0.0
-        while closed_qty < qty and self.entries:
-            if self.entries[0]['qty'] > qty:
-                entry = self.entries[0]
+        entries = [e for e in self.entries if e['name'] == inputs['name']]
+        while closed_qty < qty and entries:
+            if entries[0]['quantity'] > qty:
+                entry = entries[0]
                 e_qty = qty
-                self.entries[0]['qty'] -= qty
+                entry['quantity'] -= qty
+                self.entries[self.entries.index(entry)] = entry
+                self.update_entries(entry)
             else:
-                entry = self.entries.pop(0)
-                e_qty = entry['qty']
+                entry = entries.pop(0)
+                entry = self.entries.pop(self.entries.index(entry))
+                e_qty = entry['quantity']
+                self.delete_entries(entry)
 
             closed_qty += e_qty
             entry_price = entry['price']
@@ -353,13 +407,48 @@ class Position:
                 'exit_price': price,
                 'profit': profit,
                 'qty': e_qty,
-                'open_time': entry['time'],
-                'close_time': time,
+                'open_time': entry['timestamp'],
+                'close_time': inputs['timestamp'],
                 'reason': reason
             })
-        self.total_qty -= closed_qty
+        self.total_qty[inputs['name']] -= closed_qty
         self.total_profit += profit
         return profit
 
-    def is_open(self):
-        return self.total_qty > 0
+    def is_open(self, name: str):
+        return self.total_qty.get(name, 0) > 0
+
+    def query_condition(self, inputs: dict):
+        '''Query condition for the position table in the database'''
+
+        return (
+            PositionTable.mode == inputs['mode'],
+            PositionTable.account == inputs['account'],
+            PositionTable.strategy == inputs['strategy'],
+            PositionTable.name == inputs['name'],
+            PositionTable.timestamp == inputs['timestamp']
+        )
+
+    def delete_entries(self, inputs: dict):
+        '''Delete entries from the position table'''
+
+        if not db.HAS_DB:
+            return
+
+        if self.backtest:
+            return
+
+        condition = self.query_condition(inputs)
+        db.delete(PositionTable, *condition)
+
+    def update_entries(self, inputs: dict):
+        '''Update the position table in the database'''
+
+        if not db.HAS_DB:
+            return
+
+        if self.backtest:
+            return
+
+        condition = self.query_condition(inputs)
+        db.update(PositionTable, inputs, *condition)

@@ -2,7 +2,7 @@
 import streamlit as st
 
 from run import logging
-from trader.tasker import Tasks
+from trader.tasker import get_tasks
 from trader.config import API
 
 
@@ -16,7 +16,7 @@ if 'log_output' not in st.session_state:
 
 st.title("💹 AutoTradingPlatform 自動交易平台")
 
-
+Tasks = get_tasks()
 strategy_option = st.selectbox(
     "選擇要執行的動作",
     options=list(Tasks.keys()),
