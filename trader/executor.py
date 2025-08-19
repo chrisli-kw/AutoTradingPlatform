@@ -559,6 +559,9 @@ class StrategyExecutor(AccountHandler, Subscriber):
                     self._log_and_notify(
                         f"【連線異常】{self.env.ACCOUNT_NAME} 無法查詢餘額")
 
+            if now.minute == 0 and now.second == 0:
+                self._log_and_notify('Monitor status: running')
+
         # 啟動 Telegram 控制 bot
         bot = TelegramBot([self.account_name])
 
@@ -588,7 +591,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
                     order_data = self.Order.place_order(order)
                     self.update_position_(order, order_data)
 
-        logging.info('Non-trading time, stop monitoring')
+        self._log_and_notify('Non-trading time, stop monitoring')
 
         for scale in ['2T', '5T', '15T', '30T', '60T']:
             self.updateKBars(scale)
