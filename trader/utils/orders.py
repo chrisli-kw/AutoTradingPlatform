@@ -92,7 +92,11 @@ class OrderTool(FuturesMargin):
         return 'Common'
 
     def generate_data(self, target: str, content: namedtuple):
-        market = TradeDataHandler.getStrategyConfig(target).market
+        config = TradeDataHandler.getStrategyConfig(target)
+        if config is None:
+            return
+
+        market = config.market
         is_real_trade = isinstance(content, dict)
 
         action = self.content_attr(content, 'action')
@@ -223,7 +227,7 @@ class OrderTool(FuturesMargin):
         if target not in TradeData.BidAsk:
             return
 
-        contract = TradeData.Contracts.get(target)
+        contract = TradeData.Contracts.get(target, get_contract(target))
         is_stock = isinstance(contract, contracts.Stock)
         quantity = self.get_sell_quantity(content)
         price_type = 'MKT'

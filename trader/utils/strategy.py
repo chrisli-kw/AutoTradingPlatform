@@ -1,10 +1,12 @@
 import logging
 import numpy as np
 import pandas as pd
+from datetime import datetime
 
 from .objects import Action
 from .positions import TradeDataHandler
-from ..config import TODAY_STR, StrategyList
+from ..config import TODAY_STR, StrategyList, TimeTransferFutures
+from ..utils import get_contract
 from ..utils.database import db
 from ..utils.database.tables import ExDividendTable, SecurityInfo
 from ..utils.objects.data import TradeData
@@ -152,7 +154,13 @@ class StrategyTool:
         if not entries:
             return False
 
+        contract = get_contract(target)
+        not_transfer = not (
+            (TODAY_STR.replace('-', '/') == contract.delivery_date) and
+            (datetime.now() > TimeTransferFutures)
+        )
         return (
+            not_transfer and
             conf.raiseQuota and
             conf.raise_qty <= conf.max_qty.get(
                 target) - position.total_qty.get(target, 0)

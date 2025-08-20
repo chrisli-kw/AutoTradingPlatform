@@ -244,15 +244,15 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 enoughOpen = False
 
             if target in TradeData.Futures.Transferred:
-                msg = f'{target} 轉倉-New'
                 infos = dict(
                     action_type=actionType,
                     action=TradeData.Futures.Transferred[target]['action'],
                     target=target,
                     quantity=TradeData.Futures.Transferred[target]['quantity'],
                     octype=octype,
-                    reason=msg
+                    reason=f'{target} 轉倉-New'
                 )
+                msg = f'{target} 轉倉-New: {infos}'
                 self._log_and_notify(msg)
                 TradeData.Futures.Transferred.pop(target)
 
@@ -289,6 +289,8 @@ class StrategyExecutor(AccountHandler, Subscriber):
                                 'action': data['action']
                             }
                         })
+                        TradeData.Contracts[new_contract] = get_contract(
+                            new_contract)
                         TradeData.Securities.Strategy[new_contract] = strategy
                         TradeData.Securities.Monitor[new_contract] = None
                         TradeData.Securities.Monitor.pop(target, None)
