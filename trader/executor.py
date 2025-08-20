@@ -212,20 +212,17 @@ class StrategyExecutor(AccountHandler, Subscriber):
             inputs = TradeDataHandler.getQuotesNow(target).copy()
             data = db.query(SecurityInfo, self.WatchList.match_target(target))
             strategy = TradeData.Securities.Strategy[target]
-            raise_pos = self.StrategySet.isRaiseQty(target)
 
             contract = TradeData.Contracts.get(target)
             is_stock = isinstance(contract, contracts.Stock)
 
             # new position
-            if data.empty or (not data.empty and raise_pos):
+            if data.empty:
                 actionType = 'Open'
                 octype = 'New'
 
                 data = {}
-                order_cond, quantity = self.get_quantity(
-                    target, raise_pos=raise_pos)
-
+                order_cond, quantity = self.get_quantity(target)
                 enoughOpen = self.check_enough(target, quantity)
 
             # in-stock position
@@ -308,6 +305,11 @@ class StrategyExecutor(AccountHandler, Subscriber):
                         conf = TradeDataHandler.getStrategyConfig(new_contract)
                         conf.positions.close(data)
 
+                    if actionInfo.isRaiseQty:
+                        actionType = 'Open'
+                        octype = 'New'
+                        order_cond = self.check_order_cond(target)
+
                     infos = dict(
                         action_type=actionType,
                         target=target,
@@ -367,7 +369,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         return pools
 
-    def get_quantity(self, target: str, raise_pos=False):
+    def get_quantity(self, target: str):
         '''Calculate the quantity for opening a position'''
 
         strategy = TradeData.Securities.Strategy.get(target)
@@ -375,8 +377,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         quantityFunc = self.StrategySet.mapQuantities(strategy)
 
         inputs = TradeDataHandler.getQuotesNow(target)
-        quantity, quantity_limit = quantityFunc(
-            inputs=inputs, raise_pos=raise_pos, target=target)
+        quantity, quantity_limit = quantityFunc(inputs=inputs, target=target)
 
         order_cond = self.check_order_cond(target)
         leverage = self.Order.check_leverage(target, order_cond)

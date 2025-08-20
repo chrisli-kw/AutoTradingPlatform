@@ -104,19 +104,6 @@ class StrategyTool:
         df = df[df.Date == TODAY_STR].set_index('Code').CashDividend.to_dict()
         TradeData.Stocks.Dividends = df
 
-    def get_pos_balance(self, target: str, raise_pos=False):
-        conf = TradeDataHandler.getStrategyConfig(target)
-        if conf is None:
-            return 100
-
-        if not hasattr(conf, 'raise_qty'):
-            return 100
-
-        max_qty = conf.max_qty.get(target, 1)
-        if raise_pos:
-            return 100*(conf.raise_qty/max_qty)
-        return 100*(conf.open_qty/max_qty)
-
     def transfer_position(self, inputs: dict, **kwargs):
         target = inputs['symbol']
         df = db.query(
@@ -143,28 +130,6 @@ class StrategyTool:
 
         conf = StrategyList.Config.get(strategy)
         return getattr(conf, 'DayTrade', False)
-
-    def isRaiseQty(self, target: str):
-        conf = TradeDataHandler.getStrategyConfig(target)
-        if conf is None:
-            return False
-
-        position = conf.positions
-        entries = [e for e in position.entries if e['name'] == target]
-        if not entries:
-            return False
-
-        contract = get_contract(target)
-        not_transfer = not (
-            (TODAY_STR.replace('-', '/') == contract.delivery_date) and
-            (datetime.now() > TimeTransferFutures)
-        )
-        return (
-            not_transfer and
-            conf.raiseQuota and
-            conf.raise_qty <= conf.max_qty.get(
-                target) - position.total_qty.get(target, 0)
-        )
 
     def export_strategy_data_(self):
         for conf in StrategyList.Config.values():

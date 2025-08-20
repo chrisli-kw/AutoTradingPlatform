@@ -155,8 +155,7 @@ class StrategyConfig:
         ===================================================================
         '''
 
-        raise_pos = kwargs.get('raise_pos', False)
-        quantity = self.raise_qty if raise_pos else self.open_qty
+        quantity = self.open_qty
         target = kwargs.get('target', '')
         return quantity, self.max_qty.get(target, 0)
 
