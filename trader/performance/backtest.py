@@ -859,3 +859,114 @@ class BackTester(BacktestPerformance):
         )
         del df, rows
         return result
+
+
+class FuturesBackTester:
+    def __init__(self, account_name: str, data_short: pd.DataFrame, data_long: pd.DataFrame):
+        self.account_name = account_name
+        self.data_short = data_short
+        self.data_long = data_long
+        self.trades_short = list()
+        self.trades_long = list()
+        self.created_features = list()
+
+    def simulate_trades(self, config, mode):
+        config = config(self.account_name, config.name)
+        position = Position(self.account_name, config.name, backtest=True)
+
+        if not (
+            hasattr(config, 'examineOpen') or
+            hasattr(config, 'raise_position') or
+            hasattr(config, 'stop_loss') or
+            hasattr(config, 'stop_profit')
+        ):
+            return pd.DataFrame(Position(self.account_name, config.name).exits)
+
+        if mode == 'short':
+            trades = self.trades_short.copy()
+        else:
+            trades = self.trades_long.copy()
+
+        for trade in tqdm(trades):
+            name = trade['name']
+            time = trade['tTime']
+            price = trade['tOpen']
+
+            data = {
+                'account': self.account_name,
+                'strategy': config.name,
+                'name': name,
+                'timestamp': time,
+                'price': price
+            }
+            # 建倉邏輯
+            if not position.is_open(name):
+                if config.examineOpen(trade):
+                    data.update({
+                        'quantity': config.open_qty,
+                        'reason': '建倉'
+                    })
+                    position.open(data)
+                    continue
+
+            else:
+                # 加碼
+                if config.raiseQuota and config.raise_position(trade, position.entries):
+                    total_qty = position.total_qty.get(name, 0)
+                    raise_qty = min(
+                        config.raise_qty, config.max_qty.get(name, 0) - total_qty)
+
+                    if raise_qty:
+                        data.update({
+                            'quantity': raise_qty,
+                            'reason': '加碼'
+                        })
+                        position.open(data)
+                        continue
+
+                # 平倉邏輯
+                if config.stop_loss(trade, position.entries):
+                    data.update({
+                        'quantity': config.stop_loss_qty,
+                        'reason': '停損'
+                    })
+                    position.close(data)
+                elif config.stop_profit(trade, position.entries):
+                    quantity = config.stop_profit_qty
+                    data.update({
+                        'quantity': quantity,
+                        'reason': '停利'
+                    })
+                    position.close(data)
+
+        return pd.DataFrame(position.exits)
+
+    def run(self, config=None, mode='short'):
+
+        if config.Features != self.created_features:
+
+            tb_short = config.add_features(self.data_short)
+            self.trades_short = tb_short.to_dict('records')
+
+            tb_long = config.add_features(self.data_long)
+            self.trades_long = tb_long.to_dict('records')
+
+            self.created_features = tb_short.columns.to_list()
+
+        trades = self.simulate_trades(config, mode)
+
+        if trades.empty:
+            return {'Summary': {}, 'Records': trades}
+
+        trades['duration'] = (
+            trades.close_time - trades.open_time).dt.total_seconds()/60
+        trades['balance'] = trades.profit.cumsum()
+        trades['trade_type'] = config.mode
+        trades = trades.rename(
+            columns={'open_time': 'open_Time', 'close_time': 'close_Time'})
+
+        return {
+            'Predictions': self.data_short if mode == 'short' else self.data_long,
+            'Summary': compute_profits(trades),
+            'Records': trades
+        }
