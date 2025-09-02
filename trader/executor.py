@@ -170,7 +170,13 @@ class StrategyExecutor(AccountHandler, Subscriber):
         info.index = info.code
 
         # 剔除不堅控的股票
-        info = info[~info.code.isin(self._get_filter_out())]
+        filter_outs = self._get_filter_out()
+        info = info[~info.code.isin(filter_outs)]
+        if 'Call' in filter_outs:
+            info = info[~info.code.apply(lambda x: x[-1] == 'C')]
+        if 'Put' in filter_outs:
+            info = info[~info.code.apply(lambda x: x[-1] == 'P')]
+        
 
         # 庫存的處理 (遠端有庫存，地端無庫存)
         tb = info[~info.code.isin(TradeData.Securities.Strategy.keys())].copy()

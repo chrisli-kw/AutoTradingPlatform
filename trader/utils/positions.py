@@ -212,6 +212,8 @@ class TradeDataHandler:
                 TradeData.Securities.Monitor.update({code: None})
 
             conf = TradeDataHandler.getStrategyConfig(code)
+            if conf is None:
+                continue
 
             condition_info = (
                 SecurityInfo.mode == TradeData.Account.Mode,
