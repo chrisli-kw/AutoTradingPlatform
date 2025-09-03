@@ -67,7 +67,7 @@ TODAY = datetime.today()
 # 使用者相關
 ACCOUNTS = get_settings("ACCOUNT", "USERS", dataType='list')
 LOG_LEVEL = get_settings("ACCOUNT", "LOG_LEVEL")
-PATH = get_settings('DATA', 'DATA_PATH')
+PATH = get_settings('DATA', 'DATA_PATH', default='./data')
 
 
 class Cost:
