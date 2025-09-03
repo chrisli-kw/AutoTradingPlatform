@@ -1,6 +1,7 @@
 import time
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from typing import Union
 from datetime import datetime
 from collections import namedtuple
@@ -21,6 +22,7 @@ from ..utils.kbar import KBarTool
 from ..utils.crawler import readStockList
 from ..utils.objects import Action
 from ..utils.database import db, KBarTables
+from ..utils.positions import Position
 
 
 class BacktestPerformance:
