@@ -194,7 +194,7 @@ class OrderTool(FuturesMargin):
     def appendOrder(self, target: str, content: namedtuple):
         '''Add new order data to OrderTable'''
 
-        order_cond = self.content_attr(content, 'order_cond')
+        order_cond = self.content_attr(content, 'order_cond', default='Cash')
         order_data = self.generate_data(target, content)
         order_data['leverage'] = self.check_leverage(target, order_cond)
 

@@ -12,6 +12,9 @@ from ..config import (
     TODAY,
     TODAY_STR,
     TimeStartStock,
+    TimeEndStock,
+    TimeStartFuturesNight,
+    TimeEndFuturesNight,
     StrategyList
 )
 from . import get_contract, concat_df
@@ -124,10 +127,17 @@ class KBarTool(TechnicalSignals):
                 kbar = self.convert_kbar(tb, scale)
                 if scale == '1D':
                     kbar = kbar[kbar.Time.dt.date.astype(str) != TODAY_STR]
-                else:
+                elif (
+                    (TimeStartStock <= now <= TimeEndStock) or
+                    (TimeStartFuturesNight <= now <= TimeEndFuturesNight)
+                ):
                     scale_ = self._scale_converter(scale)
-                    n = time_tool.count_n_kbars(TimeStartStock, now, scale_)
-                    time_ = TimeStartStock + timedelta(minutes=scale_*n)
+                    if TimeStartFuturesNight <= now <= TimeEndFuturesNight:
+                        start_time = TimeStartFuturesNight
+                    else:
+                        start_time = TimeStartStock
+                    n = time_tool.count_n_kbars(start_time, now, scale_)
+                    time_ = start_time + timedelta(minutes=scale_*n)
                     kbar = kbar[kbar.Time < time_]
 
                 TradeData.KBars.Freq[scale] = self.concatKBars(scale, kbar)
