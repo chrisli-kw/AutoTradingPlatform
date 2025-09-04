@@ -868,8 +868,8 @@ class FuturesBackTester:
         self.account_name = account_name
         self.data_short = data_short
         self.data_long = data_long
-        self.trades_short = list()
-        self.trades_long = list()
+        self.trades_short = np.array([])
+        self.trades_long = np.array([])
         self.created_features = list()
 
     def simulate_trades(self, config, mode):
@@ -945,13 +945,13 @@ class FuturesBackTester:
 
     def run(self, config=None, mode='short'):
 
-        if config.Features != self.created_features:
+        if set(config.Features) != set(self.created_features):
 
             tb_short = config.add_features(self.data_short)
-            self.trades_short = tb_short.to_dict('records')
+            self.trades_short = np.array(tb_short.to_dict('records'))
 
             tb_long = config.add_features(self.data_long)
-            self.trades_long = tb_long.to_dict('records')
+            self.trades_long = np.array(tb_long.to_dict('records'))
 
             self.created_features = tb_short.columns.to_list()
 
