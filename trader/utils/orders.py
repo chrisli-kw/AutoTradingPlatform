@@ -196,6 +196,9 @@ class OrderTool(FuturesMargin):
 
         order_cond = self.content_attr(content, 'order_cond', default='Cash')
         order_data = self.generate_data(target, content)
+        if order_data is None:
+            return
+
         order_data['leverage'] = self.check_leverage(target, order_cond)
 
         db.add_data(TradingStatement, **order_data)

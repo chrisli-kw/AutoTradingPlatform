@@ -209,7 +209,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         return all_targets
 
     def update_position_(self, order: namedtuple, order_data: dict):
-        if TradeData.Account.Simulate:
+        if TradeData.Account.Simulate and order_data:
             self.simulator.update_monitor(order, order_data)
 
     def monitor_targets(self, target: str):
