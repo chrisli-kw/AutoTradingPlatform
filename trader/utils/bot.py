@@ -2,7 +2,6 @@ import logging
 from threading import Event
 from telegram.error import Conflict
 from telegram.error import TelegramError
-from telegram.utils.request import Request
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
 from ..config import NotifyConfig

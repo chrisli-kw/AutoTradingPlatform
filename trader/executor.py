@@ -548,6 +548,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
             f'[Stock Portfolio Limit] Short: {TradeData.Stocks.LimitShort}')
 
         logging.info(f'[Futures portfolio Limit] {TradeData.Futures.Limit}')
+        logging.info(f"[Data Info] {TradeData.KBars.Freq['1T'].Time.max()}")
 
         text = f"\n【開始監控】{self.env.ACCOUNT_NAME} 啟動完成({__version__})"
         text += f"\n【操盤模式】{TradeData.Account.Mode}"

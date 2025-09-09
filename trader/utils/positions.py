@@ -72,6 +72,10 @@ class WatchListTool:
 
         target = data['code']
         conf = TradeDataHandler.getStrategyConfig(target)
+
+        if conf is None:
+            return
+
         max_qty = conf.max_qty.get(target, 1) if conf else 1
         df = self.get_match_info(target)
         if not df.empty:
