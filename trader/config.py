@@ -106,11 +106,13 @@ class NotifyConfig:
 
 
 class StrategyNameList:
-    All = [
-        s.split('.py')[0] for s in os.listdir('./trader/scripts/StrategySet') if '.py' in s]
+    if os.path.exists('./trader/scripts/StrategySet'):
+        All = [
+            s.split('.py')[0] for s in os.listdir('./trader/scripts/StrategySet') if '.py' in s]
+    else:
+        All = []
     Long = []
     Short = []
-    # Code = {stra: f'Strategy{i+1}' for i, stra in enumerate(All)}
     Config = {}
 
     @staticmethod
