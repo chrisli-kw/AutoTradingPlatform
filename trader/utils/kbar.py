@@ -315,6 +315,10 @@ class TickDataProcesser:
         dates = sorted(dates)
 
         df = np.array([None]*len(dates))
+
+        if not df.shape[0]:
+            return pd.DataFrame()
+
         iterator = tqdm(dates)
         for i, date in enumerate(iterator):
             temp = self.convert_daily_tick(date, scale=scale)
