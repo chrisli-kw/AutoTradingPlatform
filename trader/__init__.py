@@ -6,7 +6,7 @@ from .utils.select import SelectStock
 from .utils.kbar import TickDataProcesser
 
 
-__version__ = '2.0.12'
+__version__ = '2.0.13'
 
 exec = ThreadPoolExecutor(max_workers=5)
 picker = SelectStock()

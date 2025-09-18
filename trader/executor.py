@@ -246,17 +246,29 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 enoughOpen = False
 
             if target in TradeData.Futures.Transferred:
+                quantity = TradeData.Futures.Transferred[target]['quantity']
                 infos = dict(
                     action_type=actionType,
                     action=TradeData.Futures.Transferred[target]['action'],
                     target=target,
-                    quantity=TradeData.Futures.Transferred[target]['quantity'],
+                    quantity=quantity,
                     octype=octype,
                     reason=f'{target} 轉倉-New'
                 )
                 msg = f'{target} 轉倉-New: {infos}'
                 self._log_and_notify(msg)
                 TradeData.Futures.Transferred.pop(target)
+                try:
+                    conf = TradeDataHandler.getStrategyConfig(target)
+                    data = conf.get_data(
+                        target,
+                        TradeDataHandler.getQuotesNow(target).get('price', 0)
+                    )
+                    data.update({'quantity': 1, 'reason': '轉倉'})
+                    for i in range(quantity):
+                        conf.positions.open(data)
+                except:
+                    logging.exception(f'Update position table failed:')
 
                 return self.Order.OrderInfo(**infos)
 

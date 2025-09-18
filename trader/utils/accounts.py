@@ -356,29 +356,30 @@ class AccountInfo:
     def get_futures_positions(self):
         '''查看期權帳戶持有部位'''
 
-        try:
-            positions = API.list_positions(API.futopt_account)
-            if not positions:
-                return TradeData.Securities.InfoDefault
+        if API.futopt_account.signed:
+            try:
+                positions = API.list_positions(API.futopt_account)
+                if not positions:
+                    return TradeData.Securities.InfoDefault
 
-            df = self._obj_2_df(positions)
-            if df.shape[0]:
-                df = df.rename(columns={
-                    'direction': 'action',
-                    'price': 'cost_price',
-                })
-                df[['account', 'market']] = [self.account_name, 'Futures']
-                df['yd_quantity'] = df.quantity
-                df['order_cond'] = ''
+                df = self._obj_2_df(positions)
+                if df.shape[0]:
+                    df = df.rename(columns={
+                        'direction': 'action',
+                        'price': 'cost_price',
+                    })
+                    df[['account', 'market']] = [self.account_name, 'Futures']
+                    df['yd_quantity'] = df.quantity
+                    df['order_cond'] = ''
 
-                df['contract'] = df.code.apply(lambda x: get_contract(x))
-                df['isDue'] = df.contract.apply(
-                    lambda x: TODAY_STR.replace('-', '/') == x.delivery_date)
-                df.code = df.contract.apply(lambda x: x.symbol)
-                df['order'] = df[['quantity', 'action']].to_dict('records')
-                return df
-        except:
-            logging.exception('List futures positions failed:')
+                    df['contract'] = df.code.apply(lambda x: get_contract(x))
+                    df['isDue'] = df.contract.apply(
+                        lambda x: TODAY_STR.replace('-', '/') == x.delivery_date)
+                    df.code = df.contract.apply(lambda x: x.symbol)
+                    df['order'] = df[['quantity', 'action']].to_dict('records')
+                    return df
+            except Exception as e:
+                logging.error(f'List futures positions failed: {e.args[0]}')
         return TradeData.Securities.InfoDefault
 
     def get_settle_profitloss(self, start_date: str, end_date: str, market='Stocks'):
@@ -397,9 +398,12 @@ class AccountInfo:
 
         profitloss_detail = []
         profitloss = API.list_profit_loss(account, start_date, end_date)
-        for pls in profitloss:
-            pl_detail = API.list_profit_loss_detail(account, pls.id)
-            profitloss_detail += pl_detail
+        if market == 'Stocks':
+            profitloss_detail = profitloss
+        else:
+            for pls in profitloss:
+                pl_detail = API.list_profit_loss_detail(account, pls.id)
+                profitloss_detail += pl_detail
 
         if not len(profitloss_detail):
             return TradeData.Futures.SettleDefault
@@ -407,7 +411,7 @@ class AccountInfo:
         df = self._obj_2_df(profitloss_detail)
         df = df.sort_values('date').drop_duplicates()
         df.date = df.date.apply(lambda x: f'{x[:4]}-{x[4:6]}-{x[6:]}')
-        df['profit'] = df.pnl - df.tax - df.fee
+        # df['profit'] = df.pnl - df.tax - df.fee
         return df
 
     def dataUsage(self):
@@ -521,8 +525,11 @@ class AccountHandler(AccountInfo):
     def activate_ca_(self):
         logging.info(f'[AccountInfo] Activate {self.env.ACCOUNT_NAME} CA')
         id = self.env.account_id()
-        API.activate_ca(
-            ca_path=f"./lib/ekey/551/{id}/S/Sinopac.pfx",
-            ca_passwd=self.env.ca_passwd() if self.env.ca_passwd() else id,
-            person_id=id,
-        )
+        try:
+            API.activate_ca(
+                ca_path=f"./lib/ekey/551/{id}/S/Sinopac.pfx",
+                ca_passwd=self.env.ca_passwd() if self.env.ca_passwd() else id,
+                person_id=id,
+            )
+        except Exception as e:
+            logging.error(f'{e.args[0]}')
