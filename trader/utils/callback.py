@@ -21,7 +21,7 @@ class CallbackHandler:
         symbol = self.fut_symbol(msg)
         price = msg['order']['price']
         if price == 0:
-            price = TradeDataHandler.getQuotesNow(symbol)['price']
+            price = TradeDataHandler.getQuotesNow(symbol).get('price', 0)
             msg['order']['price'] = price
         msg.update({
             'symbol': symbol,
