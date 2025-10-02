@@ -547,7 +547,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         logging.info(f'[AccountInfo] Mode: {TradeData.Account.Mode}')
         logging.info(f'[Security Strategy] {TradeData.Securities.Strategy}')
         logging.info(
-            f'[Security position] {db.query(SecurityInfo).shape[0]}')
+            f'[Security position] {db.query(SecurityInfo, SecurityInfo.account == self.account_name).shape[0]}')
         logging.info(f'[Stock Position] Long: {TradeData.Stocks.N_Long}')
         logging.info(
             f'[Stock Position] Limit Long: {self.env.MARGING_TRADING_AMOUNT}')
