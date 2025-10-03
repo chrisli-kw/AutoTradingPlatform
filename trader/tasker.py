@@ -14,12 +14,13 @@ from .config import (
     ACCOUNTS,
     TimeEndStock,
     ConvertScales,
+    NotifyConfig
 )
 from .create_env import app
 from .utils import tasker, get_contract
 from .utils.time import time_tool
 from .utils.crawler import crawler
-from .utils.notify import notifier
+from .utils.notify import Notification
 from .utils.file import file_handler
 from .utils.database import db, redis_tick
 from .utils.database.tables import SecurityList
@@ -48,6 +49,7 @@ def runAccountInfo(**kwargs):
     for env in ACCOUNTS:
         logging.debug(f'Load 【{env}】 config')
         config = UserEnv(env)
+        notifier = Notification(config=NotifyConfig, account=env)
 
         acct = config.ACCOUNT_NAME
         account.login_(config)
@@ -95,6 +97,7 @@ def runAccountInfo(**kwargs):
 
 @tasker
 def runSelectStock(**kwargs):
+    notifier = Notification(config=NotifyConfig)
     df = picker.pick(3, 1.8, 3)
     df = picker.melt_table(df)
     tb = df[df.Time == TODAY_STR].reset_index(drop=True)
@@ -148,6 +151,7 @@ def runShioajiSubscriber(**kwargs):
 
 def runAutoTrader(account: str):
     try:
+        notifier = Notification(config=NotifyConfig, account=account)
         se = StrategyExecutor(account)
         se.init_account()
         se.run()
@@ -176,6 +180,7 @@ def runCrawlStockData(account: str, start=None, end=None):
     target = pd.to_datetime('15:05:00')
     config = UserEnv(account)
     aInfo = AccountInfo()
+    notifier = Notification(config=NotifyConfig, account=account)
 
     try:
         now = datetime.now()

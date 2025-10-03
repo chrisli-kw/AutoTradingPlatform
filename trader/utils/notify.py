@@ -48,14 +48,20 @@ class LineNotify:
 
 
 class Notification:
-    def __init__(self, config: NotifyConfig):
+    def __init__(self, config: NotifyConfig, account: str = 'default'):
         if config.PLATFORM == 'Line':
             self.send = LineNotify(token=config.LINE_TOKEN)
         else:
-            self.send = TelegramNotify(
-                token=config.TELEGRAM_TOKEN,
-                chat_id=config.TELEGRAM_CHAT_ID
-            )
+            if account == 'default':
+                self.send = TelegramNotify(
+                    token=list(config.TELEGRAM_TOKEN.keys())[0],
+                    chat_id=list(config.TELEGRAM_CHAT_ID.keys())[0]
+                )
+            else:
+                self.send = TelegramNotify(
+                    token=config.TELEGRAM_TOKEN.get(account, ''),
+                    chat_id=config.TELEGRAM_CHAT_ID.get(account, '')
+                )
 
         self.order_cond = {
             'Cash': '現股',
@@ -208,6 +214,3 @@ class Notification:
 
         text = f"\n【本日選股清單】{text}"
         self.send.post(text)
-
-
-notifier = Notification(config=NotifyConfig)

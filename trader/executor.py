@@ -12,13 +12,14 @@ from .config import (
     MonitorFreq,
     TimeTransferFutures,
     StrategyList,
+    NotifyConfig
 )
 from .utils import get_contract
 from .utils.database import db
 from .utils.database.tables import SecurityInfo
 from .utils.time import time_tool
 from .utils.crawler import crawler
-from .utils.notify import notifier
+from .utils.notify import Notification
 from .utils.orders import OrderTool
 from .utils.subscribe import Subscriber
 from .utils.simulation import Simulator
@@ -40,6 +41,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         Subscriber.__init__(self)
         StrategyList.init_config(account_name)
 
+        self.notifier = Notification(config=NotifyConfig, account=account_name)
         self.Order = OrderTool(account_name)
         self.simulator = Simulator(account_name)
         self.WatchList = WatchListTool(account_name)
@@ -73,19 +75,19 @@ class StrategyExecutor(AccountHandler, Subscriber):
             return
 
         if stat == constant.OrderState.StockOrder:
-            notifier.post_tftOrder(stat, msg)
+            self.notifier.post_tftOrder(stat, msg)
             self.Order.StockOrder(msg)
 
         elif stat == constant.OrderState.StockDeal:
-            notifier.post_tftDeal(stat, msg)
+            self.notifier.post_tftDeal(stat, msg)
             self.Order.StockDeal(msg)
 
         elif stat == constant.OrderState.FuturesOrder:
-            notifier.post_fOrder(stat, msg)
+            self.notifier.post_fOrder(stat, msg)
             self.Order.FuturesOrder(msg)
 
         elif stat == constant.OrderState.FuturesDeal:
-            notifier.post_fDeal(stat, msg)
+            self.notifier.post_fDeal(stat, msg)
             CallbackHandler.FuturesDeal(msg)
 
     def init_account(self):
@@ -151,7 +153,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
     def _log_and_notify(self, msg: str):
         '''將訊息加入log並推播'''
         logging.info(msg)
-        notifier.send.post(f'\n{msg}')
+        self.notifier.send.post(f'\n{msg}')
 
     def _get_filter_out(self):
         filter_out = []
@@ -569,7 +571,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         for target, info in TradeData.Securities.Monitor.items():
             if isinstance(info, dict):
                 text += f"\n【庫存部位】{target}: {info.get('action', '')} - {info.get('quantity', 0)}"
-        notifier.send.post(text)
+        self.notifier.send.post(text)
 
         def periodic_check():
             # Check if the connection is still alive
@@ -584,7 +586,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 self._log_and_notify('Monitor status: running')
 
         # 啟動 Telegram 控制 bot
-        bot = TelegramBot([self.account_name])
+        bot = TelegramBot(self.account_name)
 
         # 開始監控
         stop_flag, pause_flag = bot.get_flags(self.account_name)

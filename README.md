@@ -122,8 +122,8 @@ DB_NAME = your_DB_schema_name
 
 [NOTIFY] # optional, can be left blank, PLATFORM = Telegram/Line
 PLATFORM = Telegram
-TELEGRAM_TOKEN = your_Telegram_Notify_token
-TELEGRAM_CHAT_ID = your_Telegram_Chat_ID
+TELEGRAM_TOKEN = {"user_name": "your_Telegram_Notify_token"}
+TELEGRAM_CHAT_ID = {"user_name": "your_Telegram_Chat_ID"}
 LINE_TOKEN = your_LINE_Notify_token
 
 [STRATEGY]

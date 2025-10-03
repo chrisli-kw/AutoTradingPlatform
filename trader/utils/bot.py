@@ -15,20 +15,20 @@ stop_flags = {}
 pause_flags = {}
 
 # chat_id whitelist
-WHITELIST = {NotifyConfig.TELEGRAM_CHAT_ID}
+WHITELIST = set(NotifyConfig.TELEGRAM_CHAT_ID)
 
 
 class TelegramBot:
-    def __init__(self, account_names: list):
-        self.account_names = account_names
+    def __init__(self, account_name: str):
+        self.account_names = [account_name]
         self._init_flags()
 
-        if NotifyConfig.TELEGRAM_TOKEN is None:
+        if NotifyConfig.TELEGRAM_TOKEN is {}:
             return
 
         try:
             self.updater = Updater(
-                token=NotifyConfig.TELEGRAM_TOKEN,
+                token=NotifyConfig.TELEGRAM_TOKEN.get(account_name, ''),
                 request_kwargs={'connect_timeout': 300, 'read_timeout': 300},
                 use_context=True
             )

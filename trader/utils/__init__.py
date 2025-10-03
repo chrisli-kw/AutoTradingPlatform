@@ -3,8 +3,8 @@ import logging
 import numpy as np
 import pandas as pd
 
-from ..config import API
-from .notify import notifier
+from ..config import API, NotifyConfig
+from .notify import Notification
 
 
 def reduce_mem_usage(df, verbose=True):
@@ -92,6 +92,7 @@ def concat_df(df1: pd.DataFrame, df2: pd.DataFrame, sort_by=[], reset_index=Fals
 def tasker(func):
     def wrapper(**kwargs):
         name = func.__name__
+        notifier = Notification(config=NotifyConfig)
         try:
             func(**kwargs)
         except KeyboardInterrupt:

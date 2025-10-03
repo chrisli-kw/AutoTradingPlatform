@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 import pandas as pd
 import configparser
@@ -22,13 +23,21 @@ def getList(section, option, fallback=None):
     return []
 
 
+def getJSON(section, option, fallback=None):
+    content = SystemConfig.get(section, option, fallback=fallback)
+    if len(content) > 0:
+        return json.loads(content)
+    return {}
+
+
 def get_settings(section, option, dataType='str', default=''):
     funcs = {
         'str': SystemConfig.get,
         'int': SystemConfig.getint,
         'float': SystemConfig.getfloat,
         'bool': SystemConfig.getboolean,
-        'list': getList
+        'list': getList,
+        'json': getJSON
     }
 
     if default == '' and dataType in ['int', 'float']:
@@ -101,8 +110,10 @@ class NotifyConfig:
     '''Configuration regarding notifications'''
     PLATFORM = get_settings('NOTIFY', 'PLATFORM')
     LINE_TOKEN = get_settings('NOTIFY', 'LINE_TOKEN')
-    TELEGRAM_TOKEN = get_settings('NOTIFY', 'TELEGRAM_TOKEN', default=None)
-    TELEGRAM_CHAT_ID = get_settings('NOTIFY', 'TELEGRAM_CHAT_ID', default='')
+    TELEGRAM_TOKEN = get_settings(
+        'NOTIFY', 'TELEGRAM_TOKEN', dataType='json', default={})
+    TELEGRAM_CHAT_ID = get_settings(
+        'NOTIFY', 'TELEGRAM_CHAT_ID', dataType='json', default={})
 
 
 class StrategyNameList:
