@@ -462,7 +462,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
             target_amount = self.Order.get_stock_amount(
                 target, price, quantity, mode)
         else:
-            quota = TradeDataHandler.getFuturesQuota()
+            quota = TradeDataHandler.getFuturesQuota(self.account_name)
             df = self.Order.filterOrderTable('Futures')
             target_amount = self.Order.get_open_margin(target, quantity)
 
@@ -517,7 +517,10 @@ class StrategyExecutor(AccountHandler, Subscriber):
             TradeData.Stocks.LimitLong,
             TradeData.Stocks.LimitShort,
             TradeData.Futures.Limit,
-            db.query(SecurityInfo).shape[0]
+            db.query(
+                SecurityInfo,
+                SecurityInfo.account == self.account_name
+            ).shape[0]
         ])
 
     def is_break_loop(self, now: datetime):

@@ -110,6 +110,7 @@ class StrategyTool:
             SecurityInfo,
             SecurityInfo.mode == TradeData.Account.Mode,
             SecurityInfo.market == 'Futures',
+            SecurityInfo.account == self.account_name,
             SecurityInfo.code == target
         )
         action = df.action.values[0]

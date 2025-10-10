@@ -168,7 +168,7 @@ class TradeDataHandler:
         return conf
 
     @staticmethod
-    def getFuturesQuota():
+    def getFuturesQuota(account: str):
         '''更新可開倉的期貨標的數'''
 
         open_deals = len(TradeData.Futures.Opened)
@@ -176,6 +176,7 @@ class TradeDataHandler:
         df = db.query(
             SecurityInfo,
             SecurityInfo.mode == TradeData.Account.Mode,
+            SecurityInfo.account == account,
             SecurityInfo.market == 'Futures'
         )
         quota = TradeData.Futures.Limit-df.shape[0] - open_deals + close_deals
