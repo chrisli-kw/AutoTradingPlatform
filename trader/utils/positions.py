@@ -247,7 +247,7 @@ class TradeDataHandler:
                 data = TradeData.Securities.Monitor.get(code)
                 quantity_ = data.get('quantity', 0)
 
-                if (
+                if df.empty or (
                     not conf.positions.entries and
                     code not in getattr(conf, 'FILTER_OUT', [])
                 ):
@@ -261,14 +261,15 @@ class TradeDataHandler:
                     })
                     db.add_data(SecurityInfo, **data)
 
-                    data.update({
-                        'name': code,
-                        'price': data.get('cost_price', 0),
-                        'reason': '同步庫存'
-                    })
-                    conf.positions.open(data)
+                    if db.query(PositionTable, *condition_table).empty:
+                        data.update({
+                            'name': code,
+                            'price': data.get('cost_price', 0),
+                            'reason': '同步庫存'
+                        })
+                        conf.positions.open(data)
                 elif (
-                    quantity_ != df.iloc[0].quantity and
+                    (not df.empty and quantity_ != df.iloc[0].quantity) and
                     conf.positions.entries
                 ):
                     data_ = {
