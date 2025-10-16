@@ -121,9 +121,9 @@ def runCrawlExDividendList(**kwargs):
 def runCrawlFuturesTickData(date=TODAY_STR, **kwargs):
     crawler.FromHTML.get_FuturesTickData(date)
 
-    # 轉換&更新期貨逐筆成交資料
-    df = tdp.convert_daily_tick(date, '1T')
-    crawler.FromHTML.export_futures_kbar(df)
+    # # 轉換&更新期貨逐筆成交資料
+    # df = tdp.convert_daily_tick(date, '1T')
+    # crawler.FromHTML.export_futures_kbar(df)
 
 
 @tasker

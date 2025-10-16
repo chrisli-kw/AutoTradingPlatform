@@ -47,7 +47,7 @@ class CrawlFromSJ:
     def get_security_list(self, market='Stocks', stock_only: bool = True):
         '''
         自 Shioaji 取得商品清單
-        當 market='Stocks' 且只保留普通股股票且不需要權證: stock_only = True 
+        當 market='Stocks' 且只保留普通股股票且不需要權證: stock_only = True
         '''
         id_list = [
             {**id} for exchange in API.Contracts.get(market) for id in exchange]
@@ -241,7 +241,7 @@ class CrawlFromSJ:
 
     def merge_daily_data(self, day: datetime, scale: str, save=True):
         '''
-        This function merges daily kbar data at the 1st trading-day of 
+        This function merges daily kbar data at the 1st trading-day of
         each month
         '''
 
@@ -603,7 +603,8 @@ class CrawlFromHTML:
             month = date.split('-')[1]
             date = date.replace('-', '_')
 
-            result = requests.get(f"{self.url_futures_tick}/Daily_{date}.zip")
+            result = requests.get(
+                f"{self.url_futures_tick}/Daily_{date}.zip", verify=False)
             z = zipfile.ZipFile(io.BytesIO(result.content))
             z.extractall(f'{PATH}/ticks/futures/{year}/Daily_{year}_{month}')
         except zipfile.BadZipFile:

@@ -262,13 +262,8 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 TradeData.Futures.Transferred.pop(target)
                 try:
                     conf = TradeDataHandler.getStrategyConfig(target)
-                    data = conf.get_data(
-                        target,
-                        TradeDataHandler.getQuotesNow(target).get('price', 0)
-                    )
-                    data.update({'quantity': 1, 'reason': '轉倉'})
-                    for i in range(quantity):
-                        conf.positions.open(data)
+                    if hasattr(conf, 'transfer'):
+                        conf.transfer(target, quantity)
                 except:
                     logging.exception(f'Update position table failed:')
 
