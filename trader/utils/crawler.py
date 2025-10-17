@@ -5,6 +5,7 @@ import time
 import json
 import logging
 import zipfile
+import urllib3
 import requests
 import numpy as np
 import pandas as pd
@@ -343,8 +344,11 @@ class CrawlFromHTML:
     def Leverage(self, stockid: str):
         '''取得個股融資成數'''
 
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
         url = f'https://www.sinotrade.com.tw/Stock/Stock_3_8_6?code={stockid}'
-        tb = pd.read_html(url)[-1]
+        html = requests.get(url, verify=False).text
+        tb = pd.read_html(StringIO(html))[-1]
 
         if tb.shape[0] == 0:
             return {'融資成數': 0, '融券成數': 100}

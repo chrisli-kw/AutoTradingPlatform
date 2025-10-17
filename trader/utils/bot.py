@@ -1,21 +1,28 @@
 import logging
-from threading import Event
-from telegram.error import Conflict
-from telegram.error import TelegramError
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from threading import Event, Thread
+from typing import Optional
+
+from telegram import Update
+from telegram.error import NetworkError, TimedOut, RetryAfter, Conflict, TelegramError
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+)
 
 from ..config import NotifyConfig
 from .objects.data import TradeData
 from .database import db
 from .database.tables import SecurityInfo
 
-
 # Status flag: supports multiple accounts
 stop_flags = {}
 pause_flags = {}
 
 # chat_id whitelist
-WHITELIST = set(NotifyConfig.TELEGRAM_CHAT_ID)
+WHITELIST = {str(x) for x in NotifyConfig.TELEGRAM_CHAT_ID.values()}
 
 
 class TelegramBot:
@@ -23,108 +30,200 @@ class TelegramBot:
         self.account_names = [account_name]
         self._init_flags()
 
-        if NotifyConfig.TELEGRAM_TOKEN is {}:
+        # dict 判斷不要用 "is {}"
+        token = None
+        try:
+            token = NotifyConfig.TELEGRAM_TOKEN.get(account_name, "")
+        except Exception:
+            token = ""
+
+        if not token:
+            logging.warning("Telegram token 未設定或為空，跳過啟動 bot。")
+            self.app = None
             return
 
         try:
-            self.updater = Updater(
-                token=NotifyConfig.TELEGRAM_TOKEN.get(account_name, ''),
-                request_kwargs={'connect_timeout': 300, 'read_timeout': 300},
-                use_context=True
-            )
-            dispatcher = self.updater.dispatcher
+            for name in (
+                "httpx",            # HTTP 請求「HTTP Request: POST ...」
+                "httpcore",         # httpx 的底層連線
+                "telegram",         # PTB 自身（含 network/request）
+                "telegram.ext",
+                "apscheduler",      # 若也不想看到 APScheduler 訊息
+            ):
+                logging.getLogger(name).setLevel(logging.WARNING)
 
-            # Bot commant dispatcher
-            dispatcher.add_handler(CommandHandler("pause", self.cmd_pause))
-            dispatcher.add_handler(CommandHandler("resume", self.cmd_resume))
-            dispatcher.add_handler(CommandHandler("stop", self.cmd_stop))
-            dispatcher.add_handler(CommandHandler("status", self.cmd_status))
-            dispatcher.add_handler(CommandHandler(
-                "position", self.cmd_position))
+            self.app = (
+                ApplicationBuilder()
+                .token(token)
+                .connect_timeout(300)
+                .read_timeout(300)
+                .write_timeout(30)
+                .build()
+            )
+
+            # 指令
+            self.app.add_handler(CommandHandler("pause", self.cmd_pause))
+            self.app.add_handler(CommandHandler("resume", self.cmd_resume))
+            self.app.add_handler(CommandHandler("stop", self.cmd_stop))
+            self.app.add_handler(CommandHandler("status", self.cmd_status))
+            self.app.add_handler(CommandHandler("position", self.cmd_position))
 
             # 後備文字處理器（防漏掉）
-            dispatcher.add_handler(MessageHandler(
-                Filters.text & ~Filters.command, self.handle_text))
-            dispatcher.add_error_handler(self.error_handler)
+            self.app.add_handler(MessageHandler(
+                filters.TEXT & ~filters.COMMAND, self.handle_text)
+            )
 
-            self.updater.start_polling()
+            # 錯誤處理
+            self.app.add_error_handler(self.error_handler)
+
+            # 非阻塞背景啟動（主程式可繼續跑）
+            self._thread = Thread(
+                target=self._run_polling_in_background, daemon=True
+            )
+            self._thread.start()
+
         except Conflict as e:
-            logging.error(f'{e}')
-            self.updater = None
-        except:
-            logging.exception('Initialize telegram updater failed:')
-            self.updater = None
+            logging.error(f"Telegram Conflict: {e}")
+            self.app = None
+        except Exception:
+            logging.exception("Initialize telegram application failed:")
+            self.app = None
+
+    def _run_polling_in_background(self):
+        """
+        以背景 thread 執行 run_polling()，避免阻塞主執行緒。
+        停止訊號交由主程式結束時一併處理（daemon thread）。
+        """
+        try:
+            # stop_signals=None 可避免攔截主程式訊號；allowed_updates 可留空用預設
+            self.app.run_polling(
+                stop_signals=None,
+                poll_interval=1.0,              # 失敗後重試間隔
+                allowed_updates=None,           # 預設即可
+                drop_pending_updates=False      # 依需求；若常重啟可設 True
+            )
+        except Exception:
+            logging.exception("run_polling 發生例外：")
 
     def _init_flags(self):
         for name in self.account_names:
             stop_flags[name] = Event()
             pause_flags[name] = Event()
 
-    def error_handler(self, update, context):
-        try:
-            raise context.error
-        except TelegramError as e:
-            if "terminated by other getUpdates request" in str(e):
-                logging.warning("⚠️ Bot polling 被其他實例中斷，停止 updater polling")
-                context.bot_data["should_shutdown"] = True
-            else:
-                logging.error("🚨 發生未預期錯誤")
+    async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
+        err = context.error
 
-    def post(self, update, msg: str):
-        update.message.reply_text(text=msg)
+        # 這些都屬於暫時性或可預期：降噪
+        transient = (NetworkError, TimedOut, RetryAfter, Conflict)
+        if isinstance(err, transient):
+            logging.warning("Telegram 暫時性網路異常：%s", err)
+            return
 
-    def _check_permission(self, update):
+        if isinstance(err, TelegramError) and "terminated by other getUpdates request" in str(err):
+            logging.warning(
+                "⚠️ Bot polling 被其他實例中斷（terminated by other getUpdates request）")
+            # 這裡可視需要做應對；run_polling 會自動處理重連
+            return
+
+        logging.exception("🚨 Handler 未預期錯誤", exc_info=err)
+
+    async def post(self, update: Update, msg: str):
+        if update and update.effective_message:
+            await update.effective_message.reply_text(text=msg)
+
+    def _check_permission(self, update: Optional[Update]) -> bool:
+        """回傳是否允許；白名單為空時一律放行；不允許時回覆 chat_id 方便加入白名單。"""
         try:
-            if update.message is None:
+            if not update or not update.effective_chat:
                 return False
 
             chat_id = str(update.effective_chat.id)
-            msg = update.message.text.strip()
-            logging.warning(f'[TEXT MESSAGE][{chat_id}] {msg}')
-            return chat_id in WHITELIST
+            msg = (update.effective_message.text or "").strip(
+            ) if update.effective_message else ""
+            logging.info(f"[TEXT MESSAGE][{chat_id}] {msg}")
+
+            # 白名單為空 -> 放行（避免因設定缺漏導致完全不回覆）
+            if not WHITELIST:
+                logging.warning("⚠️ Telegram 白名單為空，允許所有聊天。")
+                return True
+
+            # 在白名單 -> 放行
+            if chat_id in WHITELIST:
+                return True
+
+            # 允許以 username 白名單（可選，用於群組/超級群）
+            try:
+                user = update.effective_user
+                uname = (user.username or "").lower() if user else ""
+                user_whitelist = {u.lower() for u in getattr(
+                    NotifyConfig, "TELEGRAM_USER_WHITELIST", [])}
+                if uname and uname in user_whitelist:
+                    return True
+            except Exception:
+                pass
+
+            # 不允許 -> 告知 chat_id 以便加入白名單
+            if update.effective_message:
+                update.effective_message.reply_text(
+                    f"⛔️ 未授權聊天（chat_id={chat_id}）。"
+                )
+            return False
         except Conflict:
             return False
 
-    def _parse_args(self, update):
+    def _parse_args(self, context: ContextTypes.DEFAULT_TYPE) -> Optional[str]:
         try:
-            return update.message.text.strip().split()[1]
-        except IndexError:
-            self.post(update, msg="⚠️ 請輸入帳號名稱，例如 `/pause account_name`")
+            # v20+ 用 context.args 取參數
+            if context.args:
+                return context.args[0]
+
+            if self.account_names:
+                return self.account_names[0]
+
+            return None
+        except Exception:
             return None
 
-    # ========== Command Response ==========
-    def cmd_pause(self, update, context):
+    # ========== Command Response (async) ==========
+
+    async def cmd_pause(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_permission(update):
             return
 
-        name = self._parse_args(update)
+        name = self._parse_args(context)
         if name and name in pause_flags:
             pause_flags[name].set()
-            self.post(update, f"🛑 [{name}] 已暫停監控")
+            await self.post(update, f"🛑 [{name}] 已暫停監控")
+        else:
+            await self.post(update, "⚠️ 請輸入帳號名稱，例如 `/pause account_name`")
 
-    def cmd_resume(self, update, context):
+    async def cmd_resume(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_permission(update):
             return
 
-        name = self._parse_args(update)
+        name = self._parse_args(context)
         if name and name in pause_flags:
             pause_flags[name].clear()
-            self.post(update, f"✅ [{name}] 已恢復監控")
+            await self.post(update, f"✅ [{name}] 已恢復監控")
+        else:
+            await self.post(update, "⚠️ 請輸入帳號名稱，例如 `/resume account_name`")
 
-    def cmd_stop(self, update, context):
+    async def cmd_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_permission(update):
             return
 
-        name = self._parse_args(update)
+        name = self._parse_args(context)
         if name and name in stop_flags:
             stop_flags[name].set()
-            self.post(update, f"❌ [{name}] 程式即將停止")
+            await self.post(update, f"❌ [{name}] 程式即將停止")
+        else:
+            await self.post(update, "⚠️ 請輸入帳號名稱，例如 `/stop account_name`")
 
-    def cmd_status(self, update, context):
+    async def cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_permission(update):
             return
 
-        name = self._parse_args(update)
+        name = self._parse_args(context)
         if name in stop_flags and name in pause_flags:
             if stop_flags[name].is_set():
                 status = "❌ 已關閉"
@@ -132,29 +231,32 @@ class TelegramBot:
                 status = "🛑 暫停中"
             else:
                 status = "✅ 交易中"
-            self.post(update, f"[{name}] 目前狀態：{status}")
+            await self.post(update, f"[{name}] 目前狀態：{status}")
+        else:
+            await self.post(update, "⚠️ 請輸入帳號名稱，例如 `/status account_name`")
 
-    def cmd_position(self, update, context):
+    async def cmd_position(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_permission(update):
             return
 
-        name = self._parse_args(update)
+        name = self._parse_args(context)
         if name:
+            # 注意：這是同步查詢，若耗時可考慮丟到 ThreadPool
             position = db.query(
                 SecurityInfo,
                 SecurityInfo.mode == TradeData.Account.Mode,
                 SecurityInfo.account == name
             )[['code', 'quantity']]
             pos_dict = position.groupby('code').quantity.sum().to_dict()
-            self.post(update, msg=f"📦 [{name}] 持倉：{pos_dict}")
+            await self.post(update, msg=f"📦 [{name}] 持倉：{pos_dict}")
+        else:
+            await self.post(update, "⚠️ 請輸入帳號名稱，例如 `/position account_name`")
 
-    def handle_text(self, update, context):
-        '''========== Handle text messages =========='''
-
+    async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_permission(update):
             return
 
-        self.post(update, msg="❓ 請使用正確指令，如：`/pause account_name`")
+        await self.post(update, "❓ 請使用正確指令，如：`/pause account_name`")
 
     def get_flags(self, account_name: str):
         '''========== Get status flags of an account =========='''

@@ -142,6 +142,9 @@ class KBarTool(TechnicalSignals):
     def convert_kbar(self, tb: pd.DataFrame, scale='60T'):
         '''將1分K轉換成其他週期K線資料'''
         if tb.shape[0]:
+            if isinstance(scale, str) and scale.endswith('T'):
+                scale = scale.replace('T', 'min')
+
             return (
                 tb.set_index('Time')
                 .groupby('name')

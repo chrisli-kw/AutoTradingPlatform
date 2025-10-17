@@ -140,7 +140,14 @@ class AccountInfo:
 
         info_stock = self.get_stock_positions()
         info_futures = self.get_futures_positions()
-        return pd.concat([info_stock, info_futures]).reset_index(drop=True)
+
+        if not info_stock.empty and not info_futures.empty:
+            return pd.concat([info_stock, info_futures]).reset_index(drop=True)
+        elif info_stock.empty and not info_futures.empty:
+            return info_futures
+        elif not info_stock.empty and info_futures.empty:
+            return info_stock
+        return TradeData.Securities.InfoDefault
 
     def query_close(self, stockid: str, date: str):
         '''查證券收盤價'''
@@ -186,16 +193,15 @@ class AccountInfo:
 
         df_fail = pd.DataFrame(columns=['date', 'amount', 'T'])
 
-        now = datetime.now()
-        if 18 <= now.hour <= 19:
-            logging.debug('Settle info temporary not accessable.')
-            return df_fail
-
         n = 0
         while n < 5:
             try:
                 settlement = self._list_settlements()
                 df = self._obj_2_df(settlement)
+
+                if df.empty and 18 <= datetime.now().hour <= 19:
+                    logging.warning('Settle info temporary not accessable.')
+                    return df_fail
 
                 if mode == 'info':
                     logging.debug(f"Settlements:{df.to_dict('records')}")
