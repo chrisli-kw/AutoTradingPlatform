@@ -52,11 +52,17 @@ def get_settings(section, option, dataType='str', default=''):
 
 
 def get_holidays():
+    '''Source: https://data.ntpc.gov.tw/datasets/308dcd75-6434-45bc-a95f-584da4fed251'''
     try:
         filename = './lib/政府行政機關辦公日曆表.csv'
-        df = pd.read_csv(filename, low_memory=False, encoding='big5')
+        try:
+            df = pd.read_csv(filename, low_memory=False)
+        except:
+            df = pd.read_csv(filename, low_memory=False, encoding='big5')
+        df.columns = [c.lower() for c in df.columns]
         df.date = pd.to_datetime(df.date.astype(str))
-        df.name = df.name.fillna(df.holidayCategory)
+        df.name = df.name.fillna(df.holidaycategory)
+        df = df[df.year == TODAY.year]
         holidays = df.set_index('date').name.to_dict()
 
         eves = {k: v for k, v in holidays.items() if v == '農曆除夕'}
