@@ -906,7 +906,7 @@ class FuturesBackTester:
                 if config.examineOpen(trade):
                     data.update({
                         'quantity': config.open_qty,
-                        'reason': '建倉'
+                        'reason': f'建倉 - {config.open_reason}'
                     })
                     position.open(data)
                     continue
@@ -921,7 +921,7 @@ class FuturesBackTester:
                     if raise_qty:
                         data.update({
                             'quantity': raise_qty,
-                            'reason': '加碼'
+                            'reason': f'加碼 - {config.raise_reason}'
                         })
                         position.open(data)
                         continue
@@ -930,14 +930,14 @@ class FuturesBackTester:
                 if config.stop_loss(trade, position.entries):
                     data.update({
                         'quantity': config.stop_loss_qty,
-                        'reason': '停損'
+                        'reason': f'停損 - {config.stop_loss_reason}'
                     })
                     position.close(data)
                 elif config.stop_profit(trade, position.entries):
                     quantity = config.stop_profit_qty
                     data.update({
                         'quantity': quantity,
-                        'reason': '停利'
+                        'reason': f'停利 - {config.stop_profit_reason}'
                     })
                     position.close(data)
 

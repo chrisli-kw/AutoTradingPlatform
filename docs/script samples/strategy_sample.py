@@ -55,17 +55,21 @@ class StrategyConfig:
     # trading leverage
     leverage = 1
 
-    # Quantity for opening a position at a time
+    # Quantity & reason for opening a position at a time
     open_qty = 1
+    open_reason = ''
 
-    # Quantity for raising a position at a time
+    # Quantity & reason  for raising a position at a time
     raise_qty = 1
+    raise_reason = ''
 
-    # Quantity for stop loss a position at a time
+    # Quantity & reason  for stop loss a position at a time
     stop_loss_qty = 1
+    stop_loss_reason = ''
 
-    # Quantity for stop profit a position at a time
+    # Quantity & reason  for stop profit a position at a time
     stop_profit_qty = 1
+    stop_profit_reason = ''
 
     # The maximum quantity of the strategy can make
     max_qty = 10
