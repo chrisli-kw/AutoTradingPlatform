@@ -941,7 +941,10 @@ class FuturesBackTester:
                     })
                     position.close(data)
 
-        return pd.DataFrame(position.exits)
+        return (
+            pd.DataFrame(position.exits)
+            .rename(columns={'reason': 'close_reason'})
+        )
 
     def run(self, config=None, mode='short'):
 

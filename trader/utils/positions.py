@@ -417,6 +417,7 @@ class Position:
                 'qty': e_qty,
                 'open_time': entry['timestamp'],
                 'close_time': inputs['timestamp'],
+                'open_reason': entry.get('reason', '建倉'),
                 'reason': reason
             })
         self.total_qty[inputs['name']] -= closed_qty
