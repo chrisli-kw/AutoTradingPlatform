@@ -908,7 +908,7 @@ class FuturesBackTester:
                         'quantity': config.open_qty,
                         'reason': f'建倉 - {config.open_reason}'
                     })
-                    position.open(data)
+                    config.avg_cost = position.open(data)
                     continue
 
             else:
@@ -923,7 +923,7 @@ class FuturesBackTester:
                             'quantity': raise_qty,
                             'reason': f'加碼 - {config.raise_reason}'
                         })
-                        position.open(data)
+                        config.avg_cost = position.open(data)
                         continue
 
                 # 平倉邏輯
@@ -932,14 +932,14 @@ class FuturesBackTester:
                         'quantity': config.stop_loss_qty,
                         'reason': f'停損 - {config.stop_loss_reason}'
                     })
-                    position.close(data)
+                    config.avg_cost = position.close(data)
                 elif config.stop_profit(trade, position.entries):
                     quantity = config.stop_profit_qty
                     data.update({
                         'quantity': quantity,
                         'reason': f'停利 - {config.stop_profit_reason}'
                     })
-                    position.close(data)
+                    config.avg_cost = position.close(data)
 
         return (
             pd.DataFrame(position.exits)

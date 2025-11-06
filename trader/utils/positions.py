@@ -1,5 +1,6 @@
 import os
 import logging
+import numpy as np
 import pandas as pd
 from datetime import datetime
 from collections import namedtuple
@@ -376,24 +377,33 @@ class Position:
             self.total_qty = df.groupby(
                 'name').quantity.sum().to_dict() if not df.empty else {}
 
+    def average_cost(self):
+        if self.entries:
+            return np.average([e.get('price', 0) for e in self.entries])
+        return np.inf
+
     def open(self, inputs: dict):
         self.entries.append(inputs)
 
         name = inputs['name']
         total_qty = self.total_qty.get(name, 0)
         self.total_qty[name] = total_qty + inputs['quantity']
+        avg_cost = self.average_cost()
 
         if not self.backtest:
             db.add_data(PositionTable, **inputs)
 
+        return avg_cost
+
     def close(self, inputs: dict):
         price = inputs['price']
-        qty = min(inputs['quantity'], self.total_qty[inputs['name']])
+        qty = min(inputs.get('quantity', 0), self.total_qty[inputs['name']])
         reason = inputs.get('reason', '平倉')
 
         closed_qty = 0
         profit = 0.0
         entries = [e for e in self.entries if e['name'] == inputs['name']]
+        avg_cost = 0
         while closed_qty < qty and entries:
             if entries[0]['quantity'] > qty:
                 entry = entries[0]
@@ -420,9 +430,10 @@ class Position:
                 'open_reason': entry.get('reason', '建倉'),
                 'reason': reason
             })
+            avg_cost = self.average_cost()
         self.total_qty[inputs['name']] -= closed_qty
         self.total_profit += profit
-        return profit
+        return avg_cost
 
     def is_open(self, name: str):
         return self.total_qty.get(name, 0) > 0
