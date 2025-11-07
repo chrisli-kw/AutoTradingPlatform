@@ -379,7 +379,9 @@ class Position:
 
     def average_cost(self):
         if self.entries:
-            return np.average([e.get('price', 0) for e in self.entries])
+            costs = [e.get('price', 0) for e in self.entries]
+            qtys = [e.get('quantity', 0) for e in self.entries]
+            return np.average(costs, weights=qtys)
         return np.inf
 
     def open(self, inputs: dict):

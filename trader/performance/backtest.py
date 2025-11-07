@@ -891,14 +891,13 @@ class FuturesBackTester:
 
         for trade in tqdm(trades):
             name = trade['name']
-            time = trade['tTime']
             price = trade['tOpen']
 
             data = {
                 'account': self.account_name,
                 'strategy': config.name,
                 'name': name,
-                'timestamp': time,
+                'timestamp': trade['tTime'],
                 'price': price
             }
             # 建倉邏輯
@@ -934,9 +933,8 @@ class FuturesBackTester:
                     })
                     config.avg_cost = position.close(data)
                 elif config.stop_profit(trade, position.entries):
-                    quantity = config.stop_profit_qty
                     data.update({
-                        'quantity': quantity,
+                        'quantity': config.stop_profit_qty,
                         'reason': f'停利 - {config.stop_profit_reason}'
                     })
                     config.avg_cost = position.close(data)
