@@ -939,6 +939,13 @@ class FuturesBackTester:
                     })
                     config.avg_cost = position.close(data)
 
+        if position.entries:
+            data.update({
+                'quantity': sum(e['quantity'] for e in position.entries),
+                'reason': '回測結束'
+            })
+            config.avg_cost = position.close(data)
+
         return (
             pd.DataFrame(position.exits)
             .rename(columns={'reason': 'close_reason'})
