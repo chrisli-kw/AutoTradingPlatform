@@ -65,7 +65,7 @@ def get_holidays():
         df = df[df.year == TODAY.year]
         holidays = df.set_index('date').name.to_dict()
 
-        eves = {k: v for k, v in holidays.items() if v == '農曆除夕'}
+        eves = {k: v for k, v in holidays.items() if '除夕' in v}
         for i in range(2):
             days = {d - timedelta(days=i+1) if d - timedelta(days=i+1)
                     not in holidays else d - timedelta(days=i+2): '年前封關' for d in eves}
