@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from datetime import time as timetime
 
 from ..config import (
+    TODAY,
     TODAY_STR,
     holidays,
     TimeStartStock,
@@ -19,8 +20,20 @@ from ..config import (
 
 class TimeTool:
 
-    DueDays = {
-        (d.year, d.month): d for d in pd.date_range('2001-01-01', '2030-12-31', freq='WOM-3WED')}
+    def __init__(self):
+        self.DueDays = self._set_duedays()
+
+    def _set_duedays(self):
+        end_year = 2050
+        due_days = {
+            (d.year, d.month): d for d in pd.date_range('2001-01-01', f'{end_year}-12-31', freq='WOM-3WED')}
+
+        for key, dueday in due_days.items():
+            while dueday in holidays:
+                dueday += timedelta(days=1)
+                due_days[key] = dueday
+
+        return due_days
 
     def datetime_to_str(self, date: datetime):
         '''將datetime時間轉為字串, 輸出格式:YYYY-MM-DD'''
@@ -217,13 +230,7 @@ class TimeTool:
             td = timedelta()
 
         if market == 'Futures':
-            due_day = self.DueDays[(2024, 8)]
-            if str(dt.date()) == str(due_day.date()):
-                end = due_day.replace(hour=13, minute=30)
-            else:
-                end = TimeEndFuturesDay
-
-            is_day_time = TimeStartFuturesDay + td < dt <= end
+            is_day_time = TimeStartFuturesDay + td < dt <= TimeEndFuturesDay
             is_after_hour = TimeStartFuturesNight+td < dt <= TimeEndFuturesNight
 
             if period == 'Day':

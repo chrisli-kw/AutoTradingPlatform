@@ -11,7 +11,8 @@ from ..config import (
     PATH,
     TODAY,
     TODAY_STR,
-    StrategyList
+    StrategyList,
+    holidays
 )
 from . import get_contract, concat_df
 from .time import time_tool
@@ -55,10 +56,25 @@ class KBarTool(TechnicalSignals):
         參數 - kbar_start_day: 觀察起始日，格式為 yyyy-mm-dd
         '''
 
-        if not kbar_start_day or TODAY < kbar_start_day:
-            return 35
+        default_ndays = 35
 
-        return max((TODAY - kbar_start_day).days, 35)
+        if not kbar_start_day or TODAY < pd.to_datetime(kbar_start_day):
+            n_trading_days = default_ndays
+        else:
+            n_trading_days = max(
+                (TODAY - pd.to_datetime(kbar_start_day)).days, default_ndays)
+
+        trading_cnt = 0
+        days_back = 0
+        d = pd.to_datetime(TODAY_STR)
+
+        while trading_cnt < n_trading_days:
+            if d not in holidays:
+                trading_cnt += 1
+            d -= timedelta(days=1)
+            days_back += 1
+
+        return days_back
 
     def _apply_feature_by_scale(self, df: pd.DataFrame, scale: str):
         for conf in StrategyList.Config.values():
