@@ -20,6 +20,7 @@ class WatchListTool:
         self.watchlist_file = f'watchlist_{account_name}'
 
     def update_position(self, order: namedtuple):
+        # TODO: delete this function
         target = order.target
         position = 100
         watchlist = self.get_match_info(target)
@@ -63,9 +64,10 @@ class WatchListTool:
         quantity = data.get('quantity', 0)
         position = data.get('position', 0)
 
-        is_empty = (quantity <= 0 or position <= 0)
-        logging.debug(
-            f'[Monitor List]Check|{target}|{is_empty}|quantity: {quantity}; position: {position}|')
+        is_empty = (quantity <= 0)  # or position <= 0)
+        if is_empty:
+            logging.warning(
+                f'[Monitor List]Check|{target}|{is_empty}|quantity: {quantity}; position: {position}|')
         return is_empty
 
     def update_monitor(self, oc_type: str, data: dict):
