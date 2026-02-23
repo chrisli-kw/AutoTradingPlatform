@@ -463,6 +463,8 @@ class Position:
             return
 
         condition = self.query_condition(inputs)
+        logging.warning(
+            'Delete entries from the position table with condition: %s', condition)
         db.delete(PositionTable, *condition)
 
     def update_entries(self, inputs: dict):
