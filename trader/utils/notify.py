@@ -17,7 +17,10 @@ class TelegramNotify:
 
         url = f'{self.NotifyURL}/bot{self._token_}/sendMessage'
         data = {'chat_id': self._chat_id_, 'text': message}
-        requests.post(url, data=data)
+        try:
+            requests.post(url, data=data)
+        except Exception as e:
+            logging.error(f'Telegram Notify 發送失敗: {e}')
 
 
 class LineNotify:

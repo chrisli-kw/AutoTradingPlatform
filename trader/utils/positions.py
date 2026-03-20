@@ -85,11 +85,17 @@ class WatchListTool:
             quantity = data['order']['quantity']
 
             if oc_type == 'New':
-                position = int(100*conf.raise_qty/max_qty)
+                if max_qty > 0 and max_qty > 0:
+                    position = int(100*conf.raise_qty/max_qty)
+                else:
+                    position = 0
                 position *= -1
                 quantity *= -1
             else:
-                position = int(100*conf.stop_loss_qty/max_qty)
+                if max_qty > 0 and max_qty > 0:
+                    position = int(100*conf.stop_loss_qty/max_qty)
+                else:
+                    position = 0
 
             df['position'] -= position
             df['quantity'] -= quantity
@@ -383,7 +389,10 @@ class Position:
         if self.entries:
             costs = [e.get('price', 0) for e in self.entries]
             qtys = [e.get('quantity', 0) for e in self.entries]
-            return np.average(costs, weights=qtys)
+            try:
+                return np.average(costs, weights=qtys)
+            except ZeroDivisionError:
+                return 0
         return np.inf
 
     def open(self, inputs: dict):
@@ -463,8 +472,7 @@ class Position:
             return
 
         condition = self.query_condition(inputs)
-        logging.warning(
-            'Delete entries from the position table with condition: %s', condition)
+        logging.warning('Delete entries from the position table')
         db.delete(PositionTable, *condition)
 
     def update_entries(self, inputs: dict):
