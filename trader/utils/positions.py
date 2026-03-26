@@ -265,7 +265,7 @@ class TradeDataHandler:
                         'mode': TradeData.Account.Mode,
                         'timestamp': datetime.now(),
                         'position': int(
-                            100*data.get('quantity')/conf.max_qty.get(code, 1)),
+                            100*data.get('quantity')/conf.max_qty.get(code, 1)) or 0,
                         'strategy': strategy,
                     })
                     db.add_data(SecurityInfo, **data)
