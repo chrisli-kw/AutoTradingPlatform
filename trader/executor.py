@@ -418,6 +418,9 @@ class StrategyExecutor(AccountHandler, Subscriber):
             return 'Cash'
 
         conf = TradeDataHandler.getStrategyConfig(target)
+        if conf is None:
+            return 'Cash'
+
         mode = conf.mode
         margin_trading = getattr(conf, 'Margin_Trading', False)
         short_selling = getattr(conf, 'SHORT_SELLING', False)
@@ -446,8 +449,11 @@ class StrategyExecutor(AccountHandler, Subscriber):
             return False
 
         contract = TradeData.Contracts.get(target)
-        mode = TradeDataHandler.getStrategyConfig(target).mode
+        conf = TradeDataHandler.getStrategyConfig(target)
+        if conf is None:
+            return False
 
+        mode = conf.mode
         if isinstance(contract, contracts.Stock):
             quota = TradeDataHandler.getStocksQuota(mode)
             df = self.Order.filterOrderTable('Stocks')
@@ -612,7 +618,12 @@ class StrategyExecutor(AccountHandler, Subscriber):
                     order_data = self.Order.place_order(order)
                     self.update_position_(order, order_data)
 
-        self._log_and_notify('Non-trading time, stop monitoring')
+        if stop_flag.is_set():
+            self._log_and_notify(
+                '[Stop Monitoring] Received stop command from Telegram bot')
+        else:
+            self._log_and_notify(
+                '[Stop Monitoring] Stopped due to non-trading hours or no positions')
 
         for scale in ['2T', '5T', '15T', '30T', '60T']:
             self.updateKBars(scale)

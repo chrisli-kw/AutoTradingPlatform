@@ -294,27 +294,31 @@ class OrderTool(FuturesMargin):
                 quantity -= q
 
     def StockOrder(self, msg: dict):
-        stock = msg['contract']['code']
+        code = msg['contract']['code']
         order = msg['order']
         operation = msg['operation']
 
-        c3 = order['action'] == 'Buy'
-        TradeDataHandler.update_deal_list(stock, order['action'])
+        conf = TradeDataHandler.getStrategyConfig(code)
+        if conf and code in conf.FILTER_OUT:
+            return
 
-        leverage = self.check_leverage(stock, order['order_cond'])
+        c3 = order['action'] == 'Buy'
+        TradeDataHandler.update_deal_list(code, order['action'])
+
+        leverage = self.check_leverage(code, order['order_cond'])
 
         if self.is_new_order(operation) and c3:
-            self.appendOrder(stock, order)
+            self.appendOrder(code, order)
 
         # 若融資配額張數不足，改現股買進 ex: '此證券配額張數不足，餘額 0 張（證金： 0 ）'
         elif self.is_insufficient_quota(operation):
             q_balance = operation['op_msg'].split(' ')
             if len(q_balance) > 1:
                 q_balance = int(q_balance[1])
-                infos = dict(action=order['action'], target=stock)
+                infos = dict(action=order['action'], target=code)
 
                 # 若本日還沒有下過融資且剩餘券數為0，才可以改下現股
-                if q_balance == 0 and stock not in TradeData.Stocks.Bought:
+                if q_balance == 0 and code not in TradeData.Stocks.Bought:
                     orderinfo = self.OrderInfo(
                         quantity=1000 *
                         int(order['quantity']*(1-leverage)),
@@ -333,12 +337,12 @@ class OrderTool(FuturesMargin):
 
         # 若刪單成功就自清單移除
         if self.is_cancel_order(operation):
-            self.deleteOrder(stock)
+            self.deleteOrder(code)
             if c3:
-                TradeDataHandler.update_deal_list(stock, 'Cancel')
+                TradeDataHandler.update_deal_list(code, 'Cancel')
 
         # 更新監控庫存
-        df = db.query(SecurityInfo, self.WatchListTool.match_target(stock))
+        df = db.query(SecurityInfo, self.WatchListTool.match_target(code))
         order['oc_type'] = 'New' if df.empty else 'Cover'
         self.WatchListTool.update_monitor(order['oc_type'], msg)
 
@@ -346,10 +350,15 @@ class OrderTool(FuturesMargin):
         msg = CallbackHandler.update_stock_msg(msg)
 
         action = msg['action']
+        code = msg['code']
+
+        conf = TradeDataHandler.getStrategyConfig(code)
+        if conf and code in conf.FILTER_OUT:
+            return
+
         if action == 'Sell':
-            stock = msg['code']
-            TradeDataHandler.update_deal_list(stock, action)
-            self.appendOrder(stock, msg)
+            TradeDataHandler.update_deal_list(code, action)
+            self.appendOrder(code, msg)
 
     def FuturesOrder(self, msg: dict):
         msg = CallbackHandler().update_futures_msg(msg)
@@ -357,6 +366,10 @@ class OrderTool(FuturesMargin):
         order = msg['order']
         symbol = CallbackHandler.fut_symbol(msg)
         operation = msg['operation']
+
+        conf = TradeDataHandler.getStrategyConfig(symbol)
+        if conf and symbol in conf.FILTER_OUT:
+            return
 
         if self.is_new_order(operation):
             TradeDataHandler.update_deal_list(symbol, order['oc_type'])
