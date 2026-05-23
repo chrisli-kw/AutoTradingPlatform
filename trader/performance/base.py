@@ -122,8 +122,8 @@ def convert_statement(df, mode='trading', **kwargs):
 def compute_profits(tb):
     win_loss = computeWinLoss(tb)
     total_profit = tb.profit.sum()
-    df_profit = tb[tb.profit > 0]
-    df_loss = tb[tb.profit <= 0]
+    df_profit = tb[tb.profit > 0].copy()
+    df_loss = tb[tb.profit <= 0].copy()
 
     has_profits = df_profit.shape[0]
     has_loss = df_loss.shape[0]
@@ -131,20 +131,29 @@ def compute_profits(tb):
     # 毛利/毛損
     gross_profit = df_profit.profit.sum() if has_profits else 0
     gross_loss = df_loss.profit.sum() if has_loss else 0
-    profit_factor = round(
-        abs(gross_profit/gross_loss), 2) if gross_loss else np.inf
+
+    if has_loss:
+        profit_factor = round(abs(gross_profit/gross_loss), 2)
+        ratio1 = round(
+            abs(df_profit.profit.mean()/df_loss.profit.mean()), 2)
+    else:
+        profit_factor = np.inf
+        ratio1 = np.inf
+
     if total_profit < 0:
         profit_factor *= -1
 
     # 平均獲利/虧損金額
+    df_profit.profit /= df_profit.qty
     mean_profit = df_profit.profit.mean() if has_profits else 0
-    mean_loss = df_loss.profit.mean() if has_loss else 0
     median_profit = df_profit.profit.median() if has_profits else 0
-    median_loss = df_loss.profit.median() if has_loss else 0
     max_profit = df_profit.profit.max() if has_profits else 0
+
+    df_loss.profit /= df_loss.qty
+    mean_loss = df_loss.profit.mean() if has_loss else 0
+    median_loss = df_loss.profit.median() if has_loss else 0
     max_loss = df_loss.profit.min() if has_loss else 0
 
-    ratio1 = round(abs(mean_profit/mean_loss), 2) if mean_loss else np.inf
     profits = {
         'TotalTrade': tb.shape[0],
         'Wins': win_loss[True],
