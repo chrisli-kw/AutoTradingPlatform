@@ -73,7 +73,10 @@ class WatchListTool:
     def update_monitor(self, oc_type: str, data: dict):
         '''更新監控庫存(成交回報)'''
 
-        target = data['code']
+        try:
+            target = data['code']
+        except KeyError:
+            target = data['contract']['code']
         conf = TradeDataHandler.getStrategyConfig(target)
 
         if conf is None:
@@ -409,30 +412,36 @@ class Position:
         return avg_cost
 
     def close(self, inputs: dict):
+        name = inputs['name']
         price = inputs['price']
-        qty = min(inputs.get('quantity', 0), self.total_qty[inputs['name']])
+        qty = min(inputs.get('quantity', 0), self.total_qty[name])
         reason = inputs.get('reason', '平倉')
 
         closed_qty = 0
-        profit = 0.0
-        entries = [e for e in self.entries if e['name'] == inputs['name']]
-        avg_cost = 0
+        total_profit = 0.0
+
+        entries = [e for e in self.entries if e['name'] == name]
+
         while closed_qty < qty and entries:
-            if entries[0]['quantity'] > qty:
-                entry = entries[0]
-                e_qty = qty
-                entry['quantity'] -= qty
-                self.entries[self.entries.index(entry)] = entry
+            entry = entries[0]
+            remaining_qty = qty - closed_qty
+
+            if entry['quantity'] > remaining_qty:
+                e_qty = remaining_qty
+                entry['quantity'] -= e_qty
                 self.update_entries(entry)
             else:
-                entry = entries.pop(0)
-                entry = self.entries.pop(self.entries.index(entry))
+                entries.pop(0)
+                self.entries.remove(entry)
                 e_qty = entry['quantity']
                 self.delete_entries(entry)
 
             closed_qty += e_qty
+
             entry_price = entry['price']
             profit = (price - entry_price) * e_qty
+            total_profit += profit
+
             self.exits.append({
                 'entry_price': entry_price,
                 'exit_price': price,
@@ -443,10 +452,11 @@ class Position:
                 'open_reason': entry.get('reason', '建倉'),
                 'reason': reason
             })
-            avg_cost = self.average_cost()
-        self.total_qty[inputs['name']] -= closed_qty
-        self.total_profit += profit
-        return avg_cost
+
+        self.total_qty[name] -= closed_qty
+        self.total_profit += total_profit
+
+        return self.average_cost()
 
     def is_open(self, name: str):
         return self.total_qty.get(name, 0) > 0
