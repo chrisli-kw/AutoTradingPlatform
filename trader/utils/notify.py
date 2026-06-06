@@ -170,6 +170,10 @@ class Notification:
         text = f"\n【成交】{name}({code+delivery_month})\n【帳號】{account}\n【{msg['action']}】{quantity}口 {price}元"
         self.send.post(text)
 
+    def post_human_deal(self, name: str, quantity: int):
+        text = f"【更新部位】手動下單\n 最新部位: {name} - {quantity}"
+        self.send.post(text)
+
     def post_put_call_ratio(self, df_pcr: pd.DataFrame):
         '''發送推播-Put/Call Ratio'''
 

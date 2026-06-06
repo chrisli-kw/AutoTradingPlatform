@@ -10,7 +10,8 @@ from .database.tables import SecurityInfo, PositionTable
 from .time import time_tool
 from .file import file_handler
 from .objects.data import TradeData
-from ..config import API, StrategyList, Cost
+from .notify import Notification
+from ..config import API, StrategyList, Cost, NotifyConfig
 
 
 class WatchListTool:
@@ -146,7 +147,8 @@ class WatchListTool:
         if quantity <= 0:
             return
 
-        price = order.get('price', data.get('price', data.get('cost_price', 0))) or 0
+        price = order.get('price', data.get(
+            'price', data.get('cost_price', 0))) or 0
         if price == 0:
             price = TradeDataHandler.getQuotesNow(target).get('price', 0)
 
@@ -167,6 +169,13 @@ class WatchListTool:
             conf.positions.open(inputs)
         elif oc_type == 'Cover':
             conf.positions.close(inputs)
+
+        # Post notification
+        entries = [e for e in conf.positions.entries if e['name'] == target]
+        name = entries[0]['name'] if entries else target
+        quantity = sum(e['quantity'] for e in entries)
+        Notification(NotifyConfig, account=self.account_name).post_human_deal(
+            name, quantity)
 
 
 class TradeDataHandler:
