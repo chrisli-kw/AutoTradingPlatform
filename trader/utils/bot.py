@@ -12,7 +12,8 @@ from telegram.ext import (
     filters,
 )
 
-from ..config import NotifyConfig
+from ..config import NotifyConfig, StrategyList
+from .notify import Notification
 from .objects.data import TradeData
 from .database import db
 from .database.tables import SecurityInfo
@@ -67,6 +68,12 @@ class TelegramBot:
             self.app.add_handler(CommandHandler("stop", self.cmd_stop))
             self.app.add_handler(CommandHandler("status", self.cmd_status))
             self.app.add_handler(CommandHandler("position", self.cmd_position))
+            self.app.add_handler(CommandHandler(
+                "update_max_qty", self.cmd_update_max_qty))
+            self.app.add_handler(MessageHandler(
+                filters.Regex(r"^/update-max-qty(?:\s|$)"),
+                self.cmd_update_max_qty)
+            )
 
             # 後備文字處理器（防漏掉）
             self.app.add_handler(MessageHandler(
@@ -184,6 +191,23 @@ class TelegramBot:
         except Exception:
             return None
 
+    def _parse_update_max_qty_args(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if context.args:
+            raw = ' '.join(context.args)
+        elif update and update.effective_message:
+            raw = (update.effective_message.text or '').strip()
+            raw = raw.split(maxsplit=1)[1] if ' ' in raw else ''
+        else:
+            raw = ''
+
+        parts = raw.rsplit('-', 2)
+        if len(parts) != 3 or '-' not in parts[0]:
+            return None
+
+        account_strategy, target, max_qty = parts
+        account, strategy = account_strategy.split('-', 1)
+        return account.strip(), strategy.strip(), target.strip(), max_qty.strip()
+
     # ========== Command Response (async) ==========
 
     async def cmd_pause(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -251,6 +275,48 @@ class TelegramBot:
             await self.post(update, msg=f"📦 [{name}] 持倉：{pos_dict}")
         else:
             await self.post(update, "⚠️ 請輸入帳號名稱，例如 `/position account_name`")
+
+    async def cmd_update_max_qty(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not self._check_permission(update):
+            return
+
+        parsed = self._parse_update_max_qty_args(update, context)
+        usage = "Usage: /update_max_qty account-strategy-target-max_qty"
+        if parsed is None:
+            await self.post(update, usage)
+            return
+
+        account, strategy, target, max_qty = parsed
+        if account not in self.account_names:
+            await self.post(update, f"Unknown account: {account}")
+            return
+
+        try:
+            max_qty = int(max_qty)
+        except ValueError:
+            await self.post(update, f"Invalid max_qty: {max_qty}")
+            return
+
+        if max_qty < 0:
+            await self.post(update, "max_qty must be >= 0")
+            return
+
+        conf = StrategyList.Config.get(strategy)
+        if conf is None:
+            await self.post(update, f"Unknown strategy: {strategy}")
+            return
+
+        if not hasattr(conf, 'max_qty'):
+            await self.post(update, f"Strategy has no max_qty: {strategy}")
+            return
+
+        old_qty = conf.max_qty.get(target)
+        conf.max_qty[target] = max_qty
+        logging.info(
+            f'[Strategy max_qty]Update|{account}|{strategy}|{target}|{old_qty}->{max_qty}')
+        notifier = Notification(NotifyConfig, account=account)
+        notifier.post_update_max_qty(target, max_qty)
+        await self.post(update, f"【更新部位】最大數量\n{target}: {max_qty}")
 
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_permission(update):

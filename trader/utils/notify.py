@@ -172,6 +172,12 @@ class Notification:
 
     def post_human_deal(self, name: str, quantity: int):
         text = f"【更新部位】手動下單\n 最新部位: {name} - {quantity}"
+        logging.info(text.replace('\n', ' | '))
+        self.send.post(text)
+
+    def post_update_max_qty(self, name: str, quantity: int):
+        text = f"【更新部位】最大數量\n{name}: {quantity}"
+        logging.info(text.replace('\n', ' | '))
         self.send.post(text)
 
     def post_put_call_ratio(self, df_pcr: pd.DataFrame):
