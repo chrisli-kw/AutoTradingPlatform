@@ -339,7 +339,7 @@ class TelegramBot:
         if not self._check_permission(update):
             return
 
-        parsed = self._parse_check_max_qty_args(update, context)  # TODO
+        parsed = self._parse_check_max_qty_args(update, context)
         usage = "Usage: /check_max_qty account-strategy-target"
         if parsed is None:
             await self.post(update, usage)
