@@ -10,7 +10,8 @@ from .database.tables import SecurityInfo, PositionTable
 from .time import time_tool
 from .file import file_handler
 from .objects.data import TradeData
-from ..config import API, StrategyList, Cost
+from .notify import Notification
+from ..config import API, StrategyList, Cost, NotifyConfig
 
 
 class WatchListTool:
@@ -70,7 +71,7 @@ class WatchListTool:
                 f'[Monitor List]Check|{target}|{is_empty}|quantity: {quantity}; position: {position}|')
         return is_empty
 
-    def update_monitor(self, oc_type: str, data: dict):
+    def update_monitor(self, oc_type: str, data: dict, sync_position: bool = False):
         '''更新監控庫存(成交回報)'''
 
         try:
@@ -121,10 +122,13 @@ class WatchListTool:
                 yd_quantity=0,
                 order_cond=data['order'].get('order_cond', 'Cash'),
                 timestamp=datetime.now(),
-                position=int(100*conf.open_qty/max_qty),
+                position=int(100*conf.open_qty/max_qty) if max_qty > 0 else 0,
                 strategy=TradeData.Securities.Strategy.get(target, 'unknown')
             )
             db.add_data(SecurityInfo, **data)
+
+        if sync_position:
+            self.sync_strategy_position(target, oc_type, data)
 
     def check_remove_monitor(self, target: str):
         is_empty = self.check_is_empty(target)
@@ -132,6 +136,46 @@ class WatchListTool:
             condition = self.match_target(target)
             db.delete(SecurityInfo, condition)
         return is_empty
+
+    def sync_strategy_position(self, target: str, oc_type: str, data: dict):
+        conf = TradeDataHandler.getStrategyConfig(target)
+        if conf is None or not hasattr(conf, 'positions'):
+            return
+
+        order = data.get('order', data)
+        quantity = int(order.get('quantity', data.get('quantity', 0)) or 0)
+        if quantity <= 0:
+            return
+
+        price = order.get('price', data.get(
+            'price', data.get('cost_price', 0))) or 0
+        if price == 0:
+            price = TradeDataHandler.getQuotesNow(target).get('price', 0)
+
+        strategy = TradeData.Securities.Strategy.get(target)
+        inputs = {
+            'mode': TradeData.Account.Mode,
+            'account': self.account_name,
+            'strategy': strategy,
+            'name': target,
+            'timestamp': datetime.now(),
+            'price': price,
+            'quantity': quantity,
+            'reason': 'manual callback',
+        }
+
+        conf.positions.reload()
+        if oc_type == 'New':
+            conf.positions.open(inputs)
+        elif oc_type == 'Cover':
+            conf.positions.close(inputs)
+
+        # Post notification
+        entries = [e for e in conf.positions.entries if e['name'] == target]
+        name = entries[0]['name'] if entries else target
+        total_qty = sum(e['quantity'] for e in entries)
+        Notification(NotifyConfig, account=self.account_name).post_human_deal(
+            name, oc_type, quantity, total_qty)
 
 
 class TradeDataHandler:
@@ -378,15 +422,22 @@ class Position:
         self.total_profit = 0.0
 
         if not backtest:
-            df = db.query(
-                PositionTable,
-                PositionTable.mode == TradeData.Account.Mode,
-                PositionTable.account == account_name,
-                PositionTable.strategy == strategy
-            )
-            self.entries = df.to_dict('records')
-            self.total_qty = df.groupby(
-                'name').quantity.sum().to_dict() if not df.empty else {}
+            self.reload()
+
+    def reload(self):
+        if self.backtest:
+            return self
+
+        df = db.query(
+            PositionTable,
+            PositionTable.mode == TradeData.Account.Mode,
+            PositionTable.account == self.account_name,
+            PositionTable.strategy == self.strategy
+        )
+        self.entries = df.to_dict('records')
+        self.total_qty = df.groupby(
+            'name').quantity.sum().to_dict() if not df.empty else {}
+        return self
 
     def average_cost(self):
         if self.entries:
@@ -414,7 +465,7 @@ class Position:
     def close(self, inputs: dict):
         name = inputs['name']
         price = inputs['price']
-        qty = min(inputs.get('quantity', 0), self.total_qty[name])
+        qty = min(inputs.get('quantity', 0), self.total_qty.get(name, 0))
         reason = inputs.get('reason', '平倉')
 
         closed_qty = 0
@@ -453,7 +504,7 @@ class Position:
                 'reason': reason
             })
 
-        self.total_qty[name] -= closed_qty
+        self.total_qty[name] = self.total_qty.get(name, 0) - closed_qty
         self.total_profit += total_profit
 
         return self.average_cost()

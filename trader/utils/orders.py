@@ -40,6 +40,70 @@ class OrderTool(FuturesMargin):
             'op_type', 'account_id', 'msg',
 
         ])
+        self._auto_order_callbacks = []
+
+    @staticmethod
+    def _order_key(target: str, action: str, oc_type: str, quantity: int):
+        return (
+            target,
+            action or '',
+            oc_type or '',
+            int(quantity or 0)
+        )
+
+    def _register_auto_order(self, target: str, action: str, oc_type: str, quantity: int):
+        key = self._order_key(target, action, oc_type, quantity)
+        self._auto_order_callbacks.append((datetime.now(), key))
+
+    def _prune_auto_orders(self, max_age: int = 60):
+        now = datetime.now()
+        self._auto_order_callbacks = [
+            item for item in self._auto_order_callbacks
+            if (now - item[0]).total_seconds() <= max_age
+        ]
+
+    def _pop_auto_order(self, key: tuple):
+        for i, item in enumerate(self._auto_order_callbacks):
+            if item[1] == key:
+                self._auto_order_callbacks.pop(i)
+                return True
+        return False
+
+    def _pop_auto_order_like(self, target: str, action: str, oc_type: str):
+        for i, item in enumerate(self._auto_order_callbacks):
+            key = item[1]
+            if key[:3] == (target, action or '', oc_type or ''):
+                self._auto_order_callbacks.pop(i)
+                return True
+        return False
+
+    def _consume_auto_order(self, target: str, order: dict):
+        self._prune_auto_orders()
+
+        action = order.get('action', '')
+        oc_type = order.get('oc_type', '')
+        key = self._order_key(
+            target,
+            action,
+            oc_type,
+            order.get('quantity', 0)
+        )
+        if self._pop_auto_order(key):
+            return True
+
+        stock_key = self._order_key(
+            target,
+            action,
+            '',
+            order.get('quantity', 0)
+        )
+        if self._pop_auto_order(stock_key):
+            return True
+
+        return (
+            self._pop_auto_order_like(target, action, oc_type) or
+            self._pop_auto_order_like(target, action, '')
+        )
 
     @staticmethod
     def is_new_order(operation: dict):
@@ -268,11 +332,12 @@ class OrderTool(FuturesMargin):
             q = 5 if order_lot == 'Common' else quantity
             enough_to_place = self.checkEnoughToPlace(target)
             while quantity > 0 and enough_to_place:
+                order_quantity = min(quantity, q)
                 order = API.Order(
                     # 價格 (市價單 = 0)
                     price=price,
                     # 數量 (最小1張; 零股最小50股 or 全部庫存)
-                    quantity=min(quantity, q),
+                    quantity=order_quantity,
                     # 動作: 買進/賣出
                     action=content.action,
                     # 市價單/限價單
@@ -289,9 +354,15 @@ class OrderTool(FuturesMargin):
                     # 先賣後買: True, False
                     daytrade_short=content.daytrade_short,
                 )
+                self._register_auto_order(
+                    target,
+                    content.action,
+                    '' if is_stock else content.octype,
+                    order_quantity
+                )
                 result = API.place_order(contract, order)
                 # self.check_order_status(result, is_stock)
-                quantity -= q
+                quantity -= order_quantity
 
     def StockOrder(self, msg: dict):
         code = msg['contract']['code']
@@ -344,7 +415,12 @@ class OrderTool(FuturesMargin):
         # 更新監控庫存
         df = db.query(SecurityInfo, self.WatchListTool.match_target(code))
         order['oc_type'] = 'New' if df.empty else 'Cover'
-        self.WatchListTool.update_monitor(order['oc_type'], msg)
+        is_auto_order = self._consume_auto_order(code, order)
+        self.WatchListTool.update_monitor(
+            order['oc_type'],
+            msg,
+            sync_position=(not is_auto_order and self.is_new_order(operation))
+        )
 
     def StockDeal(self, msg: dict):
         msg = CallbackHandler.update_stock_msg(msg)
@@ -381,4 +457,9 @@ class OrderTool(FuturesMargin):
             TradeDataHandler.update_deal_list(symbol, 'Cancel')
 
         # 更新監控庫存
-        self.WatchListTool.update_monitor(order['oc_type'], msg)
+        is_auto_order = self._consume_auto_order(symbol, order)
+        self.WatchListTool.update_monitor(
+            order['oc_type'],
+            msg,
+            sync_position=(not is_auto_order and self.is_new_order(operation))
+        )
