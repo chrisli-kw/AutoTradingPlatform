@@ -173,9 +173,9 @@ class WatchListTool:
         # Post notification
         entries = [e for e in conf.positions.entries if e['name'] == target]
         name = entries[0]['name'] if entries else target
-        quantity = sum(e['quantity'] for e in entries)
+        total_qty = sum(e['quantity'] for e in entries)
         Notification(NotifyConfig, account=self.account_name).post_human_deal(
-            name, quantity)
+            name, oc_type, quantity, total_qty)
 
 
 class TradeDataHandler:

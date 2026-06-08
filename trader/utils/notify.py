@@ -170,8 +170,21 @@ class Notification:
         text = f"\n【成交】{name}({code+delivery_month})\n【帳號】{account}\n【{msg['action']}】{quantity}口 {price}元"
         self.send.post(text)
 
-    def post_human_deal(self, name: str, quantity: int):
-        text = f"【更新部位】手動下單\n 最新部位: {name} - {quantity}"
+    def post_human_deal(
+            self,
+            name: str,
+            oc_type: str,
+            quantity: int,
+            total_qty: int
+    ):
+        if oc_type == 'New':
+            action = '建倉'
+        elif oc_type == 'Cover':
+            action = '平倉'
+        else:
+            action = '下單'
+
+        text = f"【更新部位】手動{action} {quantity} 口\n 最新部位: {name} - {total_qty}"
         logging.info(text.replace('\n', ' | '))
         self.send.post(text)
 
