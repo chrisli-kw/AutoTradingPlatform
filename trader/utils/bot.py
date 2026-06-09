@@ -329,8 +329,12 @@ class TelegramBot:
             await self.post(update, f"Strategy has no max_qty: {strategy}")
             return
 
+        if not hasattr(conf, 'update_max_qty'):
+            await self.post(update, f"Strategy has no update_max_qty, max_qty will be temporary updated")
+
         old_qty = conf.max_qty.get(target)
         conf.max_qty[target] = max_qty
+        conf.update_max_qty(account, strategy, target, max_qty)
         logging.info(
             f'[Strategy max_qty]Update|{account}|{strategy}|{target}|{old_qty}->{max_qty}')
         await self.post(update, f"【{account} 更新部位】最大數量\n{target}: {max_qty}")
