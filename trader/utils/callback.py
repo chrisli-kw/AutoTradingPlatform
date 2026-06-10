@@ -39,6 +39,23 @@ class CallbackHandler:
         return symbol
 
     @staticmethod
+    def fut_deal_symbol(msg: dict):
+        symbol = msg['code'] + msg['delivery_month']
+        is_option = (
+            msg.get('security_type') == 'OPT' or
+            msg.get('option_right') not in [None, '', 'Future']
+        )
+        if is_option:
+            option = msg.get('option_right', '')[6:7]
+            symbol = f'{symbol}{int(msg.get("strike_price", 0))}{option}'
+
+        if symbol not in TradeData.Quotes.NowTargets:
+            for k in TradeData.Quotes.NowTargets:
+                if symbol in k:
+                    return k
+        return symbol
+
+    @staticmethod
     def events(resp_code: int, event_code: int, info: str, event: str, env):
         if 'Subscription Not Found' in info:
             logging.warning(info)

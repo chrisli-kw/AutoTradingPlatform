@@ -70,6 +70,10 @@ class StrategyExecutor(AccountHandler, Subscriber):
             (
                 stat == constant.OrderState.FuturesOrder and
                 msg['order']['account']['account_id'] != API.futopt_account.account_id
+            ) or
+            (
+                stat == constant.OrderState.FuturesDeal and
+                msg['account_id'] != API.futopt_account.account_id
             )
         ):
             return
@@ -88,7 +92,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         elif stat == constant.OrderState.FuturesDeal:
             self.notifier.post_fDeal(stat, msg)
-            CallbackHandler.FuturesDeal(msg)
+            self.Order.FuturesDeal(msg)
 
     def init_account(self):
         # 登入

@@ -41,6 +41,7 @@ class OrderTool(FuturesMargin):
 
         ])
         self._auto_order_callbacks = []
+        self._futures_order_meta = {}
 
     @staticmethod
     def _order_key(target: str, action: str, oc_type: str, quantity: int):
@@ -110,8 +111,42 @@ class OrderTool(FuturesMargin):
         return operation['op_code'] == '00' or operation['op_msg'] == ''
 
     @staticmethod
+    def is_new_order_submit(operation: dict):
+        return (
+            operation.get('op_type') == 'New' and
+            operation.get('op_code') == '00' and
+            operation.get('op_msg') == ''
+        )
+
+    @staticmethod
     def is_cancel_order(operation: dict):
         return operation['op_type'] == 'Cancel'
+
+    def _set_futures_order_meta(self, order: dict, target: str, is_auto_order: bool):
+        data = {
+            'target': target,
+            'oc_type': order.get('oc_type', ''),
+            'action': order.get('action', ''),
+            'quantity': order.get('quantity', 0),
+            'is_auto_order': is_auto_order,
+        }
+        for key in ['ordno', 'seqno', 'id']:
+            value = order.get(key)
+            if value:
+                self._futures_order_meta[value] = data
+
+    def _get_futures_order_meta(self, msg: dict):
+        for key in ['ordno', 'seqno', 'id', 'trade_id']:
+            value = msg.get(key)
+            if value and value in self._futures_order_meta:
+                return self._futures_order_meta[value]
+        return {}
+
+    def _remove_futures_order_meta(self, order: dict):
+        for key in ['ordno', 'seqno', 'id']:
+            value = order.get(key)
+            if value:
+                self._futures_order_meta.pop(value, None)
 
     @staticmethod
     def is_insufficient_quota(operation: dict):
@@ -447,19 +482,52 @@ class OrderTool(FuturesMargin):
         if conf and symbol in conf.FILTER_OUT:
             return
 
-        if self.is_new_order(operation):
+        if self.is_new_order_submit(operation):
+            is_auto_order = self._consume_auto_order(symbol, order)
+            self._set_futures_order_meta(order, symbol, is_auto_order)
             TradeDataHandler.update_deal_list(symbol, order['oc_type'])
             self.appendOrder(symbol, order)
 
         # 若刪單成功就自清單移除
         if self.is_cancel_order(operation):
             self.deleteOrder(symbol)
+            self._remove_futures_order_meta(order)
             TradeDataHandler.update_deal_list(symbol, 'Cancel')
 
-        # 更新監控庫存
-        is_auto_order = self._consume_auto_order(symbol, order)
+    def FuturesDeal(self, msg: dict):
+        symbol = CallbackHandler.fut_deal_symbol(msg)
+
+        conf = TradeDataHandler.getStrategyConfig(symbol)
+        if conf and symbol in conf.FILTER_OUT:
+            return
+
+        meta = self._get_futures_order_meta(msg)
+        oc_type = meta.get('oc_type')
+        is_auto_order = meta.get('is_auto_order', False)
+
+        if not oc_type:
+            action = msg.get('action', '')
+            for action_type in ['New', 'Cover', '']:
+                if self._pop_auto_order_like(symbol, action, action_type):
+                    is_auto_order = True
+                    oc_type = action_type
+                    break
+
+        if not oc_type:
+            df = db.query(SecurityInfo, self.WatchListTool.match_target(symbol))
+            oc_type = 'New' if df.empty else 'Cover'
+
+        data = {
+            'code': symbol,
+            'order': {
+                'action': msg.get('action', ''),
+                'quantity': msg.get('quantity', 0),
+                'price': msg.get('price', 0),
+                'order_cond': 'Cash',
+            }
+        }
         self.WatchListTool.update_monitor(
-            order['oc_type'],
-            msg,
-            sync_position=(not is_auto_order and self.is_new_order(operation))
+            oc_type,
+            data,
+            sync_position=not is_auto_order
         )
