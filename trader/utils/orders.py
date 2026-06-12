@@ -119,17 +119,29 @@ class OrderTool(FuturesMargin):
         )
 
     @staticmethod
+    def is_accepted_order_operation(operation: dict):
+        return (
+            operation.get('op_code') == '00' and
+            operation.get('op_type') != 'Cancel'
+        )
+
+    @staticmethod
     def is_cancel_order(operation: dict):
         return operation['op_type'] == 'Cancel'
 
-    def _set_futures_order_meta(self, order: dict, target: str, is_auto_order: bool):
+    def _set_futures_order_meta(self, msg: dict, target: str, is_auto_order: bool):
+        order = msg['order']
+        existing = self._get_futures_order_meta(order)
         data = {
+            'order_msg': msg,
             'target': target,
-            'oc_type': order.get('oc_type', ''),
-            'action': order.get('action', ''),
-            'quantity': order.get('quantity', 0),
-            'is_auto_order': is_auto_order,
+            'oc_type': order.get('oc_type', existing.get('oc_type', '')),
+            'action': order.get('action', existing.get('action', '')),
+            'quantity': order.get('quantity', existing.get('quantity', 0)),
+            'filled_quantity': existing.get('filled_quantity', 0),
+            'is_auto_order': existing.get('is_auto_order', is_auto_order),
         }
+        logging.info(f'[FuturesOrder.Callback]{msg}')
         for key in ['ordno', 'seqno', 'id']:
             value = order.get(key)
             if value:
@@ -142,11 +154,34 @@ class OrderTool(FuturesMargin):
                 return self._futures_order_meta[value]
         return {}
 
+    def _update_futures_order_filled(self, msg: dict, meta: dict):
+        if not meta:
+            return
+
+        meta['filled_quantity'] = (
+            meta.get('filled_quantity', 0) + int(msg.get('quantity', 0) or 0)
+        )
+        if meta['filled_quantity'] < int(meta.get('quantity', 0) or 0):
+            return
+
+        order = meta.get('order_msg', {}).get('order', {})
+        self._remove_futures_order_meta(order)
+
     def _remove_futures_order_meta(self, order: dict):
         for key in ['ordno', 'seqno', 'id']:
             value = order.get(key)
             if value:
                 self._futures_order_meta.pop(value, None)
+
+    def _infer_futures_oc_type(self, target: str, action: str):
+        df = db.query(SecurityInfo, self.WatchListTool.match_target(target))
+        if df.empty:
+            return 'New'
+
+        current_action = df.iloc[0].action
+        if current_action == action:
+            return 'New'
+        return 'Cover'
 
     @staticmethod
     def is_insufficient_quota(operation: dict):
@@ -482,11 +517,12 @@ class OrderTool(FuturesMargin):
         if conf and symbol in conf.FILTER_OUT:
             return
 
-        if self.is_new_order_submit(operation):
+        if self.is_accepted_order_operation(operation):
             is_auto_order = self._consume_auto_order(symbol, order)
-            self._set_futures_order_meta(order, symbol, is_auto_order)
-            TradeDataHandler.update_deal_list(symbol, order['oc_type'])
-            self.appendOrder(symbol, order)
+            self._set_futures_order_meta(msg, symbol, is_auto_order)
+            if self.is_new_order_submit(operation):
+                TradeDataHandler.update_deal_list(symbol, order['oc_type'])
+                self.appendOrder(symbol, order)
 
         # 若刪單成功就自清單移除
         if self.is_cancel_order(operation):
@@ -514,8 +550,8 @@ class OrderTool(FuturesMargin):
                     break
 
         if not oc_type:
-            df = db.query(SecurityInfo, self.WatchListTool.match_target(symbol))
-            oc_type = 'New' if df.empty else 'Cover'
+            oc_type = self._infer_futures_oc_type(
+                symbol, msg.get('action', ''))
 
         data = {
             'code': symbol,
@@ -531,3 +567,4 @@ class OrderTool(FuturesMargin):
             data,
             sync_position=not is_auto_order
         )
+        self._update_futures_order_filled(msg, meta)
