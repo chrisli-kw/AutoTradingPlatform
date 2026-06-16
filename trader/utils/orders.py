@@ -41,6 +41,7 @@ class OrderTool(FuturesMargin):
 
         ])
         self._auto_order_callbacks = []
+        self._auto_order_fills = []
         self._futures_order_meta = {}
 
     @staticmethod
@@ -55,12 +56,26 @@ class OrderTool(FuturesMargin):
     def _register_auto_order(self, target: str, action: str, oc_type: str, quantity: int):
         key = self._order_key(target, action, oc_type, quantity)
         self._auto_order_callbacks.append((datetime.now(), key))
+        self._auto_order_fills.append({
+            'time': datetime.now(),
+            'target': target,
+            'action': action or '',
+            'oc_type': oc_type or '',
+            'remaining': int(quantity or 0),
+        })
 
     def _prune_auto_orders(self, max_age: int = 60):
         now = datetime.now()
         self._auto_order_callbacks = [
             item for item in self._auto_order_callbacks
             if (now - item[0]).total_seconds() <= max_age
+        ]
+        self._auto_order_fills = [
+            item for item in self._auto_order_fills
+            if (
+                (now - item['time']).total_seconds() <= max_age and
+                item.get('remaining', 0) > 0
+            )
         ]
 
     def _pop_auto_order(self, key: tuple):
@@ -105,6 +120,35 @@ class OrderTool(FuturesMargin):
             self._pop_auto_order_like(target, action, oc_type) or
             self._pop_auto_order_like(target, action, '')
         )
+
+    def _consume_auto_order_fill(
+            self,
+            target: str,
+            action: str,
+            oc_type: str,
+            quantity: int
+    ):
+        self._prune_auto_orders()
+
+        quantity = int(quantity or 0)
+        if quantity <= 0:
+            return False
+
+        for item in self._auto_order_fills:
+            same_order = (
+                item['target'] == target and
+                item['action'] == (action or '') and
+                item['oc_type'] in [oc_type or '', '']
+            )
+            if not same_order:
+                continue
+
+            item['remaining'] -= quantity
+            if item['remaining'] <= 0:
+                self._auto_order_fills.remove(item)
+            return True
+
+        return False
 
     @staticmethod
     def is_new_order(operation: dict):
@@ -540,11 +584,17 @@ class OrderTool(FuturesMargin):
         meta = self._get_futures_order_meta(msg)
         oc_type = meta.get('oc_type')
         is_auto_order = meta.get('is_auto_order', False)
+        action = msg.get('action', '')
+        quantity = msg.get('quantity', 0)
 
         if not oc_type:
-            action = msg.get('action', '')
             for action_type in ['New', 'Cover', '']:
-                if self._pop_auto_order_like(symbol, action, action_type):
+                if self._consume_auto_order_fill(
+                        symbol,
+                        action,
+                        action_type,
+                        quantity
+                ):
                     is_auto_order = True
                     oc_type = action_type
                     break
@@ -552,12 +602,14 @@ class OrderTool(FuturesMargin):
         if not oc_type:
             oc_type = self._infer_futures_oc_type(
                 symbol, msg.get('action', ''))
+        elif is_auto_order:
+            self._consume_auto_order_fill(symbol, action, oc_type, quantity)
 
         data = {
             'code': symbol,
             'order': {
-                'action': msg.get('action', ''),
-                'quantity': msg.get('quantity', 0),
+                'action': action,
+                'quantity': quantity,
                 'price': msg.get('price', 0),
                 'order_cond': 'Cash',
             }

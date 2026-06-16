@@ -166,9 +166,14 @@ class WatchListTool:
 
         conf.positions.reload()
         if oc_type == 'New':
-            conf.positions.open(inputs)
+            avg_cost = conf.positions.open(inputs)
         elif oc_type == 'Cover':
-            conf.positions.close(inputs)
+            avg_cost = conf.positions.close(inputs)
+        else:
+            avg_cost = conf.positions.average_cost()
+
+        if hasattr(conf, 'avg_cost'):
+            conf.avg_cost = avg_cost
 
         # Post notification
         entries = [e for e in conf.positions.entries if e['name'] == target]
@@ -455,12 +460,11 @@ class Position:
         name = inputs['name']
         total_qty = self.total_qty.get(name, 0)
         self.total_qty[name] = total_qty + inputs['quantity']
-        avg_cost = self.average_cost()
 
         if not self.backtest:
             db.add_data(PositionTable, **inputs)
 
-        return avg_cost
+        return self.average_cost()
 
     def close(self, inputs: dict):
         name = inputs['name']
