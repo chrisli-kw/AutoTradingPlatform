@@ -586,6 +586,7 @@ class OrderTool(FuturesMargin):
         is_auto_order = meta.get('is_auto_order', False)
         action = msg.get('action', '')
         quantity = msg.get('quantity', 0)
+        auto_fill_consumed = False
 
         if not oc_type:
             for action_type in ['New', 'Cover', '']:
@@ -597,12 +598,13 @@ class OrderTool(FuturesMargin):
                 ):
                     is_auto_order = True
                     oc_type = action_type
+                    auto_fill_consumed = True
                     break
 
         if not oc_type:
             oc_type = self._infer_futures_oc_type(
                 symbol, msg.get('action', ''))
-        elif is_auto_order:
+        elif is_auto_order and not auto_fill_consumed:
             self._consume_auto_order_fill(symbol, action, oc_type, quantity)
 
         data = {
