@@ -245,7 +245,7 @@ def thread_subscribe(user: str, targets: list):
         logging.info('Subscribe targets')
         for t in targets:
             target = get_contract(t, api=api)
-            api.quote.subscribe(target, quote_type='tick', version='v1')
+            api.subscribe(target, quote_type='tick', version='v1')
 
         logging.info(f'Done subscribe {len(targets)} targets')
         time.sleep(max((TimeEndStock - datetime.now()).total_seconds(), 0))

@@ -1,5 +1,5 @@
 import time
-from shioaji import constant
+import shioaji as sj
 
 from .config import TODAY, create_api
 from .utils.time import time_tool
@@ -28,13 +28,13 @@ class APITester:
         # 股票下單測試
         stockid = '2603'
         contract = self.api.Contracts.Stocks[stockid]
-        order = self.api.Order(
-            action=constant.Action.Buy,
+        order = sj.StockOrder(
+            action=sj.Action.Buy,
             price=contract.limit_up,
             quantity=1,
-            price_type=constant.StockPriceType.LMT,
-            order_type=constant.OrderType.ROD,
-            order_lot=constant.StockOrderLot.Common,
+            price_type=sj.StockPriceType.LMT,
+            order_type=sj.OrderType.ROD,
+            order_lot=sj.StockOrderLot.Common,
 
             account=self.api.stock_account
         )
@@ -48,13 +48,13 @@ class APITester:
         # 期貨下單測試
         futuresid = f'MXF{time_tool.GetDueMonth(TODAY)}'
         contract = self.api.Contracts.Futures.MXF[futuresid]
-        order = self.api.Order(
-            action=constant.Action.Buy,
+        order = sj.FuturesOrder(
+            action=sj.Action.Buy,
             price=contract.limit_up,
             quantity=1,
-            price_type=constant.FuturesPriceType.LMT,
-            order_type=constant.OrderType.ROD,
-            octype=constant.FuturesOCType.Auto,
+            price_type=sj.FuturesPriceType.LMT,
+            order_type=sj.OrderType.ROD,
+            octype=sj.FuturesOCType.Auto,
             account=self.api.futopt_account,
         )
         print(f'\n[futures order] content: {order}')
@@ -63,6 +63,26 @@ class APITester:
         print(f'[futures order] Done: {trade}')
 
         print(f'\nLog out {acct}: {self.api.logout()}\n')
+
+    def combo_order_test(self, env, buy_code: str, sell_code: str, price: float):
+        self.api.login(env.api_key(), env.secret_key())
+
+        leg_buy = self.api.Contracts.Options.TXO[buy_code]
+        leg_sell = self.api.Contracts.Options.TXO[sell_code]
+        combo = sj.ComboContract(legs=[
+            sj.ComboBase.from_contract(leg_buy, action=sj.Action.Buy),
+            sj.ComboBase.from_contract(leg_sell, action=sj.Action.Sell),
+        ])
+        order = sj.ComboOrder(
+            price=price,
+            quantity=1,
+            price_type=sj.FuturesPriceType.LMT,
+            order_type=sj.OrderType.IOC,
+            octype=sj.FuturesOCType.Auto,
+            account=self.api.futopt_account,
+        )
+        trade = self.api.place_comboorder(combo, order)
+        print(f'[combo order] Done: {trade}')
 
     def verify_test(self, env):
         self.api = create_api(simulation=False)

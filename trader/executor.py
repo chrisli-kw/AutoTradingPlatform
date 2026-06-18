@@ -2,7 +2,7 @@ import ssl
 import time
 import logging
 from collections import namedtuple
-from shioaji import constant, contracts
+import shioaji as sj
 from datetime import datetime, timedelta
 
 from . import __version__, picker, exec
@@ -60,37 +60,37 @@ class StrategyExecutor(AccountHandler, Subscriber):
         if (
             TradeData.Account.Simulate or
             (
-                stat == constant.OrderState.StockOrder and
+                stat == sj.OrderState.StockOrder and
                 msg['order']['account']['account_id'] != API.stock_account.account_id
             ) or
             (
-                stat == constant.OrderState.StockDeal and
+                stat == sj.OrderState.StockDeal and
                 msg['account_id'] != API.stock_account.account_id
             ) or
             (
-                stat == constant.OrderState.FuturesOrder and
+                stat == sj.OrderState.FuturesOrder and
                 msg['order']['account']['account_id'] != API.futopt_account.account_id
             ) or
             (
-                stat == constant.OrderState.FuturesDeal and
+                stat == sj.OrderState.FuturesDeal and
                 msg['account_id'] != API.futopt_account.account_id
             )
         ):
             return
 
-        if stat == constant.OrderState.StockOrder:
+        if stat == sj.OrderState.StockOrder:
             self.notifier.post_tftOrder(stat, msg)
             self.Order.StockOrder(msg)
 
-        elif stat == constant.OrderState.StockDeal:
+        elif stat == sj.OrderState.StockDeal:
             self.notifier.post_tftDeal(stat, msg)
             self.Order.StockDeal(msg)
 
-        elif stat == constant.OrderState.FuturesOrder:
+        elif stat == sj.OrderState.FuturesOrder:
             self.notifier.post_fOrder(stat, msg)
             self.Order.FuturesOrder(msg)
 
-        elif stat == constant.OrderState.FuturesDeal:
+        elif stat == sj.OrderState.FuturesDeal:
             self.notifier.post_fDeal(stat, msg)
             self.Order.FuturesDeal(msg)
 
@@ -225,7 +225,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
             strategy = TradeData.Securities.Strategy[target]
 
             contract = TradeData.Contracts.get(target)
-            is_stock = isinstance(contract, contracts.Stock)
+            is_stock = isinstance(contract, sj.Stock)
 
             # new position
             if data.empty:
@@ -403,7 +403,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         quantity = int(min(quantity, quantity_limit)/(1 - leverage))
         quantity = min(quantity, 499)
 
-        if not isinstance(contract, contracts.Stock):
+        if not isinstance(contract, sj.Stock):
             # 單位: 口
             return order_cond, quantity
 
@@ -418,7 +418,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         '''檢查個股可否融資融券'''
 
         contract = TradeData.Contracts.get(target)
-        if not isinstance(contract, contracts.Stock):
+        if not isinstance(contract, sj.Stock):
             return 'Cash'
 
         conf = TradeDataHandler.getStrategyConfig(target)
@@ -458,7 +458,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
             return False
 
         mode = conf.mode
-        if isinstance(contract, contracts.Stock):
+        if isinstance(contract, sj.Stock):
             quota = TradeDataHandler.getStocksQuota(mode)
             df = self.Order.filterOrderTable('Stocks')
             df = df[df.code.apply(len) == 4]
@@ -483,7 +483,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         # 1. 不可超過可交割金額
         # 2. 不可大於帳戶可委託金額上限
         # 3. 不可超過股票數上限
-        if isinstance(contract, contracts.Stock):
+        if isinstance(contract, sj.Stock):
             check_long = (
                 (amount1 <= TradeData.Account.DesposalMoney) &
                 (amount2 <= self.env.MARGING_TRADING_AMOUNT)

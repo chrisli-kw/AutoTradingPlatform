@@ -1,7 +1,7 @@
 import time
 import logging
 import pandas as pd
-from shioaji import constant, contracts
+import shioaji as sj
 from datetime import datetime
 from collections import namedtuple
 
@@ -25,9 +25,14 @@ class OrderTool(FuturesMargin):
                 'action_type',
                 'action', 'target', 'quantity',
                 'order_cond', 'octype',
-                'daytrade_short', 'reason'
+                'daytrade_short', 'reason',
+                'price', 'price_type', 'order_type',
+                'combo_legs'
             ],
-            defaults=['', '', '', 0, '', '', False, '']
+            defaults=[
+                '', '', '', 0, '', '', False, '',
+                None, None, None, None
+            ]
         )
         self.MsgOrder = namedtuple(
             typename='MsgOrder',
@@ -352,7 +357,7 @@ class OrderTool(FuturesMargin):
 
     def get_sell_quantity(self, content: namedtuple):
         contract = get_contract(content.target)
-        if content.quantity >= 1000 and isinstance(contract, contracts.Stock):
+        if content.quantity >= 1000 and isinstance(contract, sj.Stock):
             return content.quantity/1000
         return content.quantity
 
@@ -400,19 +405,121 @@ class OrderTool(FuturesMargin):
         '''Filter OrderTable by market'''
         return self.OrderTable[self.OrderTable.market == market].copy()
 
+    @staticmethod
+    def _enum_value(enum_class, value):
+        if value is None or isinstance(value, enum_class):
+            return value
+        return getattr(enum_class, str(value))
+
+    def _stock_order(
+            self,
+            content: namedtuple,
+            price: float,
+            quantity: int,
+            price_type: str,
+            order_lot: str
+    ):
+        return sj.StockOrder(
+            price=price,
+            quantity=quantity,
+            action=self._enum_value(sj.Action, content.action),
+            price_type=self._enum_value(sj.StockPriceType, price_type),
+            order_type=self._enum_value(
+                sj.OrderType,
+                self.content_attr(content, 'order_type', 'ROD') or 'ROD'
+            ),
+            order_cond=self._enum_value(
+                sj.StockOrderCond, content.order_cond or 'Cash'),
+            order_lot=self._enum_value(sj.StockOrderLot, order_lot),
+            account=API.stock_account,
+            daytrade_short=content.daytrade_short,
+        )
+
+    def _futures_order(
+            self,
+            content: namedtuple,
+            price: float,
+            quantity: int,
+            price_type: str
+    ):
+        return sj.FuturesOrder(
+            price=price,
+            quantity=quantity,
+            action=self._enum_value(sj.Action, content.action),
+            price_type=self._enum_value(sj.FuturesPriceType, price_type),
+            order_type=self._enum_value(
+                sj.OrderType,
+                self.content_attr(content, 'order_type', 'IOC') or 'IOC'
+            ),
+            octype=self._enum_value(sj.FuturesOCType, content.octype or 'Auto'),
+            account=API.futopt_account,
+        )
+
+    def _combo_order(self, content: namedtuple):
+        return sj.ComboOrder(
+            price=self.content_attr(content, 'price'),
+            quantity=content.quantity,
+            price_type=self._enum_value(
+                sj.FuturesPriceType,
+                self.content_attr(content, 'price_type', 'LMT') or 'LMT'),
+            order_type=sj.OrderType.IOC,
+            octype=self._enum_value(sj.FuturesOCType, content.octype or 'Auto'),
+            account=API.futopt_account,
+        )
+
+    def _combo_leg_contract(self, leg: dict):
+        contract = leg.get('contract')
+        if contract is not None:
+            return contract
+        return get_contract(leg['target'])
+
+    def _combo_contract(self, legs: list):
+        return sj.ComboContract(legs=[
+            sj.ComboBase.from_contract(
+                self._combo_leg_contract(leg),
+                action=self._enum_value(sj.Action, leg['action'])
+            )
+            for leg in legs
+        ])
+
+    def place_combo_order(self, content: namedtuple):
+        '''Place an options combo order.'''
+
+        if TradeData.Account.Simulate:
+            return self.appendOrder(content.target, content)
+
+        combo_legs = self.content_attr(content, 'combo_legs')
+        if not combo_legs:
+            raise ValueError('Combo order requires combo_legs.')
+        if self.content_attr(content, 'price') is None:
+            raise ValueError('Combo order requires net price.')
+
+        combo = self._combo_contract(combo_legs)
+        order = self._combo_order(content)
+        self._register_auto_order(
+            content.target,
+            content.action,
+            content.octype,
+            content.quantity
+        )
+        return API.place_comboorder(combo, order)
+
     def place_order(self, content: namedtuple):
         logging.debug(f'[OrderState.Content|{content}|')
 
         target = content.target
 
+        if self.content_attr(content, 'combo_legs'):
+            return self.place_combo_order(content)
+
         if target not in TradeData.BidAsk:
             return
 
         contract = TradeData.Contracts.get(target, get_contract(target))
-        is_stock = isinstance(contract, contracts.Stock)
+        is_stock = isinstance(contract, sj.Stock)
         quantity = self.get_sell_quantity(content)
-        price_type = 'MKT'
-        price = 0
+        price_type = self.content_attr(content, 'price_type', 'MKT') or 'MKT'
+        price = self.content_attr(content, 'price', 0) or 0
         order_lot = 'IntradayOdd' if content.quantity < 1000 and is_stock else 'Common'
 
         if is_stock:
@@ -447,27 +554,12 @@ class OrderTool(FuturesMargin):
             enough_to_place = self.checkEnoughToPlace(target)
             while quantity > 0 and enough_to_place:
                 order_quantity = min(quantity, q)
-                order = API.Order(
-                    # 價格 (市價單 = 0)
-                    price=price,
-                    # 數量 (最小1張; 零股最小50股 or 全部庫存)
-                    quantity=order_quantity,
-                    # 動作: 買進/賣出
-                    action=content.action,
-                    # 市價單/限價單
-                    price_type=price_type,
-                    # ROD:當天都可成交
-                    order_type=constant.OrderType.ROD if is_stock else constant.OrderType.IOC,
-                    # 委託類型: 現股/融資
-                    order_cond=content.order_cond if is_stock else 'Cash',
-                    # 整張或零股
-                    order_lot=order_lot,
-                    # {Auto, New, Cover, DayTrade}(自動、新倉、平倉、當沖)
-                    octype='Auto' if is_stock else content.octype,
-                    account=API.stock_account if is_stock else API.futopt_account,
-                    # 先賣後買: True, False
-                    daytrade_short=content.daytrade_short,
-                )
+                if is_stock:
+                    order = self._stock_order(
+                        content, price, order_quantity, price_type, order_lot)
+                else:
+                    order = self._futures_order(
+                        content, price, order_quantity, price_type)
                 self._register_auto_order(
                     target,
                     content.action,

@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import shioaji as sj
 from datetime import datetime
-from shioaji.account import StockAccount
 
 from ..config import API, PATH, TODAY, TODAY_STR
 from . import concat_df, get_contract
@@ -49,7 +48,7 @@ class AccountInfo:
 
         if nth_account > 1:
             accounts = API.list_accounts()
-            accounts = [a for a in accounts if isinstance(a, StockAccount)]
+            accounts = [a for a in accounts if isinstance(a, sj.StockAccount)]
             if len(accounts) > 1:
                 API.set_default_account(accounts[nth_account-1])
             else:
@@ -94,9 +93,12 @@ class AccountInfo:
     def _obj_2_df(self, objects: list):
         '''把自API查詢得到的物件轉為DataFrame'''
         try:
-            return pd.DataFrame([o.__dict__ for o in objects])
+            return pd.DataFrame([o.dict() for o in objects])
         except:
-            return pd.DataFrame([{o[0]: o[1] for o in objects}])
+            try:
+                return pd.DataFrame([o.__dict__ for o in objects])
+            except:
+                return pd.DataFrame([{o[0]: o[1] for o in objects}])
 
     def create_info_table(self):
         if file_handler.Operate.is_in_dir(self.filename, f'{PATH}/daily_info/'):
@@ -336,7 +338,7 @@ class AccountInfo:
             try:
                 stocks = API.list_positions(
                     API.stock_account,
-                    unit=sj.constant.Unit.Share
+                    unit=sj.Unit.Share
                 )
                 stocks = self._obj_2_df(stocks)
                 break
