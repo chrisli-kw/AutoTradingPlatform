@@ -64,12 +64,13 @@ def get_contract(target: str, api=None):
     if api is None:
         api = API
 
-    if target[:3] in api.Contracts.Indexs.__dict__:
-        return api.Contracts.Indexs[target[:3]][target]
-    elif target[:3] in api.Contracts.Futures.__dict__:
-        return api.Contracts.Futures[target[:3]][target]
-    elif target[:3] in api.Contracts.Options.__dict__:
-        return api.Contracts.Options[target[:3]][target]
+    c_type = target[:3]
+    if api.Contracts.Indexs.get(c_type):
+        return api.Contracts.Indexs.get(c_type)[target]
+    elif api.Contracts.Futures.get(c_type):
+        return api.Contracts.Futures.get(c_type)[target]
+    elif api.Contracts.Options.get(c_type):
+        return api.Contracts.Options.get(c_type)[target]
     return api.Contracts.Stocks[target]
 
 

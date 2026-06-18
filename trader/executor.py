@@ -109,7 +109,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         # set callbacks
         @API.on_tick_stk_v1()
-        def stk_quote_callback_v1(exchange, tick):
+        def stk_quote_callback_v1(tick):
             if tick.intraday_odd == 0 and tick.simtrade == 0:
 
                 if tick.code not in TradeData.Quotes.NowTargets:
@@ -119,10 +119,11 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 # self.to_redis({tick.code: tick_data})
 
         @API.on_tick_fop_v1()
-        def fop_quote_callback_v1(exchange, tick):
+        def fop_quote_callback_v1(tick):
             try:
                 if tick.simtrade == 0:
-                    symbol = TradeData.Futures.CodeList[tick.code]
+                    symbol = TradeData.Futures.CodeList.get(
+                        tick.code, tick.code)
 
                     if symbol not in TradeData.Quotes.NowTargets:
                         logging.debug(f'[Quotes]First|{symbol}|')
@@ -146,12 +147,12 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         # 訂閱五檔回報
         @API.on_bidask_stk_v1()
-        def stk_quote_callback(exchange, bidask):
+        def stk_quote_callback(bidask):
             TradeData.BidAsk[bidask.code] = bidask
 
         @API.on_bidask_fop_v1()
-        def fop_quote_callback(exchange, bidask):
-            symbol = TradeData.Futures.CodeList[bidask.code]
+        def fop_quote_callback(bidask):
+            symbol = TradeData.Futures.CodeList.get(bidask.code, bidask.code)
             TradeData.BidAsk[symbol] = bidask
 
     def _log_and_notify(self, msg: str):

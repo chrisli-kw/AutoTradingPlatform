@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import shioaji as sj
 from datetime import datetime
+from collections.abc import Iterable
 
 from ..config import API, PATH, TODAY, TODAY_STR
 from . import concat_df, get_contract
@@ -90,15 +91,70 @@ class AccountInfo:
 
                 time.sleep(1)
 
-    def _obj_2_df(self, objects: list):
-        '''把自API查詢得到的物件轉為DataFrame'''
+    def _obj_2_record(self, obj):
+        if obj is None:
+            return {}
+
+        if isinstance(obj, dict):
+            return obj
+
+        if hasattr(obj, 'model_dump') and callable(obj.model_dump):
+            return obj.model_dump()
+
+        if hasattr(obj, 'dict') and callable(obj.dict):
+            return obj.dict()
+
+        if hasattr(obj, '_asdict') and callable(obj._asdict):
+            return obj._asdict()
+
+        if hasattr(obj, 'keys') and callable(obj.keys):
+            return {key: obj[key] for key in obj.keys()}
+
+        if self._is_key_value_pairs(obj):
+            return dict(obj)
+
+        if hasattr(obj, '__dict__'):
+            return vars(obj)
+
+        return {'value': obj}
+
+    def _is_key_value_pairs(self, obj):
+        if not isinstance(obj, (list, tuple)):
+            return False
+
         try:
-            return pd.DataFrame([o.dict() for o in objects])
-        except:
-            try:
-                return pd.DataFrame([o.__dict__ for o in objects])
-            except:
-                return pd.DataFrame([{o[0]: o[1] for o in objects}])
+            return all(
+                isinstance(item, (list, tuple)) and
+                len(item) == 2 and
+                isinstance(item[0], str)
+                for item in obj
+            )
+        except TypeError:
+            return False
+
+    def _obj_2_df(self, objects):
+        '''把自API查詢得到的物件轉為DataFrame'''
+        if objects is None:
+            return pd.DataFrame()
+
+        if isinstance(objects, pd.DataFrame):
+            return objects.copy()
+
+        if isinstance(objects, dict):
+            return pd.DataFrame([objects])
+
+        if self._is_key_value_pairs(objects):
+            return pd.DataFrame([dict(objects)])
+
+        if (
+            isinstance(objects, Iterable) and
+            not isinstance(objects, (str, bytes)) and
+            not hasattr(objects, 'dict') and
+            not hasattr(objects, 'keys')
+        ):
+            return pd.DataFrame([self._obj_2_record(o) for o in objects])
+
+        return pd.DataFrame([self._obj_2_record(objects)])
 
     def create_info_table(self):
         if file_handler.Operate.is_in_dir(self.filename, f'{PATH}/daily_info/'):
@@ -350,7 +406,8 @@ class AccountInfo:
             'direction': 'action',
             'price': 'cost_price',
         })
-        if stocks.shape[0]:
+        if not stocks.empty and stocks.shape[1]:
+            # if stocks.shape[0]:
             names = stocks.code.apply(self.get_stock_name)
             stocks.pnl = stocks.pnl.astype(int)  # 未實現損益
             stocks.order_cond = stocks.order_cond.apply(lambda x: x._value_)
@@ -380,10 +437,10 @@ class AccountInfo:
                     df['yd_quantity'] = df.quantity
                     df['order_cond'] = ''
 
-                    df['contract'] = df.code.apply(lambda x: get_contract(x))
-                    df['isDue'] = df.contract.apply(
+                    contracts = df.code.apply(lambda x: get_contract(x))
+                    df['isDue'] = contracts.apply(
                         lambda x: TODAY_STR.replace('-', '/') == x.delivery_date)
-                    df.code = df.contract.apply(lambda x: x.symbol)
+                    df.code = contracts.apply(lambda x: x.symbol)
                     df['order'] = df[['quantity', 'action']].to_dict('records')
                     return df
             except Exception as e:
@@ -405,7 +462,11 @@ class AccountInfo:
             account = API.futopt_account
 
         profitloss_detail = []
-        profitloss = API.list_profit_loss(account, start_date, end_date)
+        profitloss = []
+        while profitloss == []:
+            profitloss = API.list_profit_loss(account, start_date, end_date)
+            time.sleep(2)
+
         if market == 'Stocks':
             profitloss_detail = profitloss
         else:
@@ -527,7 +588,13 @@ class AccountHandler(AccountInfo):
                 f.code: f.symbol for m in API.Contracts.Futures for f in m
             })
             TradeData.Futures.CodeList.update({
+                f.symbol: f.symbol for m in API.Contracts.Futures for f in m
+            })
+            TradeData.Futures.CodeList.update({
                 f.code: f.symbol for m in API.Contracts.Options for f in m
+            })
+            TradeData.Futures.CodeList.update({
+                f.symbol: f.symbol for m in API.Contracts.Options for f in m
             })
 
     def activate_ca_(self):
