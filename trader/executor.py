@@ -1,8 +1,8 @@
 import ssl
 import time
 import logging
-from collections import namedtuple
 import shioaji as sj
+from collections import namedtuple
 from datetime import datetime, timedelta
 
 from . import __version__, picker, exec
@@ -54,8 +54,35 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         self.punish_list = []
 
+    def _callback_msg_to_dict(self, msg):
+        if isinstance(msg, dict):
+            return {k: self._callback_msg_to_dict(v) for k, v in msg.items()}
+
+        if hasattr(msg, 'items') and callable(msg.items):
+            return {k: self._callback_msg_to_dict(v) for k, v in msg.items()}
+
+        if hasattr(msg, 'dict') and callable(msg.dict):
+            return self._callback_msg_to_dict(msg.dict())
+
+        return msg
+
+    def _subscribe_trade_callbacks(self):
+        for account in [API.stock_account, API.futopt_account]:
+            if account is None:
+                continue
+
+            try:
+                is_subscribed = API.subscribe_trade(account)
+                logging.info(
+                    f'[OrderCallback] subscribe_trade|{account.account_id}|{is_subscribed}')
+            except Exception:
+                logging.exception(
+                    f'[OrderCallback] subscribe_trade failed|{account.account_id}|')
+
     def _order_callback(self, stat, msg):
         '''處理委託/成交回報'''
+
+        msg = self._callback_msg_to_dict(msg)
 
         if (
             TradeData.Account.Simulate or
@@ -144,6 +171,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         # 訂閱下單回報
         API.set_order_callback(self._order_callback)
+        self._subscribe_trade_callbacks()
 
         # 訂閱五檔回報
         @API.on_bidask_stk_v1()
