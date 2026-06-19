@@ -247,6 +247,89 @@ class StrategyExecutor(AccountHandler, Subscriber):
         if TradeData.Account.Simulate and order_data:
             self.simulator.update_monitor(order, order_data)
 
+    @staticmethod
+    def _action_orders(actionInfo):
+        orders = getattr(actionInfo, 'orders', None)
+        if orders is None:
+            return []
+        if isinstance(orders, dict):
+            return [orders]
+        return orders
+
+    @staticmethod
+    def _strip_order_type(order_spec: dict):
+        spec = order_spec.copy()
+        order_type = spec.pop('type', spec.pop('order_type_', 'option'))
+        if 'label' in spec and 'order_label' not in spec:
+            spec['order_label'] = spec.pop('label')
+        return order_type, spec
+
+    def _register_option_order_strategy(self, order: namedtuple, strategy: str):
+        TradeData.Securities.Strategy[order.target] = strategy
+
+        try:
+            if order.combo_legs:
+                for leg in order.combo_legs:
+                    target = leg.get('target')
+                    contract = leg.get('contract')
+                    if target:
+                        TradeData.Securities.Strategy[target] = strategy
+                    if target and contract:
+                        TradeData.Contracts[target] = contract
+            else:
+                if order.target not in TradeData.Contracts:
+                    TradeData.Contracts[order.target] = get_contract(
+                        order.target)
+        except Exception:
+            logging.exception(
+                f'[OptionOrder] register strategy failed|{order.target}|')
+
+    def _build_orders_from_specs(
+            self,
+            order_specs: list,
+            strategy: str,
+            actionType: str,
+            octype: str,
+            default_reason: str
+    ):
+        orders = []
+        for order_spec in order_specs:
+            order_type, spec = self._strip_order_type(order_spec)
+            spec.setdefault('action_type', actionType)
+            spec.setdefault('octype', octype)
+            spec.setdefault('reason', default_reason)
+
+            if order_type in ['option', 'single_option']:
+                order = self.Order.option_order_info(**spec)
+                TradeData.Contracts[order.target] = self.Order.Options.contract(
+                    expiration=spec['expiration'],
+                    strike=spec['strike'],
+                    option_type=spec['option_type'],
+                    underlying=spec.get('underlying', 'TX')
+                )
+            elif order_type in ['option_combo', 'combo']:
+                order = self.Order.option_combo_order_info(**spec)
+            else:
+                raise ValueError(f'Unsupported order spec type: {order_type}')
+
+            self._register_option_order_strategy(order, strategy)
+            orders.append(order)
+
+        return orders
+
+    @staticmethod
+    def _as_order_list(orders):
+        if isinstance(orders, list):
+            return orders
+        return [orders]
+
+    @staticmethod
+    def _should_place_order(order: namedtuple):
+        return bool(
+            getattr(order, 'action', '') or
+            getattr(order, 'combo_legs', None)
+        )
+
     def monitor_targets(self, target: str):
         if target in TradeData.Quotes.NowTargets:
             inputs = TradeDataHandler.getQuotesNow(target).copy()
@@ -321,7 +404,8 @@ class StrategyExecutor(AccountHandler, Subscriber):
                     inputs.update(data)
 
                 actionInfo = func(inputs=inputs)
-                if actionInfo.action:
+                order_specs = self._action_orders(actionInfo)
+                if actionInfo.action or order_specs:
                     if isTransfer:
                         new_contract = f'{target[:3]}{time_tool.GetDueMonth()}'
                         self.Order.transfer_margin(target, new_contract)
@@ -338,7 +422,6 @@ class StrategyExecutor(AccountHandler, Subscriber):
                         TradeData.Securities.Strategy[new_contract] = strategy
                         TradeData.Securities.Monitor[new_contract] = None
                         TradeData.Securities.Monitor.pop(target, None)
-                        # TradeData.Securities.Strategy.pop(target, None)
                         data = {
                             'mode': TradeData.Account.Mode,
                             'account': self.account_name,
@@ -351,6 +434,17 @@ class StrategyExecutor(AccountHandler, Subscriber):
                         }
                         conf = TradeDataHandler.getStrategyConfig(new_contract)
                         conf.positions.close(data)
+
+                    if order_specs:
+                        reason = actionInfo.reason or f'{target}|{strategy}|Option order'
+                        self._log_and_notify(reason)
+                        return self._build_orders_from_specs(
+                            order_specs,
+                            strategy,
+                            actionType,
+                            octype,
+                            reason
+                        )
 
                     if actionInfo.isRaiseQty:
                         actionType = 'Open'
@@ -646,8 +740,11 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 continue
 
             for target in list(TradeData.Securities.Monitor):
-                order = self.monitor_targets(target)
-                if order.action:
+                orders = self._as_order_list(self.monitor_targets(target))
+                for order in orders:
+                    if not self._should_place_order(order):
+                        continue
+
                     order_data = self.Order.place_order(order)
                     self.update_position_(order, order_data)
 

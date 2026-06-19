@@ -223,6 +223,10 @@ class TradeDataHandler:
         return {}
 
     @staticmethod
+    def getOptionOrderStatus(label: str):
+        return TradeData.Futures.OptionOrderStatus.get(label, {})
+
+    @staticmethod
     def getStrategyConfig(target: str):
         strategy = TradeData.Securities.Strategy.get(target)
         conf = StrategyList.Config.get(strategy)
