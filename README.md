@@ -3,29 +3,31 @@
 [![PyPI - Status](https://img.shields.io/pypi/v/shioaji.svg?style=for-the-badge)](https://pypi.org/project/shioaji)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/shioaji.svg?style=for-the-badge)]()
 
-AutoTradingPlatform is a *trading framework* built on top of the [Shioaji API](https://sinotrade.github.io/) that supports trading in **stocks, futures, and options**. This framework streamlines the use of the API, making it easy for users to start trading without being familiar with the API's interface specifications. With just two simple steps, users can start trading:
+AutoTradingPlatform is a *trading framework* built on top of the [Shioaji API](https://sinotrade.github.io/) and supports **Shioaji 1.5+**. It can trade **stocks, futures, and options**, including single-leg option orders and option combo orders. The framework streamlines the use of the API, making it easy for users to start trading without being familiar with the API's interface specifications. With just two simple steps, users can start trading:
 
 1. Develop a trading strategy.
 2. Set the risk tolerance.
 
-When using AutoTradingPlatform, users can execute trades with multiple strategies on a single account, or even on multiple accounts. Additionally, the platform ensures safe order placement by monitoring risk tolerance levels. For example, if the order limit of an account is NT$500,000, buying stops when the cumulative amount of stocks approaching NT$500,000.
+When using AutoTradingPlatform, users can execute trades with multiple strategies on a single account, or even on multiple accounts. The platform also supports multi-frequency intraday monitoring, runtime strategy controls such as updating `max_qty`, and position synchronization between broker-side positions and local monitoring records.
 
 
 - [AutoTradingPlatform](#autotradingplatform)
   - [What AutoTradingPlatform is capable of?](#what-autotradingplatform-is-capable-of)
-      - [1. Position control](#1-position-control)
-      - [2. Technical indicators](#2-technical-indicators)
-      - [3. Real-time notification](#3-real-time-notification)
-      - [4. Stock selection](#4-stock-selection)
-      - [5. Historical backtesting (to be updated)](#5-historical-backtesting-to-be-updated)
-      - [6. Full automation](#6-full-automation)
-      - [7. Telegram Bot interactions](#7-telegram-bot-interactions)
+    - [1. Position control](#1-position-control)
+    - [2. Multi-frequency K-bars and technical indicators](#2-multi-frequency-k-bars-and-technical-indicators)
+    - [3. Real-time notification](#3-real-time-notification)
+    - [4. Stock selection](#4-stock-selection)
+    - [5. Historical backtesting](#5-historical-backtesting)
+    - [6. Full automation](#6-full-automation)
+    - [7. Telegram Bot interactions](#7-telegram-bot-interactions)
+    - [8. Stocks, futures, and options orders](#8-stocks-futures-and-options-orders)
+    - [9. Runtime position synchronization](#9-runtime-position-synchronization)
   - [Required packages](#required-packages)
   - [Project Structure](#project-structure)
-  - [Prepareation](#prepareation)
-      - [Step 1: Create system settings (config.ini)](#step-1-create-system-settings-configini)
-      - [Step 2: Create user settings (user env settings)](#step-2-create-user-settings-user-env-settings)
-      - [Step 3: Create stragety scripts](#step-3-create-stragety-scripts)
+  - [Preparation](#preparation)
+    - [Step 1: Create system settings (config.ini)](#step-1-create-system-settings-configini)
+    - [Step 2: Create user settings (user env settings)](#step-2-create-user-settings-user-env-settings)
+    - [Step 3: Create strategy scripts](#step-3-create-strategy-scripts)
   - [Execute Commands](#execute-commands)
       - [1. Auto trader](#1-auto-trader)
       - [2. Stock selection](#2-stock-selection)
@@ -33,29 +35,35 @@ When using AutoTradingPlatform, users can execute trades with multiple strategie
   
 ## What AutoTradingPlatform is capable of?
 
-#### 1. Position control  
-Like humans, the system pays attention to order amount, position management, and batch exit. At the same time, we can execute multiple strategies simultaneously to achieve better position control.
+#### 1. Position control
+The system monitors order amount, position size, strategy-level quantity limits, and batch exits. Multiple strategies can run on the same account while each strategy keeps its own position state and `max_qty` controls.
 
-#### 2. Technical indicators  
-In addition to traditional indicators such as MACD, KD, RSI, you can also customize the indicators you want based on technical, chip, and fundamental information.
+#### 2. Multi-frequency K-bars and technical indicators
+In addition to traditional indicators such as MACD, KD, RSI, you can customize indicators based on technical, chip, and fundamental information. Intraday monitoring stores K-bars by frequency in `TradeData.KBars.Freq`, and strategies can monitor multiple frequencies such as `1T`, `5T`, `15T`, `30T`, `60T`, and `1D`.
 
 #### 3. Real-time notification
-Using LINE Notify notifications to receive real-time order/deal messages.
+Receive real-time order/deal messages through Telegram or LINE Notify.
 
 #### 4. Stock selection
 By customizing the selection criterias, the stock selection program can be seamlessly integrated with the trading system to place orders. There is no limit to the number of strategies.
 
-#### 5. Historical backtesting (to be updated)
-Using historical data and the customizable strategy function of the trading framework to improve and maximize your potential profits.
+#### 5. Historical backtesting
+Using historical data and customizable strategy functions, the backtesting framework supports single-frequency and multi-frequency K-bar strategies. Futures-style strategies can prepare all configured `kbarScales` in advance and receive aligned multi-frequency data in strategy callbacks through `**kwargs`.
 
 #### 6. Full automation
 Once everything is set up, you can schedule and achieve fully automated trading.
 
 #### 7. Telegram Bot interactions
-Read [TelegramBot.md](./TelegramBot.md) for more instructions.
+Read [TelegramBot.md](./TelegramBot.md) for more instructions. Telegram commands can be used to check and update strategy `max_qty` while the monitor is running.
+
+#### 8. Stocks, futures, and options orders
+The order layer supports stock, futures, single-option, and option-combo order workflows for Shioaji 1.5+. Option helpers normalize option contract lookup and order creation so strategy code can focus on trading logic.
+
+#### 9. Runtime position synchronization
+AutoTradingPlatform can synchronize broker-side positions into local monitoring records. This helps recover monitoring state after manual orders, restarts, fills from outside the strategy loop, or changes made while the bot is running.
 
 ## Required packages
-Install shioaji and other packages at a time
+Install Shioaji 1.5+ and other packages at a time. The current requirements pin Shioaji to `1.5.3`.
 ```ini
 pip install -r requirements.txt
 ```
@@ -90,7 +98,7 @@ pip install -r requirements.txt
 ```
 
 
-## Prepareation
+## Preparation
 #### Step 1: Create system settings (config.ini)
 Go to ```./lib``` and create a ```config.ini``` file, which has 6 main sections: 
 
@@ -129,8 +137,8 @@ LINE_TOKEN = your_LINE_Notify_token
 [STRATEGY]
 MonitorFreq = 5      # monitor frequency (seconds per loop)
 
-[CRAWLER] # determine what K-bar frequency data you want for backtest
-SCALES = 1D, 30T, 60T
+[CRAWLER] # determine what K-bar frequency data you want for monitor/backtest
+SCALES = 1T, 5T, 15T, 30T, 60T, 1D
 ```
 
 #### Step 2: Create user settings (user env settings)
@@ -141,8 +149,22 @@ python run.py -TASK create_env
 
 Then, go to http://127.0.0.1:8090/. Press the "Submit" button after filling out the forms, the account env settings will be created in the ```user_settings``` database table.
 
-#### Step 3: Create stragety scripts
-Go to ```./trader/scripts``` and follow the [instructions](./trader/scripts/readme.md) to create your own trading strategy before starting the auto-trader.
+#### Step 3: Create strategy scripts
+Go to ```./trader/scripts``` and follow the [instructions](./trader/scripts/README.md) to create your own trading strategy before starting the auto-trader. Strategy modules can define:
+
+```python
+scale = '1T'
+kbarScales = ['1T', '15T']
+
+def add_features(df, scale='1T'):
+    ...
+
+def examineOpen(trade, price=None, **kwargs):
+    K15min = kwargs.get('K15T')
+    ...
+```
+
+During backtesting, `scale` is the main loop frequency and `kbarScales` determines which frequencies are prepared and aligned. During intraday monitoring, `TradeData.KBars.Freq[scale]` remains a pandas DataFrame for each frequency.
 
 
 ## Execute Commands
@@ -155,7 +177,7 @@ python run.py -TASK auto_trader -ACCT YourAccountName
 ```
 
 #### 2. Stock selection  
-This task will run stock data crawler (using API) and then select stock. Details of establishing selection scripts see the [instructions](./trader/scripts/readme.md).
+This task will run stock data crawler (using API) and then select stock. Details of establishing selection scripts see the [instructions](./trader/scripts/README.md).
 ```
 python run.py -TASK update_and_select_stock
 ```
