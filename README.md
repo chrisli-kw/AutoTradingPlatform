@@ -29,6 +29,7 @@ When using AutoTradingPlatform, users can execute trades with multiple strategie
     - [Step 2: Create user settings (user env settings)](#step-2-create-user-settings-user-env-settings)
     - [Step 3: Create strategy scripts](#step-3-create-strategy-scripts)
   - [Execute Commands](#execute-commands)
+      - [0. GUI control panel](#0-gui-control-panel)
       - [1. Auto trader](#1-auto-trader)
       - [2. Stock selection](#2-stock-selection)
   - [Releases and Contributing](#releases-and-contributing)
@@ -92,7 +93,8 @@ pip install -r requirements.txt
     |-- selections                   (selected stocks)  
     |-- stock_pool                   (stores watchlist, order list files for AutoTradingPlatform)  
     |-- ticks                        (futures tick data from TAIFEX)
-  |-- create_env.py                  (.env file creator)
+  |-- archives                       (legacy tools kept for reference)
+  |-- gui.py                         (local GUI control panel and dashboard)
   |-- tasker.py                      (AutoTradingPlatform task execution file)
   ...
 ```
@@ -142,12 +144,15 @@ SCALES = 1T, 5T, 15T, 30T, 60T, 1D
 ```
 
 #### Step 2: Create user settings (user env settings)
-It is necessary to create an env settings set for a whole-new AutoTradingPlatform. Firstly, run the following command in a terminal:  
-```
-python run.py -TASK create_env
-```  
+It is necessary to create user settings for each trading account before starting the auto trader. Start the local GUI:
 
-Then, go to http://127.0.0.1:8090/. Press the "Submit" button after filling out the forms, the account env settings will be created in the ```user_settings``` database table.
+```bash
+streamlit run gui.py
+```
+
+Then open the Streamlit URL shown in the terminal, usually http://localhost:8501, and go to the `使用者專區` tab. You can add, edit, or delete account settings there. The settings will be saved to the `user_settings` database table.
+
+The old `python run.py -TASK create_env` Flask setup page has been archived under `archives/legacy_create_env_app`. Use the GUI `使用者專區` for new account setup and maintenance.
 
 #### Step 3: Create strategy scripts
 Go to ```./trader/scripts``` and follow the [instructions](./trader/scripts/README.md) to create your own trading strategy before starting the auto-trader. Strategy modules can define:
@@ -166,9 +171,25 @@ def examineOpen(trade, price=None, **kwargs):
 
 During backtesting, `scale` is the main loop frequency and `kbarScales` determines which frequencies are prepared and aligned. During intraday monitoring, `TradeData.KBars.Freq[scale]` remains a pandas DataFrame for each frequency.
 
-
 ## Execute Commands
 Open a terminal and execute the following task command type:
+
+#### 0. GUI control panel
+Start the local GUI dashboard and control panel:
+
+```bash
+streamlit run gui.py
+```
+
+The GUI supports per-account trader startup, pause/resume/stop commands, status monitoring, recent log display, current position display, runtime `max_qty` updates, and `UserSettings` maintenance.
+
+If you need to bind the server explicitly, for example on Windows local use:
+
+```bash
+streamlit run gui.py --server.address 127.0.0.1 --server.port 8501
+```
+
+To stop the GUI, go back to the terminal running Streamlit and press `Ctrl+C`. If the GUI was started in the background, stop the Streamlit process from Task Manager, or terminate the corresponding Python/Streamlit PID.
 
 #### 1. Auto trader  
 parameter ACCT: account_name defined by users

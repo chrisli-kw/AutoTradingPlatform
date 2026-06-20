@@ -26,6 +26,24 @@ pause_flags = {}
 WHITELIST = {str(x) for x in NotifyConfig.TELEGRAM_CHAT_ID.values()}
 
 
+def _patch_job_queue_timezone():
+    try:
+        import pytz
+        from telegram.ext import _jobqueue
+
+        original = _jobqueue.JobQueue.scheduler_configuration.fget
+
+        def scheduler_configuration(self):
+            config = original(self)
+            config["timezone"] = pytz.utc
+            return config
+
+        _jobqueue.JobQueue.scheduler_configuration = property(
+            scheduler_configuration)
+    except Exception:
+        logging.exception("Patch telegram JobQueue timezone failed:")
+
+
 class TelegramBot:
     def __init__(self, account_name: str):
         self.account_names = [account_name]
@@ -52,6 +70,8 @@ class TelegramBot:
                 "apscheduler",      # 若也不想看到 APScheduler 訊息
             ):
                 logging.getLogger(name).setLevel(logging.WARNING)
+
+            _patch_job_queue_timezone()
 
             self.app = (
                 ApplicationBuilder()

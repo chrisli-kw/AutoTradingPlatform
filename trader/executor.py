@@ -1,4 +1,6 @@
+import os
 import ssl
+import sys
 import time
 import logging
 import shioaji as sj
@@ -29,6 +31,7 @@ from .utils.objects.data import TradeData
 from .utils.positions import WatchListTool, TradeDataHandler
 from .utils.strategy import StrategyTool
 from .utils.bot import TelegramBot
+from .utils import runtime
 
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -53,6 +56,14 @@ class StrategyExecutor(AccountHandler, Subscriber):
         }
 
         self.punish_list = []
+        runtime.write_session(
+            account_name,
+            pid=os.getpid(),
+            command=" ".join(sys.argv),
+            cwd=os.getcwd(),
+            started_at=runtime.now_text(),
+            launcher="runtime",
+        )
 
     def _callback_msg_to_dict(self, msg):
         if isinstance(msg, dict):
@@ -668,6 +679,97 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         time.sleep(sleep_time)
 
+    def _update_runtime_status(self, status: str, message: str = ""):
+        runtime.write_status(
+            self.account_name,
+            status,
+            message,
+            mode=TradeData.Account.Mode,
+            strategies=list(StrategyList.Config.keys()),
+            monitor_targets=list(TradeData.Securities.Monitor.keys()),
+            pid=os.getpid(),
+        )
+
+    def _apply_runtime_command(self, stop_flag, pause_flag):
+        command = runtime.read_command(self.account_name)
+        if not command:
+            return
+
+        command_id = command.get("id")
+        if runtime.command_is_expired(command):
+            runtime.clear_command(self.account_name, command_id)
+            return
+
+        action = command.get("command")
+        payload = command.get("payload", {})
+        message = ""
+
+        try:
+            if action == "pause":
+                pause_flag.set()
+                message = "GUI 暫停監控"
+                self.notifier.send.post(
+                    f"🛑 [{self.account_name}] 已暫停監控"
+                )
+            elif action == "resume":
+                pause_flag.clear()
+                message = "GUI 恢復監控"
+                self.notifier.send.post(
+                    f"✅ [{self.account_name}] 已恢復監控"
+                )
+            elif action == "stop":
+                stop_flag.set()
+                message = "GUI 要求停止監控"
+                self.notifier.send.post(
+                    f"❌ [{self.account_name}] 程式即將停止"
+                )
+            elif action == "update_max_qty":
+                strategy = payload.get("strategy")
+                target = payload.get("target")
+                max_qty = int(payload.get("max_qty", 0))
+
+                if max_qty < 0:
+                    raise ValueError("max_qty must be >= 0")
+
+                conf = StrategyList.Config.get(strategy)
+                if conf is None:
+                    raise ValueError(f"Unknown strategy: {strategy}")
+                if not hasattr(conf, "max_qty"):
+                    raise ValueError(f"Strategy has no max_qty: {strategy}")
+
+                old_qty = conf.max_qty.get(target)
+                conf.max_qty[target] = max_qty
+                if hasattr(conf, "update_max_qty"):
+                    conf.update_max_qty(
+                        self.account_name, strategy, target, max_qty)
+
+                message = (
+                    f"[Strategy max_qty]Update|{self.account_name}|"
+                    f"{strategy}|{target}|{old_qty}->{max_qty}"
+                )
+                self.notifier.send.post(
+                    f"【{self.account_name} 更新部位】最大數量\n"
+                    f"{target}: {max_qty}"
+                )
+            else:
+                message = f"Unknown GUI command: {action}"
+
+            logging.info(message)
+            self._update_runtime_status(
+                "stopping" if stop_flag.is_set()
+                else "paused" if pause_flag.is_set()
+                else "running",
+                message,
+            )
+        except Exception as exc:
+            logging.exception("[GUI Command] failed:")
+            self._update_runtime_status(
+                "error",
+                f"GUI command failed: {exc}",
+            )
+        finally:
+            runtime.clear_command(self.account_name, command_id)
+
     def run(self):
         '''執行自動交易'''
 
@@ -721,9 +823,11 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         # 開始監控
         stop_flag, pause_flag = bot.get_flags(self.account_name)
+        self._update_runtime_status("running", "監控啟動完成")
         while not stop_flag.is_set():
             self.loop_pause()
             now = datetime.now()
+            self._apply_runtime_command(stop_flag, pause_flag)
 
             if self.is_break_loop(now):
                 break
@@ -737,7 +841,10 @@ class StrategyExecutor(AccountHandler, Subscriber):
                         self.updateKBars(f'{freq}T')
 
             if pause_flag.is_set():
+                self._update_runtime_status("paused", "監控暫停中")
                 continue
+
+            self._update_runtime_status("running", "監控執行中")
 
             for target in list(TradeData.Securities.Monitor):
                 orders = self._as_order_list(self.monitor_targets(target))
@@ -763,6 +870,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         time.sleep(3)
         self.unsubscribe_all(all_targets)
+        self._update_runtime_status("stopped", "監控已停止")
 
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''
