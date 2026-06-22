@@ -65,14 +65,105 @@ class WatchListTool:
         quantity = data.get('quantity', 0)
         position = data.get('position', 0)
 
-        is_empty = (quantity <= 0)  # or position <= 0)
+        is_empty = (quantity == 0)
         if is_empty:
             logging.warning(
                 f'[Monitor List]Check|{target}|{is_empty}|quantity: {quantity}; position: {position}|')
         return is_empty
 
-    def update_monitor(self, oc_type: str, data: dict, sync_position: bool = False):
+    @staticmethod
+    def _futures_cost_price(
+            current_quantity: int,
+            current_cost: float,
+            fill_delta: int,
+            fill_price: float
+    ):
+        new_quantity = current_quantity + fill_delta
+        if not new_quantity:
+            return 0
+        if not current_quantity or current_quantity * new_quantity < 0:
+            return fill_price
+        if current_quantity * fill_delta > 0:
+            old_amount = abs(current_quantity) * current_cost
+            fill_amount = abs(fill_delta) * fill_price
+            return (old_amount + fill_amount) / abs(new_quantity)
+        return current_cost
+
+    def _update_futures_monitor(self, target: str, data: dict, conf, df):
+        order = data['order']
+        trade_id = data.get('trade_id') or order.get('trade_id')
+        action = TradeDataHandler.normalize_action(order.get('action'))
+        fill_quantity = abs(int(order.get('quantity', 0) or 0))
+        fill_delta = TradeDataHandler.signed_quantity(
+            fill_quantity, action, market='Futures')
+        current_quantity = int(df.iloc[0].quantity) if not df.empty else 0
+        new_quantity = current_quantity + fill_delta
+        current_cost = float(df.iloc[0].cost_price) if not df.empty else 0
+        fill_price = float(order.get('price', 0) or 0)
+        cost_price = self._futures_cost_price(
+            current_quantity, current_cost, fill_delta, fill_price)
+        strategy_quantity = TradeDataHandler.strategy_quantity(
+            new_quantity,
+            mode=getattr(conf, 'mode', 'long'),
+            action=action,
+            market='Futures'
+        )
+        max_qty = conf.max_qty.get(target, 1) if conf else 1
+        position = int(100*strategy_quantity/max_qty) if max_qty > 0 else 0
+
+        condition = self.match_target(target)
+        if new_quantity == 0:
+            if not df.empty:
+                db.delete(SecurityInfo, condition)
+            return new_quantity
+
+        position_action = 'Buy' if new_quantity > 0 else 'Sell'
+        if df.empty:
+            quote = TradeDataHandler.getQuotesNow(target)
+            security_data = dict(
+                mode=TradeData.Account.Mode,
+                account=self.account_name,
+                market='Futures',
+                code=target,
+                action=position_action,
+                quantity=new_quantity,
+                cost_price=cost_price,
+                last_price=quote.get('price', 0),
+                pnl=0,
+                yd_quantity=0,
+                order_cond=order.get('order_cond', 'Cash'),
+                timestamp=datetime.now(),
+                position=position,
+                strategy=TradeData.Securities.Strategy.get(target, 'unknown')
+            )
+            if trade_id:
+                security_data['trade_id'] = trade_id
+            db.add_data(SecurityInfo, **security_data)
+        else:
+            update_data = {
+                'action': position_action,
+                'quantity': new_quantity,
+                'cost_price': cost_price,
+                'position': position,
+            }
+            if trade_id:
+                update_data['trade_id'] = trade_id
+            if current_quantity * new_quantity < 0:
+                update_data['timestamp'] = datetime.now()
+            db.update(SecurityInfo, update_data, condition)
+        return new_quantity
+
+    def update_monitor(
+            self,
+            oc_type: str,
+            data: dict,
+            sync_position: bool = False,
+            notify_position: bool = False
+    ):
         '''更新監控庫存(成交回報)'''
+
+        if oc_type in ['NewPosition', 'DayTrade']:
+            oc_type = 'New'
 
         try:
             target = data['code']
@@ -83,9 +174,12 @@ class WatchListTool:
         if conf is None:
             return
 
-        max_qty = conf.max_qty.get(target, 1) if conf else 1
         df = self.get_match_info(target)
-        if not df.empty:
+        if conf.market == 'Futures':
+            broker_quantity = self._update_futures_monitor(
+                target, data, conf, df)
+        elif not df.empty:
+            max_qty = conf.max_qty.get(target, 1) if conf else 1
             quantity = data['order']['quantity']
 
             if oc_type == 'New':
@@ -106,8 +200,10 @@ class WatchListTool:
             condition = self.match_target(target)
             db.update(SecurityInfo, df.iloc[0].to_dict(), condition)
             self.check_remove_monitor(target)
+            broker_quantity = int(df.iloc[0].quantity)
 
         else:
+            max_qty = conf.max_qty.get(target, 1) if conf else 1
             quote = TradeDataHandler.getQuotesNow(target)
             data = dict(
                 mode=TradeData.Account.Mode,
@@ -126,9 +222,16 @@ class WatchListTool:
                 strategy=TradeData.Securities.Strategy.get(target, 'unknown')
             )
             db.add_data(SecurityInfo, **data)
+            broker_quantity = int(data['quantity'])
 
         if sync_position:
-            self.sync_strategy_position(target, oc_type, data)
+            self.sync_strategy_position(
+                target,
+                oc_type,
+                data,
+                broker_quantity=broker_quantity,
+                notify_position=notify_position
+            )
 
     def check_remove_monitor(self, target: str):
         is_empty = self.check_is_empty(target)
@@ -137,22 +240,44 @@ class WatchListTool:
             db.delete(SecurityInfo, condition)
         return is_empty
 
-    def sync_strategy_position(self, target: str, oc_type: str, data: dict):
+    def sync_strategy_position(
+            self,
+            target: str,
+            oc_type: str,
+            data: dict,
+            broker_quantity: int = None,
+            notify_position: bool = False
+    ):
         conf = TradeDataHandler.getStrategyConfig(target)
-        if conf is None or not hasattr(conf, 'positions'):
+        if conf is None or getattr(conf, 'positions', None) is None:
             return
 
         order = data.get('order', data)
-        quantity = int(order.get('quantity', data.get('quantity', 0)) or 0)
-        if quantity <= 0:
-            return
-
+        fill_quantity = abs(int(
+            order.get('quantity', data.get('quantity', 0)) or 0))
         price = order.get('price', data.get(
             'price', data.get('cost_price', 0))) or 0
         if price == 0:
             price = TradeDataHandler.getQuotesNow(target).get('price', 0)
 
         strategy = TradeData.Securities.Strategy.get(target)
+        if broker_quantity is None:
+            df = self.get_match_info(target)
+            broker_quantity = int(df.iloc[0].quantity) if not df.empty else 0
+
+        market = getattr(conf, 'market', 'Futures')
+        position_action = (
+            'Buy' if broker_quantity > 0 else
+            'Sell' if broker_quantity < 0 else
+            TradeDataHandler.normalize_action(order.get('action'))
+        )
+        desired_quantity = TradeDataHandler.strategy_quantity(
+            broker_quantity,
+            mode=getattr(conf, 'mode', 'long'),
+            action=position_action,
+            market=market
+        )
+
         inputs = {
             'mode': TradeData.Account.Mode,
             'account': self.account_name,
@@ -160,14 +285,18 @@ class WatchListTool:
             'name': target,
             'timestamp': datetime.now(),
             'price': price,
-            'quantity': quantity,
-            'reason': 'manual callback',
+            'quantity': 0,
+            'reason': 'deal callback sync',
         }
 
         conf.positions.reload()
-        if oc_type == 'New':
+        current_quantity = int(conf.positions.total_qty.get(target, 0) or 0)
+        quantity_delta = desired_quantity - current_quantity
+        if quantity_delta > 0:
+            inputs['quantity'] = quantity_delta
             avg_cost = conf.positions.open(inputs)
-        elif oc_type == 'Cover':
+        elif quantity_delta < 0:
+            inputs['quantity'] = abs(quantity_delta)
             avg_cost = conf.positions.close(inputs)
         else:
             avg_cost = conf.positions.average_cost()
@@ -175,15 +304,42 @@ class WatchListTool:
         if hasattr(conf, 'avg_cost'):
             conf.avg_cost = avg_cost
 
-        # Post notification
-        entries = [e for e in conf.positions.entries if e['name'] == target]
-        name = entries[0]['name'] if entries else target
-        total_qty = sum(e['quantity'] for e in entries)
-        Notification(NotifyConfig, account=self.account_name).post_human_deal(
-            name, oc_type, quantity, total_qty)
+        if notify_position:
+            entries = [e for e in conf.positions.entries if e['name'] == target]
+            name = entries[0]['name'] if entries else target
+            total_qty = sum(e['quantity'] for e in entries)
+            Notification(NotifyConfig, account=self.account_name).post_human_deal(
+                name, oc_type, fill_quantity, total_qty)
 
 
 class TradeDataHandler:
+    @staticmethod
+    def normalize_action(action):
+        return getattr(action, 'value', action) or ''
+
+    @staticmethod
+    def signed_quantity(quantity: int, action: str, market='Futures'):
+        quantity = abs(int(quantity or 0))
+        action = TradeDataHandler.normalize_action(action)
+        if market == 'Futures' and action == 'Sell':
+            return -quantity
+        return quantity
+
+    @staticmethod
+    def strategy_quantity(
+            broker_quantity: int,
+            mode='long',
+            action='',
+            market='Futures'
+    ):
+        quantity = int(broker_quantity or 0)
+        action = TradeDataHandler.normalize_action(action)
+        if market == 'Futures':
+            direction = -1 if mode == 'short' else 1
+            return max(quantity * direction, 0)
+        expected_action = 'Sell' if mode == 'short' else 'Buy'
+        return max(quantity, 0) if action == expected_action else 0
+
     @staticmethod
     def reset_monitor(target: str):
         TradeData.Securities.Monitor[target] = None
@@ -277,6 +433,7 @@ class TradeDataHandler:
 
     @staticmethod
     def unify_monitor_data(account_name: str):
+        watchlist = WatchListTool(account_name)
         for code, strategy in TradeData.Securities.Strategy.items():
             if code not in TradeData.Securities.Monitor:
                 TradeData.Securities.Monitor.update({code: None})
@@ -299,70 +456,60 @@ class TradeDataHandler:
 
             df = db.query(SecurityInfo, *condition_info)
 
-            # 若遠端無庫存，地端有庫存，刪除地端資料
-            if (
-                TradeData.Securities.Monitor.get(code) is None and
-                conf.positions.entries
-            ):
-                db.delete(PositionTable, *condition_table)
-                StrategyList.Config.get(strategy).positions.entries = []
-
-            # 若遠端有庫存，地端無庫存，補地端資料
-            elif TradeData.Securities.Monitor.get(code) is not None:
-                data = TradeData.Securities.Monitor.get(code)
-                quantity_ = data.get('quantity', 0)
-
-                if df.empty or (
-                    not conf.positions.entries and
-                    code not in getattr(conf, 'FILTER_OUT', [])
+            monitor_data = TradeData.Securities.Monitor.get(code)
+            if monitor_data is None:
+                if (
+                    getattr(conf, 'positions', None) is not None and
+                    conf.positions.total_qty.get(code, 0)
                 ):
+                    db.delete(PositionTable, *condition_table)
+                    conf.positions.reload()
+                continue
 
-                    data.update({
-                        'mode': TradeData.Account.Mode,
-                        'timestamp': datetime.now(),
-                        'position': int(
-                            100*data.get('quantity')/conf.max_qty.get(code, 1)) or 0,
-                        'strategy': strategy,
-                    })
-                    db.add_data(SecurityInfo, **data)
+            data = monitor_data.copy()
+            broker_quantity = int(data.get('quantity', 0) or 0)
+            market = getattr(conf, 'market', data.get('market', 'Futures'))
+            strategy_quantity = TradeDataHandler.strategy_quantity(
+                broker_quantity,
+                mode=getattr(conf, 'mode', 'long'),
+                action=data.get('action', ''),
+                market=market
+            )
+            max_qty = conf.max_qty.get(code, 1)
+            data.update({
+                'mode': TradeData.Account.Mode,
+                'timestamp': data.get('timestamp') or datetime.now(),
+                'position': int(100*strategy_quantity/max_qty)
+                if max_qty > 0 else 0,
+                'strategy': strategy,
+            })
 
-                    if db.query(PositionTable, *condition_table).empty:
-                        data.update({
-                            'name': code,
-                            'price': data.get('cost_price', 0),
-                            'reason': '同步庫存'
-                        })
-                        conf.positions.open(data)
-                elif (
-                    (not df.empty and quantity_ != df.iloc[0].quantity) and
-                    conf.positions.entries
-                ):
-                    data_ = {
-                        'quantity': quantity_,
-                        'yd_quantity': data.get('yd_quantity', 0),
-                        'pnl': data.get('pnl', 0)
-                    }
-                    db.update(SecurityInfo, data_, *condition_info)
+            columns = SecurityInfo.__table__.columns.keys()
+            security_data = {
+                key: value for key, value in data.items()
+                if key in columns and key not in ['pk_id', 'create_time']
+            }
+            if df.empty:
+                db.add_data(SecurityInfo, **security_data)
+            else:
+                db.update(SecurityInfo, security_data, *condition_info)
 
-                    df = db.query(PositionTable, *condition_table)
-                    if quantity_ > df.quantity.sum():
-                        quantity = quantity_ - df.quantity.sum()
-                        data.update({
-                            'name': code,
-                            'price': data.get('cost_price', 0),
-                            'quantity': quantity,
-                            'reason': '同步庫存'
-                        })
-                        conf.positions.open(data)
-                    else:
-                        quantity = df.quantity.sum() - quantity_
-                        data.update({
-                            'name': code,
-                            'price': data.get('cost_price', 0),
-                            'quantity': quantity,
-                            'reason': '同步庫存'
-                        })
-                        conf.positions.close(data)
+            if code in getattr(conf, 'FILTER_OUT', []):
+                continue
+
+            sync_data = {
+                'quantity': abs(broker_quantity),
+                'action': data.get('action', ''),
+                'price': data.get('cost_price', 0),
+                'cost_price': data.get('cost_price', 0),
+            }
+            watchlist.sync_strategy_position(
+                code,
+                'Sync',
+                sync_data,
+                broker_quantity=broker_quantity,
+                notify_position=False
+            )
 
 
 class FuturesMargin:

@@ -55,6 +55,7 @@ class SecurityInfo(Base):
         TIMESTAMP(fsp=6), server_default=func.now(), comment='進場時間')
     position = Column(Integer, nullable=False, comment='剩餘部位%')
     strategy = Column(String(50), server_default='unknown', comment='策略名稱')
+    trade_id = Column(String(50), server_default='unknown', comment='委託交易編號')
 
     create_time = Column(
         TIMESTAMP(fsp=6), nullable=False, server_default=func.now())

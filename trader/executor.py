@@ -90,6 +90,14 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 logging.exception(
                     f'[OrderCallback] subscribe_trade failed|{account.account_id}|')
 
+    @staticmethod
+    def _safe_notify(callback, stat, msg):
+        try:
+            callback(stat, msg)
+        except Exception:
+            logging.exception(
+                f'[OrderCallback] notification failed|{stat}|')
+
     def _order_callback(self, stat, msg):
         '''處理委託/成交回報'''
 
@@ -117,19 +125,19 @@ class StrategyExecutor(AccountHandler, Subscriber):
             return
 
         if stat == sj.OrderState.StockOrder:
-            self.notifier.post_tftOrder(stat, msg)
+            self._safe_notify(self.notifier.post_tftOrder, stat, msg)
             self.Order.StockOrder(msg)
 
         elif stat == sj.OrderState.StockDeal:
-            self.notifier.post_tftDeal(stat, msg)
+            self._safe_notify(self.notifier.post_tftDeal, stat, msg)
             self.Order.StockDeal(msg)
 
         elif stat == sj.OrderState.FuturesOrder:
-            self.notifier.post_fOrder(stat, msg)
+            self._safe_notify(self.notifier.post_fOrder, stat, msg)
             self.Order.FuturesOrder(msg)
 
         elif stat == sj.OrderState.FuturesDeal:
-            self.notifier.post_fDeal(stat, msg)
+            self._safe_notify(self.notifier.post_fDeal, stat, msg)
             self.Order.FuturesDeal(msg)
 
     def init_account(self):
@@ -349,13 +357,24 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
             contract = TradeData.Contracts.get(target)
             is_stock = isinstance(contract, sj.Stock)
+            position_data = data.to_dict('records')[0] if not data.empty else {}
+            broker_quantity = int(position_data.get('quantity', 0) or 0)
+            strategy_quantity = TradeDataHandler.strategy_quantity(
+                broker_quantity,
+                mode=getattr(
+                    TradeDataHandler.getStrategyConfig(target),
+                    'mode',
+                    'long'
+                ),
+                action=position_data.get('action', ''),
+                market='Stocks' if is_stock else 'Futures'
+            )
 
             # new position
-            if data.empty:
+            if strategy_quantity <= 0:
                 actionType = 'Open'
                 octype = 'New'
 
-                data = {}
                 order_cond, quantity = self.get_quantity(target)
                 enoughOpen = self.check_enough(target, quantity)
 
@@ -364,15 +383,21 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 actionType = 'Close'
                 octype = 'Cover'
 
-                data = data.to_dict('records')[0]
-                order_cond = data.get('order_cond', 'Cash')
-                quantity = data.get('quantity', 0)
+                order_cond = position_data.get('order_cond', 'Cash')
+                quantity = strategy_quantity
 
-                duration = (datetime.now() - data['timestamp']).total_seconds()
+                duration = (
+                    datetime.now() - position_data['timestamp']
+                ).total_seconds()
                 if is_stock and duration < 3600*4.5:
                     order_cond = self.day_trade_cond[order_cond]
 
                 enoughOpen = False
+
+            data = position_data.copy()
+            if data:
+                data['broker_quantity'] = broker_quantity
+                data['quantity'] = strategy_quantity
 
             if target in TradeData.Futures.Transferred:
                 quantity = TradeData.Futures.Transferred[target]['quantity']
@@ -417,6 +442,24 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 actionInfo = func(inputs=inputs)
                 order_specs = self._action_orders(actionInfo)
                 if actionInfo.action or order_specs:
+                    if (
+                        actionType == 'Close' and
+                        actionInfo.action and
+                        not actionInfo.isRaiseQty
+                    ):
+                        requested_quantity = int(actionInfo.quantity or 0)
+                        available_quantity = max(int(quantity or 0), 0)
+                        close_quantity = min(
+                            requested_quantity, available_quantity)
+                        if close_quantity != requested_quantity:
+                            logging.warning(
+                                f'[Order Quantity]Cap close quantity|{target}|'
+                                f'{requested_quantity}->{close_quantity}|')
+                            actionInfo = actionInfo._replace(
+                                quantity=close_quantity)
+                        if close_quantity <= 0:
+                            return self.Order.OrderInfo(target=target)
+
                     if isTransfer:
                         new_contract = f'{target[:3]}{time_tool.GetDueMonth()}'
                         self.Order.transfer_margin(target, new_contract)

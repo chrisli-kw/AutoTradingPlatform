@@ -434,14 +434,22 @@ class AccountInfo:
                         'price': 'cost_price',
                     })
                     df[['account', 'market']] = [self.account_name, 'Futures']
-                    df['yd_quantity'] = df.quantity
+                    raw_quantity = df.quantity.abs().astype(int)
                     df['order_cond'] = ''
 
                     contracts = df.code.apply(lambda x: get_contract(x))
                     df['isDue'] = contracts.apply(
                         lambda x: TODAY_STR.replace('-', '/') == x.delivery_date)
                     df.code = contracts.apply(lambda x: x.symbol)
-                    df['order'] = df[['quantity', 'action']].to_dict('records')
+                    df.action = df.action.apply(
+                        lambda x: getattr(x, 'value', x))
+                    direction = df.action.map({'Buy': 1, 'Sell': -1}).fillna(1)
+                    df.quantity = raw_quantity * direction.astype(int)
+                    df['yd_quantity'] = df.quantity
+                    df['order'] = [
+                        {'quantity': quantity, 'action': action}
+                        for quantity, action in zip(raw_quantity, df.action)
+                    ]
                     return df
             except Exception as e:
                 logging.error(f'List futures positions failed: {e.args[0]}')

@@ -62,6 +62,15 @@ class OrderTool(FuturesMargin):
     def _value(value):
         return getattr(value, 'value', value)
 
+    @classmethod
+    def _normalize_futures_oc_type(cls, oc_type):
+        oc_type = cls._value(oc_type) or ''
+        if oc_type in ['New', 'NewPosition', 'DayTrade']:
+            return 'New'
+        if oc_type == 'Cover':
+            return 'Cover'
+        return ''
+
     @staticmethod
     def _is_retry_order_status(status: str):
         return status in ['Cancelled', 'Inactive', 'Failed']
@@ -174,16 +183,23 @@ class OrderTool(FuturesMargin):
             if value:
                 self._option_order_labels[value] = label
 
-    @staticmethod
-    def _order_key(target: str, action: str, oc_type: str, quantity: int):
+    @classmethod
+    def _order_key(
+            cls,
+            target: str,
+            action: str,
+            oc_type: str,
+            quantity: int
+    ):
         return (
             target,
             action or '',
-            oc_type or '',
+            cls._normalize_futures_oc_type(oc_type),
             int(quantity or 0)
         )
 
     def _register_auto_order(self, target: str, action: str, oc_type: str, quantity: int):
+        oc_type = self._normalize_futures_oc_type(oc_type)
         key = self._order_key(target, action, oc_type, quantity)
         self._auto_order_callbacks.append((datetime.now(), key))
         self._auto_order_fills.append({
@@ -216,6 +232,7 @@ class OrderTool(FuturesMargin):
         return False
 
     def _pop_auto_order_like(self, target: str, action: str, oc_type: str):
+        oc_type = self._normalize_futures_oc_type(oc_type)
         for i, item in enumerate(self._auto_order_callbacks):
             key = item[1]
             if key[:3] == (target, action or '', oc_type or ''):
@@ -259,6 +276,7 @@ class OrderTool(FuturesMargin):
             quantity: int
     ):
         self._prune_auto_orders()
+        oc_type = self._normalize_futures_oc_type(oc_type)
 
         quantity = int(quantity or 0)
         if quantity <= 0:
@@ -317,7 +335,10 @@ class OrderTool(FuturesMargin):
         data = {
             'order_msg': msg,
             'target': target,
-            'oc_type': order.get('oc_type', existing.get('oc_type', '')),
+            'raw_oc_type': order.get(
+                'raw_oc_type', existing.get('raw_oc_type', '')),
+            'oc_type': self._normalize_futures_oc_type(
+                order.get('oc_type', existing.get('oc_type', ''))),
             'action': order.get('action', existing.get('action', '')),
             'quantity': order.get('quantity', existing.get('quantity', 0)),
             'filled_quantity': existing.get('filled_quantity', 0),
@@ -538,7 +559,11 @@ class OrderTool(FuturesMargin):
                 content,
                 order_result
             )
-        if status not in ['PreSubmitted', 'Filled']:
+        accepted_statuses = [
+            'PendingSubmit', 'PreSubmitted', 'Submitted',
+            'PartFilled', 'Filled'
+        ]
+        if status not in accepted_statuses:
             msg = order_result.status.msg
             logging.warning(f'Order not submitted/filled: {msg}')
         return status
@@ -612,8 +637,10 @@ class OrderTool(FuturesMargin):
             content: namedtuple,
             price: float,
             quantity: int,
-            price_type: str
+            price_type: str,
+            octype: str = None
     ):
+        octype = octype or self.content_attr(content, 'octype') or 'Auto'
         return sj.FuturesOrder(
             price=price,
             quantity=quantity,
@@ -624,9 +651,31 @@ class OrderTool(FuturesMargin):
                 self.content_attr(content, 'order_type', 'IOC') or 'IOC'
             ),
             octype=self._enum_value(
-                sj.FuturesOCType, content.octype or 'Auto'),
+                sj.FuturesOCType, octype),
             account=API.futopt_account,
         )
+
+    def _resolve_futures_octype(self, content: namedtuple, target: str):
+        requested = self._value(
+            self.content_attr(content, 'octype', 'Auto')) or 'Auto'
+        if requested not in ['New', 'NewPosition']:
+            return requested
+
+        df = db.query(
+            SecurityInfo, self.WatchListTool.match_target(target))
+        if df.empty:
+            return requested
+
+        broker_quantity = int(df.iloc[0].quantity or 0)
+        action = self._value(self.content_attr(content, 'action', ''))
+        order_direction = 1 if action == 'Buy' else -1 if action == 'Sell' else 0
+        if broker_quantity * order_direction >= 0:
+            return requested
+
+        logging.info(
+            f'[FuturesOCType]Auto|{target}|{requested}->Auto|'
+            f'position={broker_quantity}|action={action}|')
+        return 'Auto'
 
     def _combo_order(self, content: namedtuple):
         return sj.ComboOrder(
@@ -710,6 +759,8 @@ class OrderTool(FuturesMargin):
 
         contract = TradeData.Contracts.get(target, get_contract(target))
         is_stock = isinstance(contract, sj.Stock)
+        futures_octype = (
+            '' if is_stock else self._resolve_futures_octype(content, target))
         quantity = self.get_sell_quantity(content)
         price_type = self.content_attr(content, 'price_type', 'MKT') or 'MKT'
         price = self.content_attr(content, 'price', 0) or 0
@@ -750,7 +801,18 @@ class OrderTool(FuturesMargin):
         else:
             # #ff0000 批次下單的張數 (股票>1000股的單位為【張】) #ff0000
             q = 5 if order_lot == 'Common' else quantity
-            enough_to_place = self.checkEnoughToPlace(target)
+            is_closing = (
+                self.content_attr(content, 'action_type') == 'Close' or
+                self.content_attr(content, 'octype') == 'Cover'
+            )
+            enough_to_place = (
+                is_closing or self.checkEnoughToPlace(target))
+            if not enough_to_place:
+                logging.warning(
+                    f'[OrderState]Skipped by position limit|{target}|'
+                    f'{content.action}|{quantity}|')
+                return
+
             result = None
             order_label = self._option_order_label(content)
             if order_label:
@@ -764,11 +826,16 @@ class OrderTool(FuturesMargin):
                         content, price, order_quantity, price_type, order_lot)
                 else:
                     order = self._futures_order(
-                        content, price, order_quantity, price_type)
+                        content,
+                        price,
+                        order_quantity,
+                        price_type,
+                        octype=futures_octype
+                    )
                 self._register_auto_order(
                     target,
                     content.action,
-                    '' if is_stock else content.octype,
+                    futures_octype,
                     order_quantity
                 )
                 try:
@@ -864,6 +931,9 @@ class OrderTool(FuturesMargin):
         msg = CallbackHandler().update_futures_msg(msg)
 
         order = msg['order']
+        order['raw_oc_type'] = order.get('oc_type', '')
+        order['oc_type'] = self._normalize_futures_oc_type(
+            order.get('oc_type'))
         symbol = CallbackHandler.fut_symbol(msg)
         operation = msg['operation']
 
@@ -885,6 +955,7 @@ class OrderTool(FuturesMargin):
             TradeDataHandler.update_deal_list(symbol, 'Cancel')
 
     def FuturesDeal(self, msg: dict):
+        logging.info(f'[FuturesDeal.Callback]{msg}')
         symbol = CallbackHandler.fut_deal_symbol(msg)
 
         conf = TradeDataHandler.getStrategyConfig(symbol)
@@ -919,6 +990,7 @@ class OrderTool(FuturesMargin):
 
         data = {
             'code': symbol,
+            'trade_id': msg.get('trade_id') if msg.get('combo') else None,
             'order': {
                 'action': action,
                 'quantity': quantity,
@@ -929,6 +1001,7 @@ class OrderTool(FuturesMargin):
         self.WatchListTool.update_monitor(
             oc_type,
             data,
-            sync_position=not is_auto_order
+            sync_position=True,
+            notify_position=not is_auto_order
         )
         self._update_futures_order_filled(msg, meta)
