@@ -127,14 +127,37 @@ class KBarTool(TechnicalSignals):
         tb = tb.rename(columns={'ts': 'Time'})
         return tb
 
+    def _fetch_history_kbars(self, stockid: str, ndays: int):
+        start_day = time_tool._strf_timedelta(TODAY, ndays)
+        if ndays < 30:
+            return self.tbKBar(stockid, start_day)
+
+        start = pd.to_datetime(start_day)
+        last_day = pd.to_datetime(TODAY_STR)
+        kbars = []
+
+        while start <= last_day:
+            end = min(start + timedelta(days=29), last_day)
+            kbars.append(self.tbKBar(
+                stockid,
+                start.strftime('%Y-%m-%d'),
+                end.strftime('%Y-%m-%d')
+            ))
+            start = end + timedelta(days=1)
+
+        return (
+            pd.concat(kbars, ignore_index=True)
+            .sort_values('Time')
+            .reset_index(drop=True)
+        )
+
     def history_kbars(self, stockids: List[str], daysdata: int = 0):
         '''Get history kbar data'''
 
         now = datetime.now()
         ndays = daysdata if daysdata else self.daysdata
         for stockid in stockids:
-            td = time_tool._strf_timedelta(TODAY, ndays)
-            tb = self.tbKBar(stockid, td)
+            tb = self._fetch_history_kbars(stockid, ndays)
             for scale in self.featureFuncs:
                 kbar = self.convert_kbar(tb, scale)
                 if scale == '1D':
