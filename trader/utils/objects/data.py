@@ -51,6 +51,12 @@ class Futures:
     Closed = []
     Transferred = {}
     CodeList = {}
+    OptionOrderStatus = {}
+    # OptionOrderStatus 狀態值有:
+    # 1. Submitted   已送出，尚未確認最終結果
+    # 2. Filled      已成交
+    # 3. PartFilled  部分成交
+    # 4. Retry       被取消、失敗、拒絕，策略可調價重送
     Limit = 0
     CanTrade = False
 

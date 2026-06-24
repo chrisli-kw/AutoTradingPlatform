@@ -113,9 +113,18 @@ class StrategyTool:
             SecurityInfo.account == self.account_name,
             SecurityInfo.code == target
         )
+        if df.empty:
+            return Action()
+
         action = df.action.values[0]
         action = 'Sell' if action == 'Buy' else 'Buy'
-        quantity = df.quantity.sum() if not df.empty else 0
+        conf = TradeDataHandler.getStrategyConfig(target)
+        quantity = TradeDataHandler.strategy_quantity(
+            int(df.quantity.sum()),
+            mode=getattr(conf, 'mode', 'long'),
+            action=df.action.values[0],
+            market='Futures'
+        )
         return Action(action, f'{target} 轉倉-Cover', quantity)
 
     def isLong(self, strategy: str):

@@ -60,16 +60,53 @@ def create_queue(target_list, crawled_list=[]):
     return (q)
 
 
-def get_contract(target: str, api=None):
+def get_contract(
+        target: str = None,
+        api=None,
+        expiration: str = None,
+        strike: float = None,
+        option_type: str = None,
+        underlying: str = 'TX'
+):
     if api is None:
         api = API
 
-    if target[:3] in api.Contracts.Indexs.__dict__:
-        return api.Contracts.Indexs[target[:3]][target]
-    elif target[:3] in api.Contracts.Futures.__dict__:
-        return api.Contracts.Futures[target[:3]][target]
-    elif target[:3] in api.Contracts.Options.__dict__:
-        return api.Contracts.Options[target[:3]][target]
+    if expiration is not None or strike is not None or option_type is not None:
+        if not all([expiration, strike is not None, option_type]):
+            raise ValueError(
+                'expiration, strike, and option_type are required '
+                'for option contract lookup.'
+            )
+
+        from .options import get_option_contract
+        return get_option_contract(
+            expiration=expiration,
+            strike=strike,
+            option_type=option_type,
+            underlying=underlying,
+            api=api
+        )
+
+    if target is None:
+        raise ValueError('target is required.')
+
+    if not isinstance(target, str):
+        return target
+
+    c_type = target[:3]
+    if api.Contracts.Indexs.get(c_type):
+        return api.Contracts.Indexs.get(c_type)[target]
+    elif api.Contracts.Futures.get(c_type):
+        return api.Contracts.Futures.get(c_type)[target]
+    elif api.Contracts.Options.get(c_type):
+        return api.Contracts.Options.get(c_type)[target]
+
+    from .options import find_option_contract
+    try:
+        return find_option_contract(target, api=api)
+    except KeyError:
+        pass
+
     return api.Contracts.Stocks[target]
 
 

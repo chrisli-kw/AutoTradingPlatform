@@ -1,4 +1,5 @@
 import time
+import inspect
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -864,13 +865,248 @@ class BackTester(BacktestPerformance):
 
 
 class FuturesBackTester:
-    def __init__(self, account_name: str, data_short: pd.DataFrame, data_long: pd.DataFrame):
+    def __init__(
+        self,
+        account_name: str,
+        data_short: Union[pd.DataFrame, dict] = None,
+        data_long: Union[pd.DataFrame, dict] = None,
+        start_date: str = None,
+        end_date: str = None,
+        data_path: str = None
+    ):
         self.account_name = account_name
+        self.start_date = start_date
+        self.end_date = end_date
+        self.data_path = data_path or f'{PATH}/train'
+        self.default_freq = '1T'
+        self.loaded_scales = None
+        self._data_short_provided = data_short is not None
+        self._data_long_provided = data_long is not None
+
+        if data_short is not None and (self.start_date or self.end_date):
+            data_short = self._filter_kbar_data(data_short)
+
         self.data_short = data_short
         self.data_long = data_long
+        self.KBars_short = self._normalize_kbars(
+            data_short) if data_short is not None else {}
+        self.KBars_long = self._normalize_kbars(
+            data_long) if data_long is not None else {}
+        self.trades_by_mode = {'short': {}, 'long': {}}
+        self.kbar_context = {'short': [], 'long': []}
+        self.primary_scale_by_mode = {'short': None, 'long': None}
         self.trades_short = np.array([])
         self.trades_long = np.array([])
         self.created_features = list()
+        self.created_feature_key = None
+
+    def _get_kbar_scales(self, config):
+        kbar_scales = list(getattr(config, 'kbarScales', []))
+        scale = getattr(config, 'scale', None)
+
+        if scale and scale not in kbar_scales:
+            kbar_scales.insert(0, scale)
+
+        return kbar_scales or ['1T']
+
+    def _load_datasets(self, kbar_scales: list):
+        data_short = {}
+        data_long = {}
+
+        for freq in kbar_scales:
+            short = file_handler.Process.read_table(
+                f'{self.data_path}/valid_data_{freq}.pkl')
+            long = file_handler.Process.read_table(
+                f'{self.data_path}/train_data_{freq}.pkl')
+
+            data_short[freq] = self._filter_data_short(short)
+            data_long[freq] = long
+
+        if len(kbar_scales) == 1:
+            freq = kbar_scales[0]
+            return data_short[freq], data_long[freq]
+
+        return data_short, data_long
+
+    def _ensure_datasets(self, config):
+        kbar_scales = self._get_kbar_scales(config)
+        self.default_freq = kbar_scales[0] if len(kbar_scales) == 1 else '1T'
+
+        if (
+            self.data_short is None or
+            self.data_long is None or
+            (self.loaded_scales is not None and tuple(
+                kbar_scales) != self.loaded_scales)
+        ):
+            loaded_short, loaded_long = self._load_datasets(kbar_scales)
+            if not self._data_short_provided:
+                self.data_short = loaded_short
+            if not self._data_long_provided:
+                self.data_long = loaded_long
+            self.loaded_scales = tuple(kbar_scales)
+
+        if self.start_date or self.end_date:
+            self.data_short = self._filter_kbar_data(self.data_short)
+
+    def _filter_kbar_data(self, data):
+        if isinstance(data, dict):
+            return {
+                freq: self._filter_data_short(df)
+                for freq, df in data.items()
+            }
+        return self._filter_data_short(data)
+
+    def _filter_data_short(self, df: pd.DataFrame):
+        if df.empty or 'Time' not in df.columns:
+            return df
+
+        df = df.copy()
+        df['Time'] = pd.to_datetime(df.Time)
+
+        if self.start_date:
+            df = df[df.Time >= pd.to_datetime(self.start_date)]
+
+        if self.end_date:
+            end_date = pd.to_datetime(self.end_date)
+            if end_date == end_date.normalize():
+                df = df[df.Time < end_date + pd.Timedelta(days=1)]
+            else:
+                df = df[df.Time <= end_date]
+
+        return df
+
+    def _normalize_kbars(self, data):
+        if isinstance(data, dict):
+            return data.copy()
+        return {self.default_freq: data}
+
+    def _get_primary_scale(self, config, KBars: dict):
+        scale = getattr(config, 'scale', None)
+        if scale in KBars:
+            return scale
+
+        kbar_scales = getattr(config, 'kbarScales', [])
+        for scale in kbar_scales:
+            if scale in KBars:
+                return scale
+
+        return next(iter(KBars))
+
+    def _get_feature_key(self, config):
+        features = tuple(getattr(config, 'Features', []))
+        kbar_scales = tuple(self._get_kbar_scales(config))
+        return features, kbar_scales
+
+    def _add_features(self, config, KBars: dict):
+        result = {}
+        for scale, df in KBars.items():
+            result[scale] = config.add_features(df.copy(), scale=scale)
+        return result
+
+    def _build_kbar_records(self, KBars: dict):
+        records = {}
+        for scale, df in KBars.items():
+            if not {'Time', 'name'}.issubset(df.columns):
+                records[scale] = {}
+                continue
+
+            scale_records = {}
+            df = df.copy()
+            df['Time'] = pd.to_datetime(df.Time, errors='coerce')
+            df = df.dropna(subset=['Time'])
+            df = df.sort_values(['name', 'Time']).reset_index(drop=True)
+            for name, rows in df.groupby('name'):
+                scale_records[name] = {
+                    'times': rows.Time.to_numpy(dtype='datetime64[ns]'),
+                    'records': rows.to_dict('records')
+                }
+            records[scale] = scale_records
+        return records
+
+    def _make_kbar_context(self, KBars: dict, primary_scale: str, trades: np.array):
+        if len(KBars) <= 1:
+            return []
+
+        records = self._build_kbar_records(KBars)
+        contexts = []
+        for trade in trades:
+            kbars = {primary_scale: trade}
+            time_ = pd.to_datetime(trade['Time'], errors='coerce')
+            if pd.isna(time_):
+                contexts.append({'KBars': kbars})
+                continue
+
+            time_ = np.datetime64(time_, 'ns')
+            for scale, scale_records in records.items():
+                if scale == primary_scale:
+                    continue
+
+                data = scale_records.get(trade['name'])
+                if not data:
+                    continue
+
+                idx = np.searchsorted(data['times'], time_, side='right') - 1
+                if idx >= 0:
+                    kbars[scale] = data['records'][idx]
+
+            context = {'KBars': kbars}
+            context.update({
+                f"K{scale}": kbar
+                for scale, kbar in kbars.items()
+            })
+            contexts.append(context)
+
+        return contexts
+
+    def _accepts_kwargs(self, func):
+        return any(
+            p.kind == inspect.Parameter.VAR_KEYWORD
+            for p in inspect.signature(func).parameters.values()
+        )
+
+    def _get_predictions(self, mode: str):
+        mode = 'short' if mode == 'short' else 'long'
+        KBars = self.KBars_short if mode == 'short' else self.KBars_long
+        source = self.data_short if mode == 'short' else self.data_long
+        if isinstance(source, dict):
+            return KBars
+        return KBars[self.primary_scale_by_mode[mode]]
+
+    def _prepare_features(self, config):
+        self._ensure_datasets(config)
+        feature_key = self._get_feature_key(config)
+        if feature_key == self.created_feature_key:
+            return
+
+        KBars_short = self._add_features(
+            config, self._normalize_kbars(self.data_short))
+        KBars_long = self._add_features(
+            config, self._normalize_kbars(self.data_long))
+        primary_short = self._get_primary_scale(config, KBars_short)
+        primary_long = self._get_primary_scale(config, KBars_long)
+
+        self.KBars_short = KBars_short
+        self.KBars_long = KBars_long
+        self.trades_short = np.array(
+            KBars_short[primary_short].to_dict('records'))
+        self.trades_long = np.array(
+            KBars_long[primary_long].to_dict('records'))
+        self.trades_by_mode = {
+            'short': self.trades_short,
+            'long': self.trades_long
+        }
+        self.primary_scale_by_mode = {
+            'short': primary_short,
+            'long': primary_long
+        }
+        self.kbar_context = {
+            'short': self._make_kbar_context(
+                KBars_short, primary_short, self.trades_short),
+            'long': self._make_kbar_context(
+                KBars_long, primary_long, self.trades_long)
+        }
+        self.created_features = KBars_short[primary_short].columns.to_list()
+        self.created_feature_key = feature_key
 
     def simulate_trades(self, config, mode):
         config = config(self.account_name, config.name)
@@ -884,12 +1120,13 @@ class FuturesBackTester:
         ):
             return pd.DataFrame(Position(self.account_name, config.name).exits)
 
-        if mode == 'short':
-            trades = self.trades_short.copy()
-        else:
-            trades = self.trades_long.copy()
+        trade_mode = 'short' if mode == 'short' else 'long'
+        trades = self.trades_by_mode.get(trade_mode, self.trades_long).copy()
+        kbar_context = self.kbar_context.get(trade_mode, [])
+        use_kwargs = bool(kbar_context)
 
-        for trade in tqdm(trades):
+        for i, trade in enumerate(tqdm(trades)):
+            trade_kwargs = kbar_context[i] if use_kwargs else {}
             name = trade['name']
             price = trade['tOpen']
 
@@ -902,7 +1139,7 @@ class FuturesBackTester:
             }
             # 建倉邏輯
             if not position.is_open(name):
-                if config.examineOpen(trade):
+                if config.examineOpen(trade, **trade_kwargs):
                     data.update({
                         'quantity': config.open_qty,
                         'reason': f'建倉 - {config.open_reason}'
@@ -912,7 +1149,11 @@ class FuturesBackTester:
 
             else:
                 # 加碼
-                if config.raiseQuota and config.raise_position(trade, position.entries):
+                if (
+                    config.raiseQuota and
+                    config.raise_position(
+                        trade, position.entries, **trade_kwargs)
+                ):
                     total_qty = position.total_qty.get(name, 0)
                     raise_qty = min(
                         config.raise_qty, config.max_qty.get(name, 0) - total_qty)
@@ -926,13 +1167,13 @@ class FuturesBackTester:
                         continue
 
                 # 平倉邏輯
-                if config.stop_loss(trade, position.entries):
+                if config.stop_loss(trade, position.entries, **trade_kwargs):
                     data.update({
                         'quantity': config.stop_loss_qty,
                         'reason': f'停損 - {config.stop_loss_reason}'
                     })
                     config.avg_cost = position.close(data)
-                elif config.stop_profit(trade, position.entries):
+                elif config.stop_profit(trade, position.entries, **trade_kwargs):
                     data.update({
                         'quantity': config.stop_profit_qty,
                         'reason': f'停利 - {config.stop_profit_reason}'
@@ -953,15 +1194,7 @@ class FuturesBackTester:
 
     def run(self, config=None, mode='short'):
 
-        if set(config.Features) != set(self.created_features):
-
-            tb_short = config.add_features(self.data_short)
-            self.trades_short = np.array(tb_short.to_dict('records'))
-
-            tb_long = config.add_features(self.data_long)
-            self.trades_long = np.array(tb_long.to_dict('records'))
-
-            self.created_features = tb_short.columns.to_list()
+        self._prepare_features(config)
 
         trades = self.simulate_trades(config, mode)
 
@@ -976,7 +1209,7 @@ class FuturesBackTester:
             columns={'open_time': 'open_Time', 'close_time': 'close_Time'})
 
         return {
-            'Predictions': self.data_short if mode == 'short' else self.data_long,
+            'Predictions': self._get_predictions(mode),
             'Summary': compute_profits(trades),
             'Records': trades
         }

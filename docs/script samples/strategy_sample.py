@@ -43,11 +43,12 @@ class StrategyConfig:
     # Define whether its a long or short strategy
     mode = 'long'
 
-    # Kbar MAIN scale for backtesting
+    # Kbar MAIN scale for backtesting. The backtest loop runs on this scale.
     scale = '5T'
 
-    # Kbar scales to generate indicators for backtesting
-    kbarScales = ['1D', '5T']
+    # Kbar scales to prepare for backtesting and intraday monitoring.
+    # Backtest receives aligned multi-scale data through **kwargs.
+    kbarScales = ['5T', '15T', '1D']
 
     # whether raise trading quota after opening a position
     raiseQuota = False
@@ -107,15 +108,50 @@ class StrategyConfig:
         self.account_name = account_name
         self.positions = Position(account_name=account_name, strategy=strategy)
 
-    def add_features(self):
+    @staticmethod
+    def add_features(df: pd.DataFrame, scale='5T'):
         '''
         ===================================================================
-        Functions of adding all features.
+        Add features for one kbar scale.
+
+        Backtest calls:
+            StrategyConfig.add_features(df, scale=scale)
+
+        Intraday monitoring may also reuse this function when updating
+        TradeData.KBars.Freq[scale].
+        ===================================================================
+        '''
+        df = df.sort_values(['name', 'Time']).reset_index(drop=True)
+        group = df.groupby('name')
+        df['yClose'] = group.Close.shift().fillna(df.Close)
+        df['tOpen'] = group.Open.shift(-1).fillna(df.Close)
+        df['tTime'] = group.Time.shift(-1).fillna(df.Time)
+
+        if scale == '1D':
+            df['day_return'] = group.Close.pct_change()
+        else:
+            ranges = df.High - df.Low
+            df['ATR'] = ranges.groupby(df.name).transform(
+                lambda s: s.rolling(15).mean())
+            df['volume_ma'] = group.Volume.transform(
+                lambda s: s.shift().rolling(60).mean())
+
+        return df
+
+    def add_realtime_features(self):
+        '''
+        ===================================================================
+        Optional intraday helper.
+
+        TradeData.KBars.Freq keeps the runtime dataframes. This helper updates
+        each scale in place without changing the TradeData.KBars.Freq structure.
         ===================================================================
         '''
         for scale in self.kbarScales:
-            func = self.addFeatures_1D if scale == '1D' else self.addFeatures_T
-            TradeData.KBars.Freq[scale] = func(TradeData.KBars.Freq[scale])
+            TradeData.KBars.Freq[scale] = self.add_features(
+                TradeData.KBars.Freq[scale],
+                scale=scale
+            )
 
     def select_preprocess(self, df: pd.DataFrame, **kwargs):
         '''
@@ -164,17 +200,23 @@ class StrategyConfig:
         return quantity, self.max_qty.get(target, 0)
 
     @staticmethod
-    def examineOpen(trade: dict, price=None) -> bool:
+    def examineOpen(trade: dict, price=None, **kwargs) -> bool:
         '''
         ===================================================================
         Set conditions to open a position.
+
+        In multi-scale backtests, kwargs contains:
+            kwargs['KBars'] = {'5T': K5min, '15T': K15min, '1D': KDay}
+            kwargs['K5T'], kwargs['K15T'], kwargs['K1D'] are also available.
         ===================================================================
         '''
         open = trade.get('Open')
-        return (open > 100)
+        K15min = kwargs.get('K15T', {})
+        atr15 = K15min.get('ATR', 0)
+        return (open > 100) and (atr15 >= 0)
 
     @classmethod
-    def raise_position(self, trade: dict, entries: list, price=None):
+    def raise_position(self, trade: dict, entries: list, price=None, **kwargs):
         '''
         ===================================================================
         Set conditions to raise an increase in opened positions.
@@ -189,7 +231,7 @@ class StrategyConfig:
         return (atr > 3)
 
     @staticmethod
-    def stop_loss(trade: dict, entries: list, price=None):
+    def stop_loss(trade: dict, entries: list, price=None, **kwargs):
         '''
         ===================================================================
         Set conditions to stop loss.
@@ -200,11 +242,12 @@ class StrategyConfig:
             return False
 
         price = trade['tOpen'] if price is None else price
-        atr = trade.get('ATR')
+        K15min = kwargs.get('K15T', {})
+        atr = K15min.get('ATR', trade.get('ATR'))
         return (atr < 4)
 
     @staticmethod
-    def stop_profit(trade: dict, entries: list, price=None):
+    def stop_profit(trade: dict, entries: list, price=None, **kwargs):
         '''
         ===================================================================
         Set conditions to stop profit.
@@ -218,6 +261,27 @@ class StrategyConfig:
         atr = trade.get('ATR')
         return (atr > 10)
 
+    def get_kbar(self, target: str, scale=None):
+        '''
+        ===================================================================
+        Get the latest intraday kbar for a target and scale.
+
+        scale=None preserves the original behavior by using self.scale.
+        ===================================================================
+        '''
+        scale = scale or self.scale
+        df = TradeData.KBars.Freq[scale].copy()
+        try:
+            df = df[df.name == target].tail(1)
+            if df.empty or df.isnull().values.any():
+                logging.warning(
+                    f"Dataframe contains empty/NaN values for target: {target}, scale: {scale}")
+                return {'name': target}
+            return df.to_dict('records')[0]
+        except Exception:
+            logging.exception(f'[{target}] get_kbar error, scale={scale}:')
+            return {'name': target}
+
     def Open(self, inputs: dict, **kwargs):
         '''
         ===================================================================
@@ -230,18 +294,18 @@ class StrategyConfig:
         target = inputs['symbol']
         price = TradeData.Quotes.NowTargets[target]['price']
 
-        K1min = TradeData.KBars.Freq[self.scale].copy()
-        K1min = K1min[K1min.name == target].tail(1).to_dict('records')[0]
+        Kbar = self.get_kbar(target)
+        K15min = self.get_kbar(target, scale='15T')
 
         # New position
-        if not self.positions.entries and self.examineOpen(K1min, price=price):
+        if not self.positions.entries and self.examineOpen(Kbar, price=price, K15T=K15min):
             self.positions.open(price, now, qty=self.open_qty)
 
             reason = 'open position'
             return Action(action, reason, self.open_qty)
 
         # Raise position
-        elif self.raise_position(K1min, self.positions, price=price):
+        elif self.raise_position(Kbar, self.positions, price=price, K15T=K15min):
             raise_qty = min(
                 self.raise_qty, self.max_qty - self.positions.total_qty)
             self.positions.open(price, now, qty=raise_qty)
@@ -262,18 +326,18 @@ class StrategyConfig:
         target = inputs['symbol']
         price = TradeData.Quotes.NowTargets[target]['price']
 
-        K1min = TradeData.KBars.Freq[self.scale].copy()
-        K1min = K1min[K1min.name == target].tail(1).to_dict('records')[0]
+        Kbar = self.get_kbar(target)
+        K15min = self.get_kbar(target, scale='15T')
         entries = self.positions.entries
 
-        if self.stop_loss(K1min, entries, price=price):
+        if self.stop_loss(Kbar, entries, price=price, K15T=K15min):
             self.positions.close(
                 price, now, reason='stop loss', qty=self.stop_loss_qty)
 
             reason = 'stop loss'
             return Action(action, reason, self.stop_loss_qty)
 
-        elif self.stop_profit(K1min, entries, price=price):
+        elif self.stop_profit(Kbar, entries, price=price, K15T=K15min):
             self.positions.close(
                 price, now, reason='stop profit', qty=self.stop_profit_qty)
 

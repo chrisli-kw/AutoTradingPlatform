@@ -16,7 +16,6 @@ from .config import (
     ConvertScales,
     NotifyConfig
 )
-from .create_env import app
 from .utils import tasker, get_contract
 from .utils.time import time_tool
 from .utils.crawler import crawler
@@ -36,7 +35,10 @@ def runCreateENV(**kwargs):
     file_handler.Operate.create_folder('./lib')
     file_handler.Operate.create_folder('./lib/envs')
     file_handler.Operate.create_folder('./lib/schedules')
-    app.run(host='0.0.0.0', port=8090)
+    logging.warning(
+        'The create_env task has been archived. '
+        'Run `streamlit run gui.py` and use 使用者專區 to manage UserSettings.'
+    )
 
 
 @tasker
@@ -245,7 +247,7 @@ def thread_subscribe(user: str, targets: list):
         logging.info('Subscribe targets')
         for t in targets:
             target = get_contract(t, api=api)
-            api.quote.subscribe(target, quote_type='tick', version='v1')
+            api.subscribe(target, quote_type='tick', version='v1')
 
         logging.info(f'Done subscribe {len(targets)} targets')
         time.sleep(max((TimeEndStock - datetime.now()).total_seconds(), 0))

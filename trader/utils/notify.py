@@ -80,6 +80,32 @@ class Notification:
             'Cover': '平倉'
         }
 
+    @staticmethod
+    def _fop_contract_info(contract: dict):
+        code = contract.get('code', '')
+        delivery_month = contract.get('delivery_month', '')
+        option_right = contract.get('option_right', 'Future')
+        is_option = (
+            contract.get('security_type') == 'OPT' or
+            option_right not in [None, '', 'Future']
+        )
+
+        if is_option:
+            option = 'C' if 'Call' in option_right else 'P'
+            strike = int(contract.get('strike_price', 0) or 0)
+            symbol = f'{code}{delivery_month}{strike}{option}'
+            contracts = API.Contracts.Options.get(code)
+        else:
+            symbol = f'{code}{delivery_month}'
+            contracts = API.Contracts.Futures.get(code)
+
+        try:
+            name = contracts[symbol].name if contracts else symbol
+        except (KeyError, TypeError, AttributeError):
+            name = contract.get('full_code') or symbol
+
+        return name, symbol
+
     def post_tftOrder(self, stat, msg: dict):
         '''發送推播-股票委託'''
         logging.debug(f'[{stat}][{msg}]')
@@ -126,48 +152,40 @@ class Notification:
         if LOG_LEVEL != 'DEBUG':
             return
 
-        code = msg['contract']['code']
-        delivery_month = msg['contract']['delivery_month']
-        name = API.Contracts.Futures[code]
-        name = name[code+delivery_month].name if name else msg['contract']['option_right']
+        name, symbol = self._fop_contract_info(msg['contract'])
         order = msg['order']
         account = order['account']['account_id']
-        oc_type = self.oc_type[order['oc_type']]
+        raw_oc_type = order['oc_type']
+        normalized_oc_type = (
+            'New' if raw_oc_type in ['NewPosition', 'DayTrade']
+            else raw_oc_type
+        )
+        oc_type = self.oc_type.get(normalized_oc_type, normalized_oc_type)
         quantity = order['quantity']
 
         operation = msg['operation']
         if operation['op_code'] == '00':
             if operation['op_type'] == 'Cancel':
-                text = f"\n【刪單成功】{name}({code+delivery_month})\n【帳號】{account}\n【{oc_type}】{order['action']} {quantity}口"
+                text = f"\n【刪單成功】{name}({symbol})\n【帳號】{account}\n【{oc_type}】{order['action']} {quantity}口"
                 self.send.post(text)
 
             elif operation['op_msg'] == '':
-                text = f"\n【委託成功】{name}({code+delivery_month})\n【帳號】{account}\n【{oc_type}】{order['action']} {quantity}口"
+                text = f"\n【委託成功】{name}({symbol})\n【帳號】{account}\n【{oc_type}】{order['action']} {quantity}口"
                 self.send.post(text)
         else:
-            text = f"\n【委託失敗】{name}({code+delivery_month})\n【帳號】{account}\n【{operation['op_msg']}】"
+            text = f"\n【委託失敗】{name}({symbol})\n【帳號】{account}\n【{operation['op_msg']}】"
             self.send.post(text)
 
     def post_fDeal(self, stat, msg: dict):
         '''發送推播-期貨成交'''
         logging.debug(f'[{stat}][{msg}]')
 
-        code = msg['code']
-        delivery_month = msg['delivery_month']
-
-        if msg['option_right'] == 'Future':
-            name = API.Contracts.Futures[code]
-            code_ = code+delivery_month
-        else:
-            name = API.Contracts.Options[code]
-            option = msg["option_right"][6:7]
-            code_ = f'{code}{delivery_month}{int(msg["strike_price"])}{option}'
-        name = name[code_].name
+        name, symbol = self._fop_contract_info(msg)
 
         account = msg['account_id']
         price = msg['price']
         quantity = msg['quantity']
-        text = f"\n【成交】{name}({code+delivery_month})\n【帳號】{account}\n【{msg['action']}】{quantity}口 {price}元"
+        text = f"\n【成交】{name}({symbol})\n【帳號】{account}\n【{msg['action']}】{quantity}口 {price}元"
         self.send.post(text)
 
     def post_human_deal(

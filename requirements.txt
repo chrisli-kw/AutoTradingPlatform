@@ -21,11 +21,12 @@ pandas==2.3.3
 plotly==6.3.1
 python-dotenv==1.0.0
 python-telegram-bot==22.5
+pytz>=2024.2
 pymysql==1.1.0
 # psycopg2-binary==2.9.9
 redis==4.3.4
 requests==2.31.0
-shioaji==1.2.8
+shioaji==1.5.3
 streamlit==1.45.1
 sqlalchemy==2.0.44
 tqdm==4.67.1

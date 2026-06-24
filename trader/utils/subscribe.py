@@ -55,7 +55,10 @@ class Subscriber(KBarTool):
     def update_quote_v1(self, tick, code=''):
         '''處理即時成交資料'''
 
-        tick_data = dict(tick)
+        if hasattr(tick, 'to_dict') and callable(tick.to_dict):
+            tick_data = tick.to_dict()
+        else:
+            tick_data = dict(tick)
 
         if code == '':
             code = tick.code
@@ -81,6 +84,9 @@ class Subscriber(KBarTool):
                 self._update_K1(code)
                 self._set_target_quote_default([code])
 
+        if code not in TradeData.Quotes.AllTargets:
+            self._set_target_quote_default([code])
+
         kbar_data = TradeData.Quotes.AllTargets[code].copy()
         TradeData.Quotes.AllTargets[code] = {
             'Open': price if kbar_data['Open'] is None else kbar_data['Open'],
@@ -97,16 +103,16 @@ class Subscriber(KBarTool):
     def subscribe_index(self):
         '''訂閱指數盤中資訊'''
 
-        API.quote.subscribe(API.Contracts.Indexs.TSE.TSE001, quote_type='tick')
-        API.quote.subscribe(API.Contracts.Indexs.OTC.OTC101, quote_type='tick')
+        API.subscribe(API.Contracts.Indexs.TSE.TSE001, quote_type='tick')
+        API.subscribe(API.Contracts.Indexs.OTC.OTC101, quote_type='tick')
         self._set_index_quote_default()
 
     def unsubscribe_index(self):
         '''取消訂閱指數盤中資訊'''
 
-        API.quote.unsubscribe(
+        API.unsubscribe(
             API.Contracts.Indexs.TSE.TSE001, quote_type='tick')
-        API.quote.unsubscribe(
+        API.unsubscribe(
             API.Contracts.Indexs.OTC.OTC101, quote_type='tick')
 
     def subscribe_targets(self, targets: list, quote_type: str = 'tick'):
@@ -114,23 +120,23 @@ class Subscriber(KBarTool):
 
         for t in targets:
             target = get_contract(t)
-            API.quote.subscribe(target, quote_type=quote_type, version='v1')
+            API.subscribe(target, quote_type=quote_type, version='v1')
 
     def unsubscribe_targets(self, targets: str, quote_type: str = 'tick'):
         '''取消訂閱股票盤中資訊'''
 
         for t in targets:
             target = get_contract(t)
-            API.quote.unsubscribe(target, quote_type=quote_type, version='v1')
+            API.unsubscribe(target, quote_type=quote_type, version='v1')
 
     def subscribe_all(self, targetLists: Union[list, np.array], pass_index=False):
         '''訂閱指數、tick、bidask資料'''
 
+        self._set_target_quote_default(targetLists)
         if not pass_index:
             self.subscribe_index()
         self.subscribe_targets(targetLists, 'tick')
         self.subscribe_targets(targetLists, 'bidask')
-        self._set_target_quote_default(targetLists)
 
     def unsubscribe_all(self, targetLists: Union[list, np.array]):
         '''取消訂閱指數、tick、bidask資料'''

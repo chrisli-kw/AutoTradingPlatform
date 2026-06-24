@@ -1,8 +1,10 @@
+import os
 import ssl
+import sys
 import time
 import logging
+import shioaji as sj
 from collections import namedtuple
-from shioaji import constant, contracts
 from datetime import datetime, timedelta
 
 from . import __version__, picker, exec
@@ -29,6 +31,7 @@ from .utils.objects.data import TradeData
 from .utils.positions import WatchListTool, TradeDataHandler
 from .utils.strategy import StrategyTool
 from .utils.bot import TelegramBot
+from .utils import runtime
 
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -53,45 +56,88 @@ class StrategyExecutor(AccountHandler, Subscriber):
         }
 
         self.punish_list = []
+        runtime.write_session(
+            account_name,
+            pid=os.getpid(),
+            command=" ".join(sys.argv),
+            cwd=os.getcwd(),
+            started_at=runtime.now_text(),
+            launcher="runtime",
+        )
+
+    def _callback_msg_to_dict(self, msg):
+        if isinstance(msg, dict):
+            return {k: self._callback_msg_to_dict(v) for k, v in msg.items()}
+
+        if hasattr(msg, 'items') and callable(msg.items):
+            return {k: self._callback_msg_to_dict(v) for k, v in msg.items()}
+
+        if hasattr(msg, 'dict') and callable(msg.dict):
+            return self._callback_msg_to_dict(msg.dict())
+
+        return msg
+
+    def _subscribe_trade_callbacks(self):
+        for account in [API.stock_account, API.futopt_account]:
+            if account is None:
+                continue
+
+            try:
+                is_subscribed = API.subscribe_trade(account)
+                logging.info(
+                    f'[OrderCallback] subscribe_trade|{account.account_id}|{is_subscribed}')
+            except Exception:
+                logging.exception(
+                    f'[OrderCallback] subscribe_trade failed|{account.account_id}|')
+
+    @staticmethod
+    def _safe_notify(callback, stat, msg):
+        try:
+            callback(stat, msg)
+        except Exception:
+            logging.exception(
+                f'[OrderCallback] notification failed|{stat}|')
 
     def _order_callback(self, stat, msg):
         '''處理委託/成交回報'''
 
+        msg = self._callback_msg_to_dict(msg)
+
         if (
             TradeData.Account.Simulate or
             (
-                stat == constant.OrderState.StockOrder and
+                stat == sj.OrderState.StockOrder and
                 msg['order']['account']['account_id'] != API.stock_account.account_id
             ) or
             (
-                stat == constant.OrderState.StockDeal and
+                stat == sj.OrderState.StockDeal and
                 msg['account_id'] != API.stock_account.account_id
             ) or
             (
-                stat == constant.OrderState.FuturesOrder and
+                stat == sj.OrderState.FuturesOrder and
                 msg['order']['account']['account_id'] != API.futopt_account.account_id
             ) or
             (
-                stat == constant.OrderState.FuturesDeal and
+                stat == sj.OrderState.FuturesDeal and
                 msg['account_id'] != API.futopt_account.account_id
             )
         ):
             return
 
-        if stat == constant.OrderState.StockOrder:
-            self.notifier.post_tftOrder(stat, msg)
+        if stat == sj.OrderState.StockOrder:
+            self._safe_notify(self.notifier.post_tftOrder, stat, msg)
             self.Order.StockOrder(msg)
 
-        elif stat == constant.OrderState.StockDeal:
-            self.notifier.post_tftDeal(stat, msg)
+        elif stat == sj.OrderState.StockDeal:
+            self._safe_notify(self.notifier.post_tftDeal, stat, msg)
             self.Order.StockDeal(msg)
 
-        elif stat == constant.OrderState.FuturesOrder:
-            self.notifier.post_fOrder(stat, msg)
+        elif stat == sj.OrderState.FuturesOrder:
+            self._safe_notify(self.notifier.post_fOrder, stat, msg)
             self.Order.FuturesOrder(msg)
 
-        elif stat == constant.OrderState.FuturesDeal:
-            self.notifier.post_fDeal(stat, msg)
+        elif stat == sj.OrderState.FuturesDeal:
+            self._safe_notify(self.notifier.post_fDeal, stat, msg)
             self.Order.FuturesDeal(msg)
 
     def init_account(self):
@@ -109,7 +155,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         # set callbacks
         @API.on_tick_stk_v1()
-        def stk_quote_callback_v1(exchange, tick):
+        def stk_quote_callback_v1(tick):
             if tick.intraday_odd == 0 and tick.simtrade == 0:
 
                 if tick.code not in TradeData.Quotes.NowTargets:
@@ -119,10 +165,11 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 # self.to_redis({tick.code: tick_data})
 
         @API.on_tick_fop_v1()
-        def fop_quote_callback_v1(exchange, tick):
+        def fop_quote_callback_v1(tick):
             try:
                 if tick.simtrade == 0:
-                    symbol = TradeData.Futures.CodeList[tick.code]
+                    symbol = TradeData.Futures.CodeList.get(
+                        tick.code, tick.code)
 
                     if symbol not in TradeData.Quotes.NowTargets:
                         logging.debug(f'[Quotes]First|{symbol}|')
@@ -143,15 +190,16 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         # 訂閱下單回報
         API.set_order_callback(self._order_callback)
+        self._subscribe_trade_callbacks()
 
         # 訂閱五檔回報
         @API.on_bidask_stk_v1()
-        def stk_quote_callback(exchange, bidask):
+        def stk_quote_callback(bidask):
             TradeData.BidAsk[bidask.code] = bidask
 
         @API.on_bidask_fop_v1()
-        def fop_quote_callback(exchange, bidask):
-            symbol = TradeData.Futures.CodeList[bidask.code]
+        def fop_quote_callback(bidask):
+            symbol = TradeData.Futures.CodeList.get(bidask.code, bidask.code)
             TradeData.BidAsk[symbol] = bidask
 
     def _log_and_notify(self, msg: str):
@@ -218,6 +266,89 @@ class StrategyExecutor(AccountHandler, Subscriber):
         if TradeData.Account.Simulate and order_data:
             self.simulator.update_monitor(order, order_data)
 
+    @staticmethod
+    def _action_orders(actionInfo):
+        orders = getattr(actionInfo, 'orders', None)
+        if orders is None:
+            return []
+        if isinstance(orders, dict):
+            return [orders]
+        return orders
+
+    @staticmethod
+    def _strip_order_type(order_spec: dict):
+        spec = order_spec.copy()
+        order_type = spec.pop('type', spec.pop('order_type_', 'option'))
+        if 'label' in spec and 'order_label' not in spec:
+            spec['order_label'] = spec.pop('label')
+        return order_type, spec
+
+    def _register_option_order_strategy(self, order: namedtuple, strategy: str):
+        TradeData.Securities.Strategy[order.target] = strategy
+
+        try:
+            if order.combo_legs:
+                for leg in order.combo_legs:
+                    target = leg.get('target')
+                    contract = leg.get('contract')
+                    if target:
+                        TradeData.Securities.Strategy[target] = strategy
+                    if target and contract:
+                        TradeData.Contracts[target] = contract
+            else:
+                if order.target not in TradeData.Contracts:
+                    TradeData.Contracts[order.target] = get_contract(
+                        order.target)
+        except Exception:
+            logging.exception(
+                f'[OptionOrder] register strategy failed|{order.target}|')
+
+    def _build_orders_from_specs(
+            self,
+            order_specs: list,
+            strategy: str,
+            actionType: str,
+            octype: str,
+            default_reason: str
+    ):
+        orders = []
+        for order_spec in order_specs:
+            order_type, spec = self._strip_order_type(order_spec)
+            spec.setdefault('action_type', actionType)
+            spec.setdefault('octype', octype)
+            spec.setdefault('reason', default_reason)
+
+            if order_type in ['option', 'single_option']:
+                order = self.Order.option_order_info(**spec)
+                TradeData.Contracts[order.target] = self.Order.Options.contract(
+                    expiration=spec['expiration'],
+                    strike=spec['strike'],
+                    option_type=spec['option_type'],
+                    underlying=spec.get('underlying', 'TX')
+                )
+            elif order_type in ['option_combo', 'combo']:
+                order = self.Order.option_combo_order_info(**spec)
+            else:
+                raise ValueError(f'Unsupported order spec type: {order_type}')
+
+            self._register_option_order_strategy(order, strategy)
+            orders.append(order)
+
+        return orders
+
+    @staticmethod
+    def _as_order_list(orders):
+        if isinstance(orders, list):
+            return orders
+        return [orders]
+
+    @staticmethod
+    def _should_place_order(order: namedtuple):
+        return bool(
+            getattr(order, 'action', '') or
+            getattr(order, 'combo_legs', None)
+        )
+
     def monitor_targets(self, target: str):
         if target in TradeData.Quotes.NowTargets:
             inputs = TradeDataHandler.getQuotesNow(target).copy()
@@ -225,14 +356,26 @@ class StrategyExecutor(AccountHandler, Subscriber):
             strategy = TradeData.Securities.Strategy[target]
 
             contract = TradeData.Contracts.get(target)
-            is_stock = isinstance(contract, contracts.Stock)
+            is_stock = isinstance(contract, sj.Stock)
+            position_data = data.to_dict(
+                'records')[0] if not data.empty else {}
+            broker_quantity = int(position_data.get('quantity', 0) or 0)
+            strategy_quantity = TradeDataHandler.strategy_quantity(
+                broker_quantity,
+                mode=getattr(
+                    TradeDataHandler.getStrategyConfig(target),
+                    'mode',
+                    'long'
+                ),
+                action=position_data.get('action', ''),
+                market='Stocks' if is_stock else 'Futures'
+            )
 
             # new position
-            if data.empty:
+            if strategy_quantity <= 0:
                 actionType = 'Open'
                 octype = 'New'
 
-                data = {}
                 order_cond, quantity = self.get_quantity(target)
                 enoughOpen = self.check_enough(target, quantity)
 
@@ -241,15 +384,21 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 actionType = 'Close'
                 octype = 'Cover'
 
-                data = data.to_dict('records')[0]
-                order_cond = data.get('order_cond', 'Cash')
-                quantity = data.get('quantity', 0)
+                order_cond = position_data.get('order_cond', 'Cash')
+                quantity = strategy_quantity
 
-                duration = (datetime.now() - data['timestamp']).total_seconds()
+                duration = (
+                    datetime.now() - position_data['timestamp']
+                ).total_seconds()
                 if is_stock and duration < 3600*4.5:
                     order_cond = self.day_trade_cond[order_cond]
 
                 enoughOpen = False
+
+            data = position_data.copy()
+            if data:
+                data['broker_quantity'] = broker_quantity
+                data['quantity'] = strategy_quantity
 
             if target in TradeData.Futures.Transferred:
                 quantity = TradeData.Futures.Transferred[target]['quantity']
@@ -292,7 +441,26 @@ class StrategyExecutor(AccountHandler, Subscriber):
                     inputs.update(data)
 
                 actionInfo = func(inputs=inputs)
-                if actionInfo.action:
+                order_specs = self._action_orders(actionInfo)
+                if actionInfo.action or order_specs:
+                    if (
+                        actionType == 'Close' and
+                        actionInfo.action and
+                        not actionInfo.isRaiseQty
+                    ):
+                        requested_quantity = int(actionInfo.quantity or 0)
+                        available_quantity = max(int(quantity or 0), 0)
+                        close_quantity = min(
+                            requested_quantity, available_quantity)
+                        if close_quantity != requested_quantity:
+                            logging.warning(
+                                f'[Order Quantity]Cap close quantity|{target}|'
+                                f'{requested_quantity}->{close_quantity}|')
+                            actionInfo = actionInfo._replace(
+                                quantity=close_quantity)
+                        if close_quantity <= 0:
+                            return self.Order.OrderInfo(target=target)
+
                     if isTransfer:
                         new_contract = f'{target[:3]}{time_tool.GetDueMonth()}'
                         self.Order.transfer_margin(target, new_contract)
@@ -309,7 +477,6 @@ class StrategyExecutor(AccountHandler, Subscriber):
                         TradeData.Securities.Strategy[new_contract] = strategy
                         TradeData.Securities.Monitor[new_contract] = None
                         TradeData.Securities.Monitor.pop(target, None)
-                        # TradeData.Securities.Strategy.pop(target, None)
                         data = {
                             'mode': TradeData.Account.Mode,
                             'account': self.account_name,
@@ -322,6 +489,17 @@ class StrategyExecutor(AccountHandler, Subscriber):
                         }
                         conf = TradeDataHandler.getStrategyConfig(new_contract)
                         conf.positions.close(data)
+
+                    if order_specs:
+                        reason = actionInfo.reason or f'{target}|{strategy}|Option order'
+                        self._log_and_notify(reason)
+                        return self._build_orders_from_specs(
+                            order_specs,
+                            strategy,
+                            actionType,
+                            octype,
+                            reason
+                        )
 
                     if actionInfo.isRaiseQty:
                         actionType = 'Open'
@@ -403,7 +581,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         quantity = int(min(quantity, quantity_limit)/(1 - leverage))
         quantity = min(quantity, 499)
 
-        if not isinstance(contract, contracts.Stock):
+        if not isinstance(contract, sj.Stock):
             # 單位: 口
             return order_cond, quantity
 
@@ -418,7 +596,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         '''檢查個股可否融資融券'''
 
         contract = TradeData.Contracts.get(target)
-        if not isinstance(contract, contracts.Stock):
+        if not isinstance(contract, sj.Stock):
             return 'Cash'
 
         conf = TradeDataHandler.getStrategyConfig(target)
@@ -458,7 +636,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
             return False
 
         mode = conf.mode
-        if isinstance(contract, contracts.Stock):
+        if isinstance(contract, sj.Stock):
             quota = TradeDataHandler.getStocksQuota(mode)
             df = self.Order.filterOrderTable('Stocks')
             df = df[df.code.apply(len) == 4]
@@ -483,7 +661,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         # 1. 不可超過可交割金額
         # 2. 不可大於帳戶可委託金額上限
         # 3. 不可超過股票數上限
-        if isinstance(contract, contracts.Stock):
+        if isinstance(contract, sj.Stock):
             check_long = (
                 (amount1 <= TradeData.Account.DesposalMoney) &
                 (amount2 <= self.env.MARGING_TRADING_AMOUNT)
@@ -545,6 +723,100 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         time.sleep(sleep_time)
 
+    def _update_runtime_status(self, status: str, message: str = ""):
+        try:
+            runtime.write_status(
+                self.account_name,
+                status,
+                message,
+                mode=TradeData.Account.Mode,
+                strategies=list(StrategyList.Config.keys()),
+                monitor_targets=list(TradeData.Securities.Monitor.keys()),
+                pid=os.getpid(),
+            )
+        except Exception:
+            logging.exception('Update runtime status failed:')
+
+    def _apply_runtime_command(self, stop_flag, pause_flag):
+        command = runtime.read_command(self.account_name)
+        if not command:
+            return
+
+        command_id = command.get("id")
+        if runtime.command_is_expired(command):
+            runtime.clear_command(self.account_name, command_id)
+            return
+
+        action = command.get("command")
+        payload = command.get("payload", {})
+        message = ""
+
+        try:
+            if action == "pause":
+                pause_flag.set()
+                message = "GUI 暫停監控"
+                self.notifier.send.post(
+                    f"🛑 [{self.account_name}] 已暫停監控"
+                )
+            elif action == "resume":
+                pause_flag.clear()
+                message = "GUI 恢復監控"
+                self.notifier.send.post(
+                    f"✅ [{self.account_name}] 已恢復監控"
+                )
+            elif action == "stop":
+                stop_flag.set()
+                message = "GUI 要求停止監控"
+                self.notifier.send.post(
+                    f"❌ [{self.account_name}] 程式即將停止"
+                )
+            elif action == "update_max_qty":
+                strategy = payload.get("strategy")
+                target = payload.get("target")
+                max_qty = int(payload.get("max_qty", 0))
+
+                if max_qty < 0:
+                    raise ValueError("max_qty must be >= 0")
+
+                conf = StrategyList.Config.get(strategy)
+                if conf is None:
+                    raise ValueError(f"Unknown strategy: {strategy}")
+                if not hasattr(conf, "max_qty"):
+                    raise ValueError(f"Strategy has no max_qty: {strategy}")
+
+                old_qty = conf.max_qty.get(target)
+                conf.max_qty[target] = max_qty
+                if hasattr(conf, "update_max_qty"):
+                    conf.update_max_qty(
+                        self.account_name, strategy, target, max_qty)
+
+                message = (
+                    f"[Strategy max_qty]Update|{self.account_name}|"
+                    f"{strategy}|{target}|{old_qty}->{max_qty}"
+                )
+                self.notifier.send.post(
+                    f"【{self.account_name} 更新部位】最大數量\n"
+                    f"{target}: {max_qty}"
+                )
+            else:
+                message = f"Unknown GUI command: {action}"
+
+            logging.info(message)
+            self._update_runtime_status(
+                "stopping" if stop_flag.is_set()
+                else "paused" if pause_flag.is_set()
+                else "running",
+                message,
+            )
+        except Exception as exc:
+            logging.exception("[GUI Command] failed:")
+            self._update_runtime_status(
+                "error",
+                f"GUI command failed: {exc}",
+            )
+        finally:
+            runtime.clear_command(self.account_name, command_id)
+
     def run(self):
         '''執行自動交易'''
 
@@ -598,9 +870,11 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         # 開始監控
         stop_flag, pause_flag = bot.get_flags(self.account_name)
+        self._update_runtime_status("running", "監控啟動完成")
         while not stop_flag.is_set():
             self.loop_pause()
             now = datetime.now()
+            self._apply_runtime_command(stop_flag, pause_flag)
 
             if self.is_break_loop(now):
                 break
@@ -614,11 +888,17 @@ class StrategyExecutor(AccountHandler, Subscriber):
                         self.updateKBars(f'{freq}T')
 
             if pause_flag.is_set():
+                self._update_runtime_status("paused", "監控暫停中")
                 continue
 
+            self._update_runtime_status("running", "監控執行中")
+
             for target in list(TradeData.Securities.Monitor):
-                order = self.monitor_targets(target)
-                if order.action:
+                orders = self._as_order_list(self.monitor_targets(target))
+                for order in orders:
+                    if not self._should_place_order(order):
+                        continue
+
                     order_data = self.Order.place_order(order)
                     self.update_position_(order, order_data)
 
@@ -637,6 +917,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         time.sleep(3)
         self.unsubscribe_all(all_targets)
+        self._update_runtime_status("stopped", "監控已停止")
 
     def output_files(self):
         '''停止交易時，輸出庫存資料 & 交易明細'''

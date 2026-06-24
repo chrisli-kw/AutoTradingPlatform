@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import shioaji as sj
 from datetime import datetime
-from shioaji.account import StockAccount
+from collections.abc import Iterable
 
 from ..config import API, PATH, TODAY, TODAY_STR
 from . import concat_df, get_contract
@@ -49,7 +49,7 @@ class AccountInfo:
 
         if nth_account > 1:
             accounts = API.list_accounts()
-            accounts = [a for a in accounts if isinstance(a, StockAccount)]
+            accounts = [a for a in accounts if isinstance(a, sj.StockAccount)]
             if len(accounts) > 1:
                 API.set_default_account(accounts[nth_account-1])
             else:
@@ -91,12 +91,70 @@ class AccountInfo:
 
                 time.sleep(1)
 
-    def _obj_2_df(self, objects: list):
-        '''把自API查詢得到的物件轉為DataFrame'''
+    def _obj_2_record(self, obj):
+        if obj is None:
+            return {}
+
+        if isinstance(obj, dict):
+            return obj
+
+        if hasattr(obj, 'model_dump') and callable(obj.model_dump):
+            return obj.model_dump()
+
+        if hasattr(obj, 'dict') and callable(obj.dict):
+            return obj.dict()
+
+        if hasattr(obj, '_asdict') and callable(obj._asdict):
+            return obj._asdict()
+
+        if hasattr(obj, 'keys') and callable(obj.keys):
+            return {key: obj[key] for key in obj.keys()}
+
+        if self._is_key_value_pairs(obj):
+            return dict(obj)
+
+        if hasattr(obj, '__dict__'):
+            return vars(obj)
+
+        return {'value': obj}
+
+    def _is_key_value_pairs(self, obj):
+        if not isinstance(obj, (list, tuple)):
+            return False
+
         try:
-            return pd.DataFrame([o.__dict__ for o in objects])
-        except:
-            return pd.DataFrame([{o[0]: o[1] for o in objects}])
+            return all(
+                isinstance(item, (list, tuple)) and
+                len(item) == 2 and
+                isinstance(item[0], str)
+                for item in obj
+            )
+        except TypeError:
+            return False
+
+    def _obj_2_df(self, objects):
+        '''把自API查詢得到的物件轉為DataFrame'''
+        if objects is None:
+            return pd.DataFrame()
+
+        if isinstance(objects, pd.DataFrame):
+            return objects.copy()
+
+        if isinstance(objects, dict):
+            return pd.DataFrame([objects])
+
+        if self._is_key_value_pairs(objects):
+            return pd.DataFrame([dict(objects)])
+
+        if (
+            isinstance(objects, Iterable) and
+            not isinstance(objects, (str, bytes)) and
+            not hasattr(objects, 'dict') and
+            not hasattr(objects, 'keys')
+        ):
+            return pd.DataFrame([self._obj_2_record(o) for o in objects])
+
+        return pd.DataFrame([self._obj_2_record(objects)])
 
     def create_info_table(self):
         if file_handler.Operate.is_in_dir(self.filename, f'{PATH}/daily_info/'):
@@ -336,7 +394,7 @@ class AccountInfo:
             try:
                 stocks = API.list_positions(
                     API.stock_account,
-                    unit=sj.constant.Unit.Share
+                    unit=sj.Unit.Share
                 )
                 stocks = self._obj_2_df(stocks)
                 break
@@ -348,7 +406,8 @@ class AccountInfo:
             'direction': 'action',
             'price': 'cost_price',
         })
-        if stocks.shape[0]:
+        if not stocks.empty and stocks.shape[1]:
+            # if stocks.shape[0]:
             names = stocks.code.apply(self.get_stock_name)
             stocks.pnl = stocks.pnl.astype(int)  # 未實現損益
             stocks.order_cond = stocks.order_cond.apply(lambda x: x._value_)
@@ -375,14 +434,22 @@ class AccountInfo:
                         'price': 'cost_price',
                     })
                     df[['account', 'market']] = [self.account_name, 'Futures']
-                    df['yd_quantity'] = df.quantity
+                    raw_quantity = df.quantity.abs().astype(int)
                     df['order_cond'] = ''
 
-                    df['contract'] = df.code.apply(lambda x: get_contract(x))
-                    df['isDue'] = df.contract.apply(
+                    contracts = df.code.apply(lambda x: get_contract(x))
+                    df['isDue'] = contracts.apply(
                         lambda x: TODAY_STR.replace('-', '/') == x.delivery_date)
-                    df.code = df.contract.apply(lambda x: x.symbol)
-                    df['order'] = df[['quantity', 'action']].to_dict('records')
+                    df.code = contracts.apply(lambda x: x.symbol)
+                    df.action = df.action.apply(
+                        lambda x: getattr(x, 'value', x))
+                    direction = df.action.map({'Buy': 1, 'Sell': -1}).fillna(1)
+                    df.quantity = raw_quantity * direction.astype(int)
+                    df['yd_quantity'] = df.quantity
+                    df['order'] = [
+                        {'quantity': quantity, 'action': action}
+                        for quantity, action in zip(raw_quantity, df.action)
+                    ]
                     return df
             except Exception as e:
                 logging.error(f'List futures positions failed: {e.args[0]}')
@@ -403,7 +470,11 @@ class AccountInfo:
             account = API.futopt_account
 
         profitloss_detail = []
-        profitloss = API.list_profit_loss(account, start_date, end_date)
+        profitloss = []
+        while profitloss == []:
+            profitloss = API.list_profit_loss(account, start_date, end_date)
+            time.sleep(2)
+
         if market == 'Stocks':
             profitloss_detail = profitloss
         else:
@@ -525,7 +596,13 @@ class AccountHandler(AccountInfo):
                 f.code: f.symbol for m in API.Contracts.Futures for f in m
             })
             TradeData.Futures.CodeList.update({
+                f.symbol: f.symbol for m in API.Contracts.Futures for f in m
+            })
+            TradeData.Futures.CodeList.update({
                 f.code: f.symbol for m in API.Contracts.Options for f in m
+            })
+            TradeData.Futures.CodeList.update({
+                f.symbol: f.symbol for m in API.Contracts.Options for f in m
             })
 
     def activate_ca_(self):

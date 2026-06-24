@@ -1,13 +1,14 @@
 import time
 import logging
 import pandas as pd
-from shioaji import constant, contracts
+import shioaji as sj
 from datetime import datetime
 from collections import namedtuple
 
 from . import get_contract
 from .objects.data import TradeData
 from .callback import CallbackHandler
+from .options import OptionOrderFactory
 from .positions import FuturesMargin, TradeDataHandler, WatchListTool
 from .database import db
 from .database.tables import TradingStatement, SecurityInfo
@@ -25,9 +26,14 @@ class OrderTool(FuturesMargin):
                 'action_type',
                 'action', 'target', 'quantity',
                 'order_cond', 'octype',
-                'daytrade_short', 'reason'
+                'daytrade_short', 'reason',
+                'price', 'price_type', 'order_type',
+                'combo_legs', 'order_label'
             ],
-            defaults=['', '', '', 0, '', '', False, '']
+            defaults=[
+                '', '', '', 0, '', '', False, '',
+                None, None, None, None, ''
+            ]
         )
         self.MsgOrder = namedtuple(
             typename='MsgOrder',
@@ -43,17 +49,157 @@ class OrderTool(FuturesMargin):
         self._auto_order_callbacks = []
         self._auto_order_fills = []
         self._futures_order_meta = {}
+        self._option_order_labels = {}
+        self.Options = OptionOrderFactory(self.OrderInfo)
+
+    def option_order_info(self, *args, **kwargs):
+        return self.Options.order_info(*args, **kwargs)
+
+    def option_combo_order_info(self, *args, **kwargs):
+        return self.Options.combo_order_info(*args, **kwargs)
 
     @staticmethod
-    def _order_key(target: str, action: str, oc_type: str, quantity: int):
+    def _value(value):
+        return getattr(value, 'value', value)
+
+    @classmethod
+    def _normalize_futures_oc_type(cls, oc_type):
+        oc_type = cls._value(oc_type) or ''
+        if oc_type in ['New', 'NewPosition', 'DayTrade']:
+            return 'New'
+        if oc_type == 'Cover':
+            return 'Cover'
+        return ''
+
+    @staticmethod
+    def _is_retry_order_status(status: str):
+        return status in ['Cancelled', 'Inactive', 'Failed']
+
+    def _option_order_label(self, content):
+        return self.content_attr(content, 'order_label', '') or ''
+
+    def _set_option_order_status(
+            self,
+            label: str,
+            status: str,
+            content=None,
+            result=None,
+            msg: dict = None
+    ):
+        if not label:
+            return
+
+        current = TradeData.Futures.OptionOrderStatus.get(label, {})
+        data = {
+            **current,
+            'label': label,
+            'status': status,
+            'updated_at': datetime.now(),
+        }
+
+        if content is not None:
+            data.update({
+                'target': self.content_attr(content, 'target', ''),
+                'action': self.content_attr(content, 'action', ''),
+                'quantity': self.content_attr(content, 'quantity', 0),
+                'price': self.content_attr(content, 'price', None),
+                'price_type': self.content_attr(content, 'price_type', None),
+                'order_type': self.content_attr(content, 'order_type', None),
+                'octype': self.content_attr(content, 'octype', ''),
+                'combo_legs': self.content_attr(content, 'combo_legs', None),
+                'reason': self.content_attr(content, 'reason', ''),
+            })
+
+        if result is not None:
+            status_info = getattr(result, 'status', None)
+            order = getattr(result, 'order', None)
+            result_status = self._value(getattr(status_info, 'status', ''))
+            data.update({
+                'trade_status': result_status,
+                'status_msg': getattr(status_info, 'msg', None),
+                'deal_quantity': getattr(status_info, 'deal_quantity', None),
+                'cancel_quantity': getattr(
+                    status_info, 'cancel_quantity', None),
+                'order_id': getattr(order, 'id', None),
+                'seqno': getattr(order, 'seqno', None),
+                'ordno': getattr(order, 'ordno', None),
+            })
+
+        if msg is not None:
+            operation = msg.get('operation', {})
+            order = msg.get('order', {})
+            status_info = msg.get('status', {})
+            data.update({
+                'operation': operation.get('op_type'),
+                'op_code': operation.get('op_code'),
+                'op_msg': operation.get('op_msg'),
+                'order_id': order.get('id', data.get('order_id')),
+                'seqno': order.get('seqno', data.get('seqno')),
+                'ordno': order.get('ordno', data.get('ordno')),
+                'deal_quantity': status_info.get(
+                    'deal_quantity', data.get('deal_quantity')),
+                'cancel_quantity': status_info.get(
+                    'cancel_quantity', data.get('cancel_quantity')),
+            })
+
+        TradeData.Futures.OptionOrderStatus[label] = data
+
+    def _set_option_order_result_status(self, label: str, content, result):
+        if not label or result is None:
+            return
+
+        status_info = getattr(result, 'status', None)
+        status = self._value(getattr(status_info, 'status', ''))
+        deal_quantity = getattr(status_info, 'deal_quantity', 0) or 0
+        order_quantity = getattr(
+            status_info,
+            'order_quantity',
+            self.content_attr(content, 'quantity', 0)
+        ) or 0
+
+        if status == 'Filled' or (
+            order_quantity and deal_quantity >= order_quantity
+        ):
+            label_status = 'Filled'
+        elif self._is_retry_order_status(status):
+            label_status = 'Retry'
+        else:
+            label_status = 'Submitted'
+
+        self._set_option_order_status(
+            label,
+            label_status,
+            content=content,
+            result=result
+        )
+
+    def _register_option_order_result(self, label: str, result):
+        if not label or result is None:
+            return
+
+        order = getattr(result, 'order', None)
+        for key in ['id', 'seqno', 'ordno']:
+            value = getattr(order, key, None)
+            if value:
+                self._option_order_labels[value] = label
+
+    @classmethod
+    def _order_key(
+            cls,
+            target: str,
+            action: str,
+            oc_type: str,
+            quantity: int
+    ):
         return (
             target,
             action or '',
-            oc_type or '',
+            cls._normalize_futures_oc_type(oc_type),
             int(quantity or 0)
         )
 
     def _register_auto_order(self, target: str, action: str, oc_type: str, quantity: int):
+        oc_type = self._normalize_futures_oc_type(oc_type)
         key = self._order_key(target, action, oc_type, quantity)
         self._auto_order_callbacks.append((datetime.now(), key))
         self._auto_order_fills.append({
@@ -86,6 +232,7 @@ class OrderTool(FuturesMargin):
         return False
 
     def _pop_auto_order_like(self, target: str, action: str, oc_type: str):
+        oc_type = self._normalize_futures_oc_type(oc_type)
         for i, item in enumerate(self._auto_order_callbacks):
             key = item[1]
             if key[:3] == (target, action or '', oc_type or ''):
@@ -129,6 +276,7 @@ class OrderTool(FuturesMargin):
             quantity: int
     ):
         self._prune_auto_orders()
+        oc_type = self._normalize_futures_oc_type(oc_type)
 
         quantity = int(quantity or 0)
         if quantity <= 0:
@@ -176,20 +324,44 @@ class OrderTool(FuturesMargin):
     def _set_futures_order_meta(self, msg: dict, target: str, is_auto_order: bool):
         order = msg['order']
         existing = self._get_futures_order_meta(order)
+        order_label = existing.get('order_label', '')
+        if not order_label:
+            for key in ['id', 'seqno', 'ordno']:
+                value = order.get(key)
+                if value in self._option_order_labels:
+                    order_label = self._option_order_labels[value]
+                    break
+
         data = {
             'order_msg': msg,
             'target': target,
-            'oc_type': order.get('oc_type', existing.get('oc_type', '')),
+            'raw_oc_type': order.get(
+                'raw_oc_type', existing.get('raw_oc_type', '')),
+            'oc_type': self._normalize_futures_oc_type(
+                order.get('oc_type', existing.get('oc_type', ''))),
             'action': order.get('action', existing.get('action', '')),
             'quantity': order.get('quantity', existing.get('quantity', 0)),
             'filled_quantity': existing.get('filled_quantity', 0),
             'is_auto_order': existing.get('is_auto_order', is_auto_order),
+            'order_label': order_label,
         }
         logging.info(f'[FuturesOrder.Callback]{msg}')
         for key in ['ordno', 'seqno', 'id']:
             value = order.get(key)
             if value:
                 self._futures_order_meta[value] = data
+
+        if order_label:
+            operation = msg.get('operation', {})
+            if operation.get('op_type') == 'Cancel':
+                self._set_option_order_status(
+                    order_label, 'Retry', msg=msg)
+            elif operation.get('op_type') == 'Reject':
+                self._set_option_order_status(
+                    order_label, 'Retry', msg=msg)
+            elif self.is_new_order_submit(operation):
+                self._set_option_order_status(
+                    order_label, 'Submitted', msg=msg)
 
     def _get_futures_order_meta(self, msg: dict):
         for key in ['ordno', 'seqno', 'id', 'trade_id']:
@@ -205,6 +377,13 @@ class OrderTool(FuturesMargin):
         meta['filled_quantity'] = (
             meta.get('filled_quantity', 0) + int(msg.get('quantity', 0) or 0)
         )
+        order_label = meta.get('order_label', '')
+        if order_label:
+            status = 'Filled'
+            if meta['filled_quantity'] < int(meta.get('quantity', 0) or 0):
+                status = 'PartFilled'
+            self._set_option_order_status(order_label, status, msg=msg)
+
         if meta['filled_quantity'] < int(meta.get('quantity', 0) or 0):
             return
 
@@ -352,22 +531,42 @@ class OrderTool(FuturesMargin):
 
     def get_sell_quantity(self, content: namedtuple):
         contract = get_contract(content.target)
-        if content.quantity >= 1000 and isinstance(contract, contracts.Stock):
+        if content.quantity >= 1000 and isinstance(contract, sj.Stock):
             return content.quantity/1000
         return content.quantity
 
-    def check_order_status(self, order_result, is_stock: bool = True):
+    def check_order_status(
+            self,
+            order_result,
+            is_stock: bool = True,
+            is_combo: bool = False,
+            content=None,
+            order_label: str = ''
+    ):
         '''確認委託狀態'''
         time.sleep(0.1)
 
-        if is_stock:
+        if is_combo:
+            API.update_combostatus(API.futopt_account)
+        elif is_stock:
             API.update_status(API.stock_account)
         else:
             API.update_status(API.futopt_account)
-        status = order_result.status.status
-        if status not in ['PreSubmitted', 'Filled']:
+        status = self._value(order_result.status.status)
+        if order_label:
+            self._set_option_order_result_status(
+                order_label,
+                content,
+                order_result
+            )
+        accepted_statuses = [
+            'PendingSubmit', 'PreSubmitted', 'Submitted',
+            'PartFilled', 'Filled'
+        ]
+        if status not in accepted_statuses:
             msg = order_result.status.msg
             logging.warning(f'Order not submitted/filled: {msg}')
+        return status
 
     def appendOrder(self, target: str, content: namedtuple):
         '''Add new order data to OrderTable'''
@@ -390,6 +589,9 @@ class OrderTool(FuturesMargin):
         '''Check if current placed amount is under target limit.'''
 
         conf = TradeDataHandler.getStrategyConfig(target)
+        if conf is None:
+            return True
+
         df = self.OrderTable[self.OrderTable.market == conf.market]
 
         if conf.market == 'Stocks':
@@ -400,20 +602,175 @@ class OrderTool(FuturesMargin):
         '''Filter OrderTable by market'''
         return self.OrderTable[self.OrderTable.market == market].copy()
 
+    @staticmethod
+    def _enum_value(enum_class, value):
+        if value is None or isinstance(value, enum_class):
+            return value
+        return getattr(enum_class, str(value))
+
+    def _stock_order(
+            self,
+            content: namedtuple,
+            price: float,
+            quantity: int,
+            price_type: str,
+            order_lot: str
+    ):
+        return sj.StockOrder(
+            price=price,
+            quantity=quantity,
+            action=self._enum_value(sj.Action, content.action),
+            price_type=self._enum_value(sj.StockPriceType, price_type),
+            order_type=self._enum_value(
+                sj.OrderType,
+                self.content_attr(content, 'order_type', 'ROD') or 'ROD'
+            ),
+            order_cond=self._enum_value(
+                sj.StockOrderCond, content.order_cond or 'Cash'),
+            order_lot=self._enum_value(sj.StockOrderLot, order_lot),
+            account=API.stock_account,
+            daytrade_short=content.daytrade_short,
+        )
+
+    def _futures_order(
+            self,
+            content: namedtuple,
+            price: float,
+            quantity: int,
+            price_type: str,
+            octype: str = None
+    ):
+        octype = octype or self.content_attr(content, 'octype') or 'Auto'
+        return sj.FuturesOrder(
+            price=price,
+            quantity=quantity,
+            action=self._enum_value(sj.Action, content.action),
+            price_type=self._enum_value(sj.FuturesPriceType, price_type),
+            order_type=self._enum_value(
+                sj.OrderType,
+                self.content_attr(content, 'order_type', 'IOC') or 'IOC'
+            ),
+            octype=self._enum_value(
+                sj.FuturesOCType, octype),
+            account=API.futopt_account,
+        )
+
+    def _resolve_futures_octype(self, content: namedtuple, target: str):
+        requested = self._value(
+            self.content_attr(content, 'octype', 'Auto')) or 'Auto'
+        if requested not in ['New', 'NewPosition']:
+            return requested
+
+        df = db.query(
+            SecurityInfo, self.WatchListTool.match_target(target))
+        if df.empty:
+            return requested
+
+        broker_quantity = int(df.iloc[0].quantity or 0)
+        action = self._value(self.content_attr(content, 'action', ''))
+        order_direction = 1 if action == 'Buy' else -1 if action == 'Sell' else 0
+        if broker_quantity * order_direction >= 0:
+            return requested
+
+        logging.info(
+            f'[FuturesOCType]Auto|{target}|{requested}->Auto|'
+            f'position={broker_quantity}|action={action}|')
+        return 'Auto'
+
+    def _combo_order(self, content: namedtuple):
+        return sj.ComboOrder(
+            price=self.content_attr(content, 'price'),
+            quantity=content.quantity,
+            price_type=self._enum_value(
+                sj.FuturesPriceType,
+                self.content_attr(content, 'price_type', 'LMT') or 'LMT'),
+            order_type=self._enum_value(
+                sj.OrderType,
+                self.content_attr(content, 'order_type', 'IOC') or 'IOC'
+            ),
+            octype=self._enum_value(
+                sj.FuturesOCType, content.octype or 'Auto'),
+            account=API.futopt_account,
+        )
+
+    def _combo_leg_contract(self, leg: dict):
+        contract = leg.get('contract')
+        if contract is not None:
+            return contract
+        return get_contract(leg['target'])
+
+    def _combo_contract(self, legs: list):
+        return sj.ComboContract(legs=[
+            sj.ComboBase.from_contract(
+                self._combo_leg_contract(leg),
+                action=self._enum_value(sj.Action, leg['action'])
+            )
+            for leg in legs
+        ])
+
+    def place_combo_order(self, content: namedtuple):
+        '''Place an options combo order.'''
+
+        if TradeData.Account.Simulate:
+            return self.appendOrder(content.target, content)
+
+        combo_legs = self.content_attr(content, 'combo_legs')
+        if not combo_legs:
+            raise ValueError('Combo order requires combo_legs.')
+        if self.content_attr(content, 'price') is None:
+            raise ValueError('Combo order requires net price.')
+
+        combo = self._combo_contract(combo_legs)
+        order = self._combo_order(content)
+        order_label = self._option_order_label(content)
+        if order_label:
+            self._set_option_order_status(
+                order_label, 'Submitted', content=content)
+
+        self._register_auto_order(
+            content.target,
+            content.action,
+            content.octype,
+            content.quantity
+        )
+        try:
+            result = API.place_comboorder(combo, order)
+            self._register_option_order_result(order_label, result)
+            self.check_order_status(
+                result,
+                is_stock=False,
+                is_combo=True,
+                content=content,
+                order_label=order_label
+            )
+            return result
+        except Exception:
+            self._set_option_order_status(
+                order_label, 'Retry', content=content)
+            raise
+
     def place_order(self, content: namedtuple):
         logging.debug(f'[OrderState.Content|{content}|')
 
         target = content.target
 
-        if target not in TradeData.BidAsk:
-            return
+        if self.content_attr(content, 'combo_legs'):
+            return self.place_combo_order(content)
 
         contract = TradeData.Contracts.get(target, get_contract(target))
-        is_stock = isinstance(contract, contracts.Stock)
+        is_stock = isinstance(contract, sj.Stock)
+        futures_octype = (
+            '' if is_stock else self._resolve_futures_octype(content, target))
         quantity = self.get_sell_quantity(content)
-        price_type = 'MKT'
-        price = 0
+        price_type = self.content_attr(content, 'price_type', 'MKT') or 'MKT'
+        price = self.content_attr(content, 'price', 0) or 0
         order_lot = 'IntradayOdd' if content.quantity < 1000 and is_stock else 'Common'
+
+        if is_stock and target not in TradeData.BidAsk:
+            return
+
+        if (not is_stock) and target not in TradeData.BidAsk and not price and price_type != 'MKT':
+            return
 
         if is_stock:
             bid_ask = TradeData.BidAsk[target]
@@ -444,39 +801,59 @@ class OrderTool(FuturesMargin):
         else:
             # #ff0000 批次下單的張數 (股票>1000股的單位為【張】) #ff0000
             q = 5 if order_lot == 'Common' else quantity
-            enough_to_place = self.checkEnoughToPlace(target)
+            is_closing = (
+                self.content_attr(content, 'action_type') == 'Close' or
+                self.content_attr(content, 'octype') == 'Cover'
+            )
+            enough_to_place = (
+                is_closing or self.checkEnoughToPlace(target))
+            if not enough_to_place:
+                logging.warning(
+                    f'[OrderState]Skipped by position limit|{target}|'
+                    f'{content.action}|{quantity}|')
+                return
+
+            result = None
+            order_label = self._option_order_label(content)
+            if order_label:
+                self._set_option_order_status(
+                    order_label, 'Submitted', content=content)
+
             while quantity > 0 and enough_to_place:
                 order_quantity = min(quantity, q)
-                order = API.Order(
-                    # 價格 (市價單 = 0)
-                    price=price,
-                    # 數量 (最小1張; 零股最小50股 or 全部庫存)
-                    quantity=order_quantity,
-                    # 動作: 買進/賣出
-                    action=content.action,
-                    # 市價單/限價單
-                    price_type=price_type,
-                    # ROD:當天都可成交
-                    order_type=constant.OrderType.ROD if is_stock else constant.OrderType.IOC,
-                    # 委託類型: 現股/融資
-                    order_cond=content.order_cond if is_stock else 'Cash',
-                    # 整張或零股
-                    order_lot=order_lot,
-                    # {Auto, New, Cover, DayTrade}(自動、新倉、平倉、當沖)
-                    octype='Auto' if is_stock else content.octype,
-                    account=API.stock_account if is_stock else API.futopt_account,
-                    # 先賣後買: True, False
-                    daytrade_short=content.daytrade_short,
-                )
+                if is_stock:
+                    order = self._stock_order(
+                        content, price, order_quantity, price_type, order_lot)
+                else:
+                    order = self._futures_order(
+                        content,
+                        price,
+                        order_quantity,
+                        price_type,
+                        octype=futures_octype
+                    )
                 self._register_auto_order(
                     target,
                     content.action,
-                    '' if is_stock else content.octype,
+                    futures_octype,
                     order_quantity
                 )
-                result = API.place_order(contract, order)
-                # self.check_order_status(result, is_stock)
+                try:
+                    result = API.place_order(contract, order)
+                    self._register_option_order_result(order_label, result)
+                    self.check_order_status(
+                        result,
+                        is_stock=is_stock,
+                        content=content,
+                        order_label=order_label
+                    )
+                except Exception:
+                    self._set_option_order_status(
+                        order_label, 'Retry', content=content)
+                    raise
                 quantity -= order_quantity
+
+            return result
 
     def StockOrder(self, msg: dict):
         code = msg['contract']['code']
@@ -554,6 +931,9 @@ class OrderTool(FuturesMargin):
         msg = CallbackHandler().update_futures_msg(msg)
 
         order = msg['order']
+        order['raw_oc_type'] = order.get('oc_type', '')
+        order['oc_type'] = self._normalize_futures_oc_type(
+            order.get('oc_type'))
         symbol = CallbackHandler.fut_symbol(msg)
         operation = msg['operation']
 
@@ -575,6 +955,7 @@ class OrderTool(FuturesMargin):
             TradeDataHandler.update_deal_list(symbol, 'Cancel')
 
     def FuturesDeal(self, msg: dict):
+        logging.info(f'[FuturesDeal.Callback]{msg}')
         symbol = CallbackHandler.fut_deal_symbol(msg)
 
         conf = TradeDataHandler.getStrategyConfig(symbol)
@@ -609,6 +990,7 @@ class OrderTool(FuturesMargin):
 
         data = {
             'code': symbol,
+            'trade_id': msg.get('trade_id') if msg.get('combo') else None,
             'order': {
                 'action': action,
                 'quantity': quantity,
@@ -619,6 +1001,7 @@ class OrderTool(FuturesMargin):
         self.WatchListTool.update_monitor(
             oc_type,
             data,
-            sync_position=not is_auto_order
+            sync_position=True,
+            notify_position=not is_auto_order
         )
         self._update_futures_order_filled(msg, meta)
