@@ -6,11 +6,11 @@ from datetime import datetime
 from collections import namedtuple
 
 from .database import db
-from .database.tables import SecurityInfo, PositionTable
 from .time import time_tool
 from .file import file_handler
-from .objects.data import TradeData
 from .notify import Notification
+from .objects.data import TradeData
+from .database.tables import SecurityInfo, PositionTable
 from ..config import API, StrategyList, Cost, NotifyConfig
 
 
@@ -612,7 +612,7 @@ class Position:
         total_qty = self.total_qty.get(name, 0)
         self.total_qty[name] = total_qty + inputs['quantity']
 
-        if not self.backtest:
+        if not self.backtest and inputs.get('quantity', 0) > 0:
             db.add_data(PositionTable, **inputs)
 
         return self.average_cost()

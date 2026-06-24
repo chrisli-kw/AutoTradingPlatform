@@ -1,11 +1,15 @@
-import json
+import os
 import re
-from datetime import datetime
-from pathlib import Path
+import json
+import time
 from uuid import uuid4
+from pathlib import Path
+from datetime import datetime
 
 
 RUNTIME_ROOT = Path("runtime")
+WRITE_MAX_ATTEMPTS = 50
+WRITE_RETRY_SECONDS = 0.2
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 INDICATOR_RE = re.compile(
     r"\[(Open|Close)\]\s*當前指數:\s*(?P<price>-?\d+)"
@@ -34,12 +38,30 @@ def _read_json(path: Path, default):
         return default
 
 
-def _write_json(path: Path, data: dict):
+def _write_json(
+        path: Path,
+        data: dict,
+        max_attempts: int = WRITE_MAX_ATTEMPTS,
+        retry_seconds: float = WRITE_RETRY_SECONDS
+):
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with tmp.open("w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    tmp.replace(path)
+    for attempt in range(max_attempts):
+        tmp = path.with_name(
+            f".{path.name}.{os.getpid()}.{uuid4().hex}.tmp")
+        try:
+            with tmp.open("w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            tmp.replace(path)
+            return
+        except PermissionError:
+            if attempt + 1 >= max_attempts:
+                raise
+            time.sleep(retry_seconds)
+        finally:
+            try:
+                tmp.unlink()
+            except (FileNotFoundError, PermissionError):
+                pass
 
 
 def now_text() -> str:

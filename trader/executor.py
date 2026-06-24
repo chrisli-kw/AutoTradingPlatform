@@ -357,7 +357,8 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
             contract = TradeData.Contracts.get(target)
             is_stock = isinstance(contract, sj.Stock)
-            position_data = data.to_dict('records')[0] if not data.empty else {}
+            position_data = data.to_dict(
+                'records')[0] if not data.empty else {}
             broker_quantity = int(position_data.get('quantity', 0) or 0)
             strategy_quantity = TradeDataHandler.strategy_quantity(
                 broker_quantity,
@@ -723,15 +724,18 @@ class StrategyExecutor(AccountHandler, Subscriber):
         time.sleep(sleep_time)
 
     def _update_runtime_status(self, status: str, message: str = ""):
-        runtime.write_status(
-            self.account_name,
-            status,
-            message,
-            mode=TradeData.Account.Mode,
-            strategies=list(StrategyList.Config.keys()),
-            monitor_targets=list(TradeData.Securities.Monitor.keys()),
-            pid=os.getpid(),
-        )
+        try:
+            runtime.write_status(
+                self.account_name,
+                status,
+                message,
+                mode=TradeData.Account.Mode,
+                strategies=list(StrategyList.Config.keys()),
+                monitor_targets=list(TradeData.Securities.Monitor.keys()),
+                pid=os.getpid(),
+            )
+        except Exception:
+            logging.exception('Update runtime status failed:')
 
     def _apply_runtime_command(self, stop_flag, pause_flag):
         command = runtime.read_command(self.account_name)
