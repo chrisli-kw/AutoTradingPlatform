@@ -18,7 +18,6 @@ class WatchListTool:
 
     def __init__(self, account_name: str):
         self.account_name = account_name
-        self.watchlist_file = f'watchlist_{account_name}'
 
     def update_position(self, order: namedtuple):
         # TODO: delete this function
