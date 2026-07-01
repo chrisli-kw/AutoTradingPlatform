@@ -213,6 +213,18 @@ class StrategyExecutor(AccountHandler, Subscriber):
             filter_out.extend(getattr(conf, 'FILTER_OUT', []))
         return filter_out
 
+    @staticmethod
+    def _is_filter_out_target(code: str, filter_outs: list):
+        if code in filter_outs:
+            return True
+        if 'TXO' in filter_outs and code.startswith('TXO'):
+            return True
+        if 'Call' in filter_outs and code.endswith('C'):
+            return True
+        if 'Put' in filter_outs and code.endswith('P'):
+            return True
+        return False
+
     def init_target_sets(self):
         '''初始化監控資訊'''
 
@@ -226,11 +238,11 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         # 剔除不堅控的股票
         filter_outs = self._get_filter_out()
-        info = info[~info.code.isin(filter_outs)]
-        if not info.empty and 'Call' in filter_outs:
-            info = info[~info.code.apply(lambda x: x[-1] == 'C')]
-        if not info.empty and 'Put' in filter_outs:
-            info = info[~info.code.apply(lambda x: x[-1] == 'P')]
+        info = info[
+            ~info.code.apply(
+                lambda code: self._is_filter_out_target(code, filter_outs)
+            )
+        ]
 
         # 設定監控清單
         TradeData.Securities.Monitor.update(info.to_dict('index'))
@@ -533,6 +545,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         due_year_month = time_tool.GetDueMonth()
         day_filter_out = crawler.FromHTML.get_CashSettle()
         df = picker.get_selection_files()
+        filter_outs = self._get_filter_out()
 
         pools = {}
         for strategy, conf in StrategyList.Config.items():
@@ -545,6 +558,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
                     for target in target_set or []:
                         if (
                             target.startswith('TXO') and
+                            'TXO' not in getattr(conf, 'FILTER_OUT', []) and
                             target not in getattr(conf, 'FILTER_OUT', [])
                         ):
                             pools.update({target: strategy})
@@ -568,7 +582,12 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         # 庫存的處理 (遠端有庫存，地端無庫存)
         pools.update({
-            target: None for target in target_set if target not in pools
+            target: None
+            for target in target_set or []
+            if (
+                target not in pools and
+                not self._is_filter_out_target(target, filter_outs)
+            )
         })
 
         return pools
