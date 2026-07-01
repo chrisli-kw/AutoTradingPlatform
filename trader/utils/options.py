@@ -159,6 +159,7 @@ class OptionOrderFactory:
             action_type: str = 'Open',
             underlying: str = 'TX',
             order_label: str = '',
+            combo_tag: str = '',
             reason: str = ''
     ):
         contract = self.contract(
@@ -177,6 +178,7 @@ class OptionOrderFactory:
             price_type=price_type,
             order_type=order_type,
             order_label=order_label,
+            combo_tag=combo_tag,
             reason=reason,
         )
 
@@ -190,6 +192,7 @@ class OptionOrderFactory:
             octype: str = 'Auto',
             action_type: str = 'Open',
             order_label: str = '',
+            combo_tag: str = '',
             reason: str = ''
     ):
         combo_legs = []
@@ -224,5 +227,6 @@ class OptionOrderFactory:
             order_type=order_type,
             combo_legs=combo_legs,
             order_label=order_label,
+            combo_tag=combo_tag,
             reason=reason,
         )

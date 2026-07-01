@@ -20,7 +20,8 @@ class Securities:
             'code', 'action', 'quantity', 'cost_price',
             'last_price', 'pnl',
             'yd_quantity', 'order_cond', 'order',
-            'timestamp', 'position', 'strategy'
+            'timestamp', 'position', 'strategy',
+            'trade_id', 'combo_tag'
         ]
     )
     Strategy = {}

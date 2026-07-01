@@ -88,9 +88,18 @@ class WatchListTool:
             return (old_amount + fill_amount) / abs(new_quantity)
         return current_cost
 
-    def _update_futures_monitor(self, target: str, data: dict, conf, df):
+    def _update_futures_monitor(
+            self,
+            target: str,
+            data: dict,
+            conf,
+            df,
+            oc_type: str = ''
+    ):
         order = data['order']
         trade_id = data.get('trade_id') or order.get('trade_id')
+        combo_tag = data.get('combo_tag') or order.get('combo_tag')
+        is_open = oc_type in ['New', 'NewPosition', 'DayTrade']
         action = TradeDataHandler.normalize_action(order.get('action'))
         fill_quantity = abs(int(order.get('quantity', 0) or 0))
         fill_delta = TradeDataHandler.signed_quantity(
@@ -135,8 +144,10 @@ class WatchListTool:
                 position=position,
                 strategy=TradeData.Securities.Strategy.get(target, 'unknown')
             )
-            if trade_id:
+            if is_open and trade_id:
                 security_data['trade_id'] = trade_id
+            if is_open and combo_tag:
+                security_data['combo_tag'] = combo_tag
             db.add_data(SecurityInfo, **security_data)
         else:
             update_data = {
@@ -145,8 +156,10 @@ class WatchListTool:
                 'cost_price': cost_price,
                 'position': position,
             }
-            if trade_id:
+            if is_open and trade_id:
                 update_data['trade_id'] = trade_id
+            if is_open and combo_tag:
+                update_data['combo_tag'] = combo_tag
             if current_quantity * new_quantity < 0:
                 update_data['timestamp'] = datetime.now()
             db.update(SecurityInfo, update_data, condition)
@@ -176,7 +189,7 @@ class WatchListTool:
         df = self.get_match_info(target)
         if conf.market == 'Futures':
             broker_quantity = self._update_futures_monitor(
-                target, data, conf, df)
+                target, data, conf, df, oc_type=oc_type)
         elif not df.empty:
             max_qty = conf.max_qty.get(target, 1) if conf else 1
             quantity = data['order']['quantity']

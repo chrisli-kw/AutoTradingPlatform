@@ -28,11 +28,11 @@ class OrderTool(FuturesMargin):
                 'order_cond', 'octype',
                 'daytrade_short', 'reason',
                 'price', 'price_type', 'order_type',
-                'combo_legs', 'order_label'
+                'combo_legs', 'order_label', 'combo_tag'
             ],
             defaults=[
                 '', '', '', 0, '', '', False, '',
-                None, None, None, None, ''
+                None, None, None, None, '', ''
             ]
         )
         self.MsgOrder = namedtuple(
@@ -107,6 +107,7 @@ class OrderTool(FuturesMargin):
                 'order_type': self.content_attr(content, 'order_type', None),
                 'octype': self.content_attr(content, 'octype', ''),
                 'combo_legs': self.content_attr(content, 'combo_legs', None),
+                'combo_tag': self.content_attr(content, 'combo_tag', ''),
                 'reason': self.content_attr(content, 'reason', ''),
             })
 
@@ -182,6 +183,36 @@ class OrderTool(FuturesMargin):
             value = getattr(order, key, None)
             if value:
                 self._option_order_labels[value] = label
+
+    def _register_futures_order_content_meta(
+            self,
+            content,
+            result,
+            order_label: str = ''
+    ):
+        if result is None:
+            return
+
+        order = getattr(result, 'order', None)
+        data = {
+            'order_msg': {'order': {}},
+            'target': self.content_attr(content, 'target', ''),
+            'raw_oc_type': self.content_attr(content, 'octype', ''),
+            'oc_type': self._normalize_futures_oc_type(
+                self.content_attr(content, 'octype', '')),
+            'action': self.content_attr(content, 'action', ''),
+            'quantity': self.content_attr(content, 'quantity', 0),
+            'filled_quantity': 0,
+            'is_auto_order': True,
+            'order_label': order_label,
+            'combo_tag': self.content_attr(content, 'combo_tag', ''),
+        }
+
+        for key in ['ordno', 'seqno', 'id', 'trade_id']:
+            value = getattr(order, key, None)
+            if value:
+                data['order_msg']['order'][key] = value
+                self._futures_order_meta[value] = data
 
     @classmethod
     def _order_key(
@@ -344,9 +375,13 @@ class OrderTool(FuturesMargin):
             'filled_quantity': existing.get('filled_quantity', 0),
             'is_auto_order': existing.get('is_auto_order', is_auto_order),
             'order_label': order_label,
+            'combo_tag': existing.get('combo_tag', ''),
         }
+        if order_label and not data['combo_tag']:
+            status = TradeData.Futures.OptionOrderStatus.get(order_label, {})
+            data['combo_tag'] = status.get('combo_tag', '')
         logging.info(f'[FuturesOrder.Callback]{msg}')
-        for key in ['ordno', 'seqno', 'id']:
+        for key in ['ordno', 'seqno', 'id', 'trade_id']:
             value = order.get(key)
             if value:
                 self._futures_order_meta[value] = data
@@ -736,6 +771,8 @@ class OrderTool(FuturesMargin):
         try:
             result = API.place_comboorder(combo, order)
             self._register_option_order_result(order_label, result)
+            self._register_futures_order_content_meta(
+                content, result, order_label)
             self.check_order_status(
                 result,
                 is_stock=False,
@@ -991,6 +1028,7 @@ class OrderTool(FuturesMargin):
         data = {
             'code': symbol,
             'trade_id': msg.get('trade_id') if msg.get('combo') else None,
+            'combo_tag': meta.get('combo_tag', '') if msg.get('combo') else '',
             'order': {
                 'action': action,
                 'quantity': quantity,

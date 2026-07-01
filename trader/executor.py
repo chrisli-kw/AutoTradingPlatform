@@ -216,12 +216,13 @@ class StrategyExecutor(AccountHandler, Subscriber):
     def init_target_sets(self):
         '''初始化監控資訊'''
 
-        # 讀取選股清單
-        TradeData.Securities.Strategy = self.get_securityPool()
-
         # 取得遠端庫存
         info = self.get_securityInfo()
         info.index = info.code
+
+        # 讀取選股清單
+        TradeData.Securities.Strategy = self.get_securityPool(
+            target_set=info.code.tolist())
 
         # 剔除不堅控的股票
         filter_outs = self._get_filter_out()
@@ -230,11 +231,6 @@ class StrategyExecutor(AccountHandler, Subscriber):
             info = info[~info.code.apply(lambda x: x[-1] == 'C')]
         if not info.empty and 'Put' in filter_outs:
             info = info[~info.code.apply(lambda x: x[-1] == 'P')]
-
-        # 庫存的處理 (遠端有庫存，地端無庫存)
-        tb = info[~info.code.isin(TradeData.Securities.Strategy.keys())].copy()
-        tb['strategy'] = None
-        TradeData.Securities.Strategy.update(tb.strategy.to_dict())
 
         # 設定監控清單
         TradeData.Securities.Monitor.update(info.to_dict('index'))
@@ -350,10 +346,10 @@ class StrategyExecutor(AccountHandler, Subscriber):
         )
 
     def monitor_targets(self, target: str):
-        if target in TradeData.Quotes.NowTargets:
+        strategy = TradeData.Securities.Strategy[target]
+        if target in TradeData.Quotes.NowTargets and strategy:
             inputs = TradeDataHandler.getQuotesNow(target).copy()
             data = db.query(SecurityInfo, self.WatchList.match_target(target))
-            strategy = TradeData.Securities.Strategy[target]
 
             contract = TradeData.Contracts.get(target)
             is_stock = isinstance(contract, sj.Stock)
@@ -531,7 +527,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
             return self.simulator.securityInfo(self.env.ACCOUNT_NAME)
         return self.securityInfo()
 
-    def get_securityPool(self):
+    def get_securityPool(self, target_set: list = None):
         '''Get the target securities pool with the format: {code: strategy}'''
 
         due_year_month = time_tool.GetDueMonth()
@@ -545,6 +541,13 @@ class StrategyExecutor(AccountHandler, Subscriber):
             for code in targets:
                 if conf.market == 'Stocks':
                     pools.update({code: strategy})
+                elif 'TXO' in code[:3]:
+                    for target in target_set or []:
+                        if (
+                            target.startswith('TXO') and
+                            target not in getattr(conf, 'FILTER_OUT', [])
+                        ):
+                            pools.update({target: strategy})
                 else:
                     pools.update({f'{code}{due_year_month}': strategy})
 
@@ -562,6 +565,11 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 code = df[df.Strategy == strategy].code
                 pools.update({stock: strategy for stock in code})
                 df = df[~df.code.isin(code)]
+
+        # 庫存的處理 (遠端有庫存，地端無庫存)
+        pools.update({
+            target: None for target in target_set if target not in pools
+        })
 
         return pools
 
