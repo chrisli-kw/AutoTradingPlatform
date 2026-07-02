@@ -44,15 +44,17 @@ class WatchListTool:
                 condition &= SecurityInfo.position <= 0
                 db.delete(SecurityInfo, condition)
 
-    def match_target(self, target: str):
+    def match_target(self, target: str, combo_tag: str = ''):
         condition = SecurityInfo.mode == TradeData.Account.Mode
         condition &= SecurityInfo.account == self.account_name
         condition &= SecurityInfo.code == target
+        if combo_tag:
+            condition &= SecurityInfo.combo_tag == combo_tag
         return condition
 
-    def get_match_info(self, target):
+    def get_match_info(self, target, combo_tag: str = ''):
         '''Get the watchlist info for the target'''
-        condition = self.match_target(target)
+        condition = self.match_target(target, combo_tag=combo_tag)
         df = db.query(SecurityInfo, condition)
         return df
 
@@ -119,7 +121,7 @@ class WatchListTool:
         max_qty = conf.max_qty.get(target, 1) if conf else 1
         position = int(100*strategy_quantity/max_qty) if max_qty > 0 else 0
 
-        condition = self.match_target(target)
+        condition = self.match_target(target, combo_tag=combo_tag)
         if new_quantity == 0:
             if not df.empty:
                 db.delete(SecurityInfo, condition)
@@ -186,7 +188,8 @@ class WatchListTool:
         if conf is None:
             return
 
-        df = self.get_match_info(target)
+        combo_tag = data.get('combo_tag') or data.get('order', {}).get('combo_tag')
+        df = self.get_match_info(target, combo_tag=combo_tag)
         if conf.market == 'Futures':
             broker_quantity = self._update_futures_monitor(
                 target, data, conf, df, oc_type=oc_type)
