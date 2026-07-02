@@ -202,6 +202,10 @@ class OrderTool(FuturesMargin):
                 self.content_attr(content, 'octype', '')),
             'action': self.content_attr(content, 'action', ''),
             'quantity': self.content_attr(content, 'quantity', 0),
+            'expected_fill_quantity': (
+                int(self.content_attr(content, 'quantity', 0) or 0) *
+                max(len(self.content_attr(content, 'combo_legs', []) or []), 1)
+            ),
             'filled_quantity': 0,
             'is_auto_order': True,
             'order_label': order_label,
@@ -372,6 +376,10 @@ class OrderTool(FuturesMargin):
                 order.get('oc_type', existing.get('oc_type', ''))),
             'action': order.get('action', existing.get('action', '')),
             'quantity': order.get('quantity', existing.get('quantity', 0)),
+            'expected_fill_quantity': existing.get(
+                'expected_fill_quantity',
+                order.get('quantity', existing.get('quantity', 0))
+            ),
             'filled_quantity': existing.get('filled_quantity', 0),
             'is_auto_order': existing.get('is_auto_order', is_auto_order),
             'order_label': order_label,
@@ -413,13 +421,16 @@ class OrderTool(FuturesMargin):
             meta.get('filled_quantity', 0) + int(msg.get('quantity', 0) or 0)
         )
         order_label = meta.get('order_label', '')
+        expected_fill_quantity = int(
+            meta.get('expected_fill_quantity', meta.get('quantity', 0)) or 0
+        )
         if order_label:
             status = 'Filled'
-            if meta['filled_quantity'] < int(meta.get('quantity', 0) or 0):
+            if expected_fill_quantity and meta['filled_quantity'] < expected_fill_quantity:
                 status = 'PartFilled'
             self._set_option_order_status(order_label, status, msg=msg)
 
-        if meta['filled_quantity'] < int(meta.get('quantity', 0) or 0):
+        if expected_fill_quantity and meta['filled_quantity'] < expected_fill_quantity:
             return
 
         order = meta.get('order_msg', {}).get('order', {})

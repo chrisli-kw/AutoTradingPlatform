@@ -82,6 +82,8 @@ class PositionTable(Base):
         TIMESTAMP(fsp=6), server_default=func.now(), comment='進場時間')
     quantity = Column(Integer, nullable=False, comment='進場數量')
     reason = Column(String(50), nullable=False, comment='進場原因')
+    trade_id = Column(String(50), server_default='unknown', comment='委託交易編號')
+    combo_tag = Column(String(50), server_default='', comment='選擇權組合單標籤')
 
     create_time = Column(
         TIMESTAMP(fsp=6), nullable=False, server_default=func.now())

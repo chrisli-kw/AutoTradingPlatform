@@ -230,7 +230,6 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
         # 取得遠端庫存
         info = self.get_securityInfo()
-        info.index = info.code
 
         # 讀取選股清單
         TradeData.Securities.Strategy = self.get_securityPool(
@@ -245,8 +244,23 @@ class StrategyExecutor(AccountHandler, Subscriber):
         ]
 
         # 設定監控清單
-        TradeData.Securities.Monitor.update(info.to_dict('index'))
+        TradeData.Securities.Monitor.update(
+            TradeDataHandler.build_monitor_dict(info))
         TradeDataHandler.unify_monitor_data(self.account_name)
+        db_info = db.query(
+            SecurityInfo,
+            SecurityInfo.mode == TradeData.Account.Mode,
+            SecurityInfo.account == self.account_name
+        )
+        if not db_info.empty:
+            db_info = db_info[
+                ~db_info.code.apply(
+                    lambda code: self._is_filter_out_target(
+                        code, filter_outs)
+                )
+            ]
+            TradeData.Securities.Monitor = TradeDataHandler.build_monitor_dict(
+                db_info)
 
         # 新增歷史K棒資料
         all_targets = list(TradeData.Securities.Monitor)
@@ -361,23 +375,36 @@ class StrategyExecutor(AccountHandler, Subscriber):
         strategy = TradeData.Securities.Strategy[target]
         if target in TradeData.Quotes.NowTargets and strategy:
             inputs = TradeDataHandler.getQuotesNow(target).copy()
-            data = db.query(SecurityInfo, self.WatchList.match_target(target))
+            monitor_data = TradeData.Securities.Monitor.get(target)
+            if isinstance(monitor_data, list):
+                position_records = monitor_data
+            else:
+                data = db.query(
+                    SecurityInfo, self.WatchList.match_target(target))
+                position_records = data.to_dict(
+                    'records') if not data.empty else []
 
             contract = TradeData.Contracts.get(target)
             is_stock = isinstance(contract, sj.Stock)
-            position_data = data.to_dict(
-                'records')[0] if not data.empty else {}
-            broker_quantity = int(position_data.get('quantity', 0) or 0)
-            strategy_quantity = TradeDataHandler.strategy_quantity(
-                broker_quantity,
-                mode=getattr(
-                    TradeDataHandler.getStrategyConfig(target),
-                    'mode',
-                    'long'
-                ),
-                action=position_data.get('action', ''),
-                market='Stocks' if is_stock else 'Futures'
-            )
+            position_data = position_records[0] if position_records else {}
+            if isinstance(monitor_data, list):
+                broker_quantity = max([
+                    abs(int(record.get('quantity', 0) or 0))
+                    for record in position_records
+                ] or [0])
+                strategy_quantity = broker_quantity
+            else:
+                broker_quantity = int(position_data.get('quantity', 0) or 0)
+                strategy_quantity = TradeDataHandler.strategy_quantity(
+                    broker_quantity,
+                    mode=getattr(
+                        TradeDataHandler.getStrategyConfig(target),
+                        'mode',
+                        'long'
+                    ),
+                    action=position_data.get('action', ''),
+                    market='Stocks' if is_stock else 'Futures'
+                )
 
             # new position
             if strategy_quantity <= 0:
@@ -407,6 +434,8 @@ class StrategyExecutor(AccountHandler, Subscriber):
             if data:
                 data['broker_quantity'] = broker_quantity
                 data['quantity'] = strategy_quantity
+                if isinstance(monitor_data, list):
+                    data['combo_legs'] = position_records
 
             if target in TradeData.Futures.Transferred:
                 quantity = TradeData.Futures.Transferred[target]['quantity']

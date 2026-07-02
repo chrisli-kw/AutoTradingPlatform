@@ -247,6 +247,9 @@ class WatchListTool:
                 broker_quantity=broker_quantity,
                 notify_position=notify_position
             )
+        combo_tag = data.get('combo_tag') or data.get('order', {}).get('combo_tag')
+        if combo_tag:
+            TradeDataHandler.refresh_combo_monitor(self.account_name, combo_tag)
 
     def check_remove_monitor(self, target: str):
         is_empty = self.check_is_empty(target)
@@ -269,6 +272,8 @@ class WatchListTool:
             return
 
         order = data.get('order', data)
+        combo_tag = data.get('combo_tag') or order.get('combo_tag', '')
+        trade_id = data.get('trade_id') or order.get('trade_id', '')
         fill_quantity = abs(int(
             order.get('quantity', data.get('quantity', 0)) or 0))
         price = order.get('price', data.get(
@@ -287,12 +292,15 @@ class WatchListTool:
             'Sell' if broker_quantity < 0 else
             TradeDataHandler.normalize_action(order.get('action'))
         )
-        desired_quantity = TradeDataHandler.strategy_quantity(
-            broker_quantity,
-            mode=getattr(conf, 'mode', 'long'),
-            action=position_action,
-            market=market
-        )
+        if combo_tag:
+            desired_quantity = abs(int(broker_quantity or 0))
+        else:
+            desired_quantity = TradeDataHandler.strategy_quantity(
+                broker_quantity,
+                mode=getattr(conf, 'mode', 'long'),
+                action=position_action,
+                market=market
+            )
 
         inputs = {
             'mode': TradeData.Account.Mode,
@@ -304,9 +312,15 @@ class WatchListTool:
             'quantity': 0,
             'reason': sync_reason,
         }
+        if trade_id:
+            inputs['trade_id'] = trade_id
+        if combo_tag:
+            inputs['combo_tag'] = combo_tag
 
         conf.positions.reload()
-        current_quantity = int(conf.positions.total_qty.get(target, 0) or 0)
+        position_key = conf.positions.position_key(target, combo_tag)
+        current_quantity = int(
+            conf.positions.total_qty.get(position_key, 0) or 0)
         quantity_delta = desired_quantity - current_quantity
         if quantity_delta > 0:
             inputs['quantity'] = quantity_delta
@@ -329,6 +343,74 @@ class WatchListTool:
 
 
 class TradeDataHandler:
+    @staticmethod
+    def normalize_combo_tag(value):
+        if value is None:
+            return ''
+        text = str(value)
+        if text.lower() in ['nan', 'none', 'unknown']:
+            return ''
+        return text
+
+    @classmethod
+    def build_monitor_dict(cls, info: pd.DataFrame):
+        if info is None or info.empty:
+            return {}
+
+        monitor = {}
+        combo_groups = {}
+        for record in info.to_dict('records'):
+            combo_tag = cls.normalize_combo_tag(record.get('combo_tag', ''))
+            record['combo_tag'] = combo_tag
+            if combo_tag:
+                trade_id = record.get('trade_id', '')
+                group_key = (combo_tag, trade_id)
+                combo_groups.setdefault(group_key, []).append(record)
+            else:
+                monitor[record['code']] = record
+
+        for legs in combo_groups.values():
+            legs = sorted(
+                legs,
+                key=lambda leg: (
+                    leg.get('pk_id') or 0,
+                    str(leg.get('timestamp') or '')
+                )
+            )
+            lead_code = legs[0]['code']
+            if isinstance(monitor.get(lead_code), list):
+                monitor[lead_code].extend(legs)
+            else:
+                monitor[lead_code] = legs
+
+        return monitor
+
+    @classmethod
+    def refresh_combo_monitor(cls, account_name: str, combo_tag: str):
+        combo_tag = cls.normalize_combo_tag(combo_tag)
+        if not combo_tag:
+            return
+
+        for key, value in list(TradeData.Securities.Monitor.items()):
+            if not isinstance(value, list):
+                continue
+            remaining = [
+                leg for leg in value
+                if cls.normalize_combo_tag(leg.get('combo_tag', '')) != combo_tag
+            ]
+            if remaining:
+                TradeData.Securities.Monitor[key] = remaining
+            else:
+                TradeData.Securities.Monitor.pop(key, None)
+
+        df = db.query(
+            SecurityInfo,
+            SecurityInfo.mode == TradeData.Account.Mode,
+            SecurityInfo.account == account_name,
+            SecurityInfo.combo_tag == combo_tag,
+        )
+        TradeData.Securities.Monitor.update(cls.build_monitor_dict(df))
+
     @staticmethod
     def normalize_action(action):
         return getattr(action, 'value', action) or ''
@@ -473,6 +555,46 @@ class TradeDataHandler:
             df = db.query(SecurityInfo, *condition_info)
 
             monitor_data = TradeData.Securities.Monitor.get(code)
+            existing_combo_rows = (
+                not df.empty and
+                'combo_tag' in df.columns and
+                df.combo_tag.apply(
+                    TradeDataHandler.normalize_combo_tag
+                ).astype(bool).any()
+            )
+            monitor_combo_tag = ''
+            if isinstance(monitor_data, dict):
+                monitor_combo_tag = TradeDataHandler.normalize_combo_tag(
+                    monitor_data.get('combo_tag', ''))
+            if existing_combo_rows and not monitor_combo_tag:
+                combo_rows = df[
+                    df.combo_tag.apply(
+                        TradeDataHandler.normalize_combo_tag
+                    ).astype(bool)
+                ]
+                has_plain_rows = df.combo_tag.apply(
+                    TradeDataHandler.normalize_combo_tag
+                ).eq('').any()
+                if not has_plain_rows:
+                    db.delete(
+                        PositionTable,
+                        *condition_table,
+                        PositionTable.combo_tag == '',
+                        PositionTable.trade_id == 'unknown',
+                        PositionTable.reason == 'unify monitor data sync'
+                    )
+                    conf.positions.reload()
+
+                for row in combo_rows.to_dict('records'):
+                    watchlist.sync_strategy_position(
+                        row['code'],
+                        'New',
+                        row,
+                        broker_quantity=int(row.get('quantity', 0) or 0),
+                        sync_reason='unify monitor data sync'
+                    )
+                continue
+
             if monitor_data is None:
                 if (
                     getattr(conf, 'positions', None) is not None and
@@ -608,9 +730,27 @@ class Position:
             PositionTable.strategy == self.strategy
         )
         self.entries = df.to_dict('records')
-        self.total_qty = df.groupby(
-            'name').quantity.sum().to_dict() if not df.empty else {}
+        self.total_qty = {}
+        if not df.empty:
+            for entry in self.entries:
+                key = self.position_key(
+                    entry['name'], entry.get('combo_tag', ''))
+                self.total_qty[key] = (
+                    self.total_qty.get(key, 0) + entry.get('quantity', 0)
+                )
         return self
+
+    @staticmethod
+    def position_key(name: str, combo_tag: str = ''):
+        return f'{name}|{combo_tag}' if combo_tag else name
+
+    @classmethod
+    def _entry_matches(cls, entry: dict, name: str, combo_tag: str = ''):
+        if entry.get('name') != name:
+            return False
+        if combo_tag:
+            return entry.get('combo_tag', '') == combo_tag
+        return True
 
     def average_cost(self):
         if self.entries:
@@ -626,8 +766,9 @@ class Position:
         self.entries.append(inputs)
 
         name = inputs['name']
-        total_qty = self.total_qty.get(name, 0)
-        self.total_qty[name] = total_qty + inputs['quantity']
+        key = self.position_key(name, inputs.get('combo_tag', ''))
+        total_qty = self.total_qty.get(key, 0)
+        self.total_qty[key] = total_qty + inputs['quantity']
 
         if not self.backtest and inputs.get('quantity', 0) > 0:
             db.add_data(PositionTable, **inputs)
@@ -636,14 +777,19 @@ class Position:
 
     def close(self, inputs: dict):
         name = inputs['name']
+        combo_tag = inputs.get('combo_tag', '')
+        key = self.position_key(name, combo_tag)
         price = inputs['price']
-        qty = min(inputs.get('quantity', 0), self.total_qty.get(name, 0))
+        qty = min(inputs.get('quantity', 0), self.total_qty.get(key, 0))
         reason = inputs.get('reason', '平倉')
 
         closed_qty = 0
         total_profit = 0.0
 
-        entries = [e for e in self.entries if e['name'] == name]
+        entries = [
+            e for e in self.entries
+            if self._entry_matches(e, name, combo_tag)
+        ]
 
         while closed_qty < qty and entries:
             entry = entries[0]
@@ -676,7 +822,7 @@ class Position:
                 'reason': reason
             })
 
-        self.total_qty[name] = self.total_qty.get(name, 0) - closed_qty
+        self.total_qty[key] = self.total_qty.get(key, 0) - closed_qty
         self.total_profit += total_profit
 
         return self.average_cost()
@@ -687,13 +833,18 @@ class Position:
     def query_condition(self, inputs: dict):
         '''Query condition for the position table in the database'''
 
-        return (
+        condition = [
             PositionTable.mode == inputs['mode'],
             PositionTable.account == inputs['account'],
             PositionTable.strategy == inputs['strategy'],
             PositionTable.name == inputs['name'],
             PositionTable.timestamp == inputs['timestamp']
-        )
+        ]
+        if inputs.get('combo_tag'):
+            condition.append(PositionTable.combo_tag == inputs['combo_tag'])
+        if inputs.get('trade_id'):
+            condition.append(PositionTable.trade_id == inputs['trade_id'])
+        return tuple(condition)
 
     def delete_entries(self, inputs: dict):
         '''Delete entries from the position table'''
