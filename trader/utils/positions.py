@@ -258,7 +258,8 @@ class WatchListTool:
             oc_type: str,
             data: dict,
             broker_quantity: int = None,
-            notify_position: bool = False
+            notify_position: bool = False,
+            sync_reason: str = 'deal callback sync'
     ):
         conf = TradeDataHandler.getStrategyConfig(target)
         if conf is None or getattr(conf, 'positions', None) is None:
@@ -298,7 +299,7 @@ class WatchListTool:
             'timestamp': datetime.now(),
             'price': price,
             'quantity': 0,
-            'reason': 'deal callback sync',
+            'reason': sync_reason,
         }
 
         conf.positions.reload()
@@ -520,7 +521,8 @@ class TradeDataHandler:
                 'Sync',
                 sync_data,
                 broker_quantity=broker_quantity,
-                notify_position=False
+                notify_position=False,
+                sync_reason='unify monitor data sync'
             )
 
 
