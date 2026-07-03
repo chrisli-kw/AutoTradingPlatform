@@ -76,7 +76,7 @@ class PositionTable(Base):
         String(10), default='Simulation', comment='交易模式 (Simulation/All)')
     account = Column(String(50), nullable=False, comment='帳戶代號')
     strategy = Column(String(50), nullable=False, comment='策略名稱')
-    name = Column(String(10), nullable=False, comment='證券名稱')
+    name = Column(String(50), nullable=False, comment='證券名稱')
     price = Column(FLOAT(2), nullable=False, comment='進場價格')
     timestamp = Column(
         TIMESTAMP(fsp=6), server_default=func.now(), comment='進場時間')

@@ -733,8 +733,10 @@ class Position:
         self.total_qty = {}
         if not df.empty:
             for entry in self.entries:
-                key = self.position_key(
-                    entry['name'], entry.get('combo_tag', ''))
+                combo_tag = TradeDataHandler.normalize_combo_tag(
+                    entry.get('combo_tag', ''))
+                entry['combo_tag'] = combo_tag
+                key = self.position_key(entry['name'], combo_tag)
                 self.total_qty[key] = (
                     self.total_qty.get(key, 0) + entry.get('quantity', 0)
                 )
@@ -748,8 +750,13 @@ class Position:
     def _entry_matches(cls, entry: dict, name: str, combo_tag: str = ''):
         if entry.get('name') != name:
             return False
+        combo_tag = TradeDataHandler.normalize_combo_tag(combo_tag)
         if combo_tag:
-            return entry.get('combo_tag', '') == combo_tag
+            return (
+                TradeDataHandler.normalize_combo_tag(
+                    entry.get('combo_tag', '')
+                ) == combo_tag
+            )
         return True
 
     def average_cost(self):
@@ -763,10 +770,17 @@ class Position:
         return np.inf
 
     def open(self, inputs: dict):
+        combo_tag = TradeDataHandler.normalize_combo_tag(
+            inputs.get('combo_tag', ''))
+        if combo_tag:
+            inputs['combo_tag'] = combo_tag
+        else:
+            inputs.pop('combo_tag', None)
+
         self.entries.append(inputs)
 
         name = inputs['name']
-        key = self.position_key(name, inputs.get('combo_tag', ''))
+        key = self.position_key(name, combo_tag)
         total_qty = self.total_qty.get(key, 0)
         self.total_qty[key] = total_qty + inputs['quantity']
 
@@ -777,7 +791,12 @@ class Position:
 
     def close(self, inputs: dict):
         name = inputs['name']
-        combo_tag = inputs.get('combo_tag', '')
+        combo_tag = TradeDataHandler.normalize_combo_tag(
+            inputs.get('combo_tag', ''))
+        if combo_tag:
+            inputs['combo_tag'] = combo_tag
+        else:
+            inputs.pop('combo_tag', None)
         key = self.position_key(name, combo_tag)
         price = inputs['price']
         qty = min(inputs.get('quantity', 0), self.total_qty.get(key, 0))
@@ -827,8 +846,10 @@ class Position:
 
         return self.average_cost()
 
-    def is_open(self, name: str):
-        return self.total_qty.get(name, 0) > 0
+    def is_open(self, name: str, combo_tag: str = ''):
+        key = self.position_key(
+            name, TradeDataHandler.normalize_combo_tag(combo_tag))
+        return self.total_qty.get(key, 0) > 0
 
     def query_condition(self, inputs: dict):
         '''Query condition for the position table in the database'''
