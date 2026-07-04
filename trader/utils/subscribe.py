@@ -144,3 +144,74 @@ class Subscriber(KBarTool):
         self.unsubscribe_index()
         self.unsubscribe_targets(targetLists, 'tick')
         self.unsubscribe_targets(targetLists, 'bidask')
+
+    @staticmethod
+    def _normalize_snapshot_targets(targets):
+        if isinstance(targets, (str, dict)):
+            return [targets]
+        if not isinstance(targets, (list, tuple, set, np.ndarray, pd.Series)):
+            return [targets]
+        return list(targets)
+
+    @staticmethod
+    def _snapshot_to_dict(snapshot):
+        if hasattr(snapshot, 'dict') and callable(snapshot.dict):
+            return snapshot.dict()
+        if hasattr(snapshot, 'to_dict') and callable(snapshot.to_dict):
+            return snapshot.to_dict()
+        if hasattr(snapshot, '_asdict') and callable(snapshot._asdict):
+            return snapshot._asdict()
+        return dict(snapshot)
+
+    def _snapshot_contract(self, target):
+        if not isinstance(target, dict):
+            return get_contract(target)
+
+        contract = target.get('contract')
+        if contract is not None:
+            return contract
+
+        target_expiration = target.get('expiration')
+        target_strike = target.get('strike')
+        target_option_type = target.get('option_type')
+        target_underlying = target.get('underlying', 'TX')
+        if (
+            target_expiration is not None or
+            target_strike is not None or
+            target_option_type is not None
+        ):
+            return get_contract(
+                expiration=target_expiration,
+                strike=target_strike,
+                option_type=target_option_type,
+                underlying=target_underlying
+            )
+
+        target_code = (
+            target.get('target') or
+            target.get('symbol') or
+            target.get('code')
+        )
+        return get_contract(target_code)
+
+    def snapshot_targets(
+            self,
+            targets: Union[str, dict, list, np.array],
+            as_df: bool = True
+    ):
+        '''取得股票/期貨盤中資訊快照'''
+
+        contracts = [
+            self._snapshot_contract(t)
+            for t in self._normalize_snapshot_targets(targets)
+        ]
+        snapshots = API.snapshots(contracts)
+
+        data = [self._snapshot_to_dict(s) for s in snapshots]
+        if not as_df:
+            return data
+
+        df = pd.DataFrame(data)
+        if 'ts' in df.columns:
+            df['ts'] = pd.to_datetime(df['ts'], errors='coerce')
+        return df
