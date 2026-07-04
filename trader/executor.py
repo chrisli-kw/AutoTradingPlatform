@@ -374,6 +374,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
     def monitor_targets(self, target: str):
         strategy = TradeData.Securities.Strategy[target]
         if target in TradeData.Quotes.NowTargets and strategy:
+            conf = TradeDataHandler.getStrategyConfig(target)
             inputs = TradeDataHandler.getQuotesNow(target).copy()
             monitor_data = TradeData.Securities.Monitor.get(target)
             if isinstance(monitor_data, list):
@@ -397,11 +398,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
                 broker_quantity = int(position_data.get('quantity', 0) or 0)
                 strategy_quantity = TradeDataHandler.strategy_quantity(
                     broker_quantity,
-                    mode=getattr(
-                        TradeDataHandler.getStrategyConfig(target),
-                        'mode',
-                        'long'
-                    ),
+                    mode=getattr(conf, 'mode', 'long'),
                     action=position_data.get('action', ''),
                     market='Stocks' if is_stock else 'Futures'
                 )
@@ -461,6 +458,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
             isTransfer = (
                 (not is_stock) and
+                getattr(conf, 'transfer_position', True) and
                 (actionType == 'Close') and
                 (TODAY_STR.replace('-', '/') == contract.delivery_date) and
                 (datetime.now() > TimeTransferFutures)

@@ -831,6 +831,8 @@ class Position:
             total_profit += profit
 
             self.exits.append({
+                'name': entry.get('name', name),
+                'combo_tag': entry.get('combo_tag', combo_tag),
                 'entry_price': entry_price,
                 'exit_price': price,
                 'profit': profit,
