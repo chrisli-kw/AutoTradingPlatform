@@ -244,9 +244,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         ]
 
         # 設定監控清單
-        TradeData.Securities.Monitor.update(
-            TradeDataHandler.build_monitor_dict(info))
-        TradeDataHandler.unify_monitor_data(self.account_name)
+        monitor_data = TradeDataHandler.build_monitor_dict(info)
         db_info = db.query(
             SecurityInfo,
             SecurityInfo.mode == TradeData.Account.Mode,
@@ -259,8 +257,10 @@ class StrategyExecutor(AccountHandler, Subscriber):
                         code, filter_outs)
                 )
             ]
-            TradeData.Securities.Monitor = TradeDataHandler.build_monitor_dict(
-                db_info)
+            monitor_data = TradeDataHandler.build_monitor_dict(db_info)
+
+        TradeData.Securities.Monitor = monitor_data
+        TradeDataHandler.unify_monitor_data(self.account_name)
 
         # 新增歷史K棒資料
         all_targets = list(TradeData.Securities.Monitor)
