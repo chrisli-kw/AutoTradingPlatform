@@ -410,7 +410,8 @@ class AccountInfo:
             # if stocks.shape[0]:
             names = stocks.code.apply(self.get_stock_name)
             stocks.pnl = stocks.pnl.astype(int)  # 未實現損益
-            stocks.order_cond = stocks.order_cond.apply(lambda x: x._value_)
+            stocks.order_cond = stocks.order_cond.apply(
+                lambda x: x._value_ if hasattr(x, '_value_') else x)  # 交易別
             stocks.order_cond = stocks.order_cond.astype(str)  # 交易別
             stocks.insert(1, 'name', names)
             stocks[['account', 'market']] = [self.account_name, 'Stocks']
