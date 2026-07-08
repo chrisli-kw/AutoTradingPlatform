@@ -16,7 +16,7 @@ from .config import (
     ConvertScales,
     NotifyConfig
 )
-from .utils import tasker, get_contract
+from .utils import tasker, get_contract, safe_logout
 from .utils.time import time_tool
 from .utils.crawler import crawler
 from .utils.notify import Notification
@@ -81,7 +81,7 @@ def runAccountInfo(**kwargs):
 
         # 登出
         time.sleep(5)
-        logging.info(f'API log out: {API.logout()}')
+        safe_logout()
         time.sleep(10)
 
     logging.info('Export data')
@@ -172,7 +172,7 @@ def runAutoTrader(account: str):
             notifier.send.post(
                 f"\n【Error】【下單機監控】{se.account_name}資料儲存失敗")
 
-        logging.info(f'API log out: {API.logout()}')
+        safe_logout()
         notifier.send.post(f"\n【停止監控】{se.account_name}關閉程式並登出")
 
     del se
@@ -222,7 +222,7 @@ def runCrawlStockData(account: str, start=None, end=None):
             filename = f'{crawler.FromSJ.folder_path}/stock_data_1T.pkl'
             file_handler.Process.save_table(df, filename)
     finally:
-        logging.info(f'API log out: {API.logout()}')
+        safe_logout()
 
 
 def thread_subscribe(user: str, targets: list):
@@ -254,7 +254,7 @@ def thread_subscribe(user: str, targets: list):
     except:
         logging.exception('Catch an exception:')
     finally:
-        logging.info(f'{user} log-out: {api.logout()}')
+        safe_logout()
     return "Task completed"
 
 

@@ -2,6 +2,7 @@ import queue
 import logging
 import numpy as np
 import pandas as pd
+from shioaji import AuthError
 
 from ..config import API, NotifyConfig
 from .notify import Notification
@@ -126,6 +127,22 @@ def concat_df(df1: pd.DataFrame, df2: pd.DataFrame, sort_by=[], reset_index=Fals
     return df
 
 
+def safe_logout(api=None) -> bool:
+    if api is None:
+        api = API
+
+    # logging.info('API log out')
+    try:
+        api.logout()
+        logging.info("API logged out")
+        return True
+    except AuthError as e:
+        if str(e) == "Not authenticated":
+            logging.info("API already logged out")
+            return False
+        raise
+
+
 def tasker(func):
     def wrapper(**kwargs):
         name = func.__name__
@@ -138,5 +155,5 @@ def tasker(func):
             logging.exception('Catch an exception:')
             notifier.send.post(f"\n【Error】【{name}】發生異常")
         finally:
-            logging.info(f'API log out: {API.logout()}')
+            safe_logout()
     return wrapper
