@@ -948,6 +948,10 @@ class StrategyExecutor(AccountHandler, Subscriber):
             self._update_runtime_status("running", "監控執行中")
 
             for target in list(TradeData.Securities.Monitor):
+                strategy = TradeData.Securities.Strategy.get(target)
+                if bot.is_strategy_stopped(self.account_name, strategy):
+                    continue
+
                 orders = self._as_order_list(self.monitor_targets(target))
                 for order in orders:
                     if not self._should_place_order(order):

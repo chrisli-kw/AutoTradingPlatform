@@ -21,6 +21,8 @@ from .database.tables import SecurityInfo
 # Status flag: supports multiple accounts
 stop_flags = {}
 pause_flags = {}
+# Strategy-level stop flags, keyed by account then strategy name.
+strategy_stop_flags = {}
 
 # chat_id whitelist
 WHITELIST = {str(x) for x in NotifyConfig.TELEGRAM_CHAT_ID.values()}
@@ -138,6 +140,9 @@ class TelegramBot:
         for name in self.account_names:
             stop_flags[name] = Event()
             pause_flags[name] = Event()
+            strategy_stop_flags[name] = {
+                strategy: Event() for strategy in StrategyList.Config
+            }
 
     async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
         err = context.error
@@ -247,6 +252,26 @@ class TelegramBot:
         account, strategy = account_strategy.split('-', 1)
         return account.strip(), strategy.strip(), target.strip()
 
+    def _parse_stop_args(self, context: ContextTypes.DEFAULT_TYPE):
+        """Return ``(account, strategy)``; strategy is None for account stop."""
+        try:
+            if not context.args:
+                return None
+
+            raw = ' '.join(context.args).strip()
+            for account in self.account_names:
+                if raw == account:
+                    return account, None
+
+                prefix = f'{account}-'
+                if raw.startswith(prefix):
+                    strategy = raw[len(prefix):].strip()
+                    return account, strategy or None
+        except Exception:
+            logging.exception('Parse stop command failed:')
+
+        return None
+
     # ========== Command Response (async) ==========
 
     async def cmd_pause(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -273,6 +298,27 @@ class TelegramBot:
 
     async def cmd_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_permission(update):
+            return
+
+        parsed = self._parse_stop_args(context)
+        usage = 'Usage: /stop account_name or /stop account_name-strategy'
+        if parsed is None:
+            await self.post(update, usage)
+            return
+
+        name, strategy = parsed
+        if strategy is not None:
+            if strategy not in StrategyList.Config:
+                await self.post(update, f'Unknown strategy: {strategy}')
+                return
+
+            strategy_stop_flags[name][strategy].set()
+            logging.info(
+                '[Stop Strategy] Received Telegram command|%s|%s',
+                name,
+                strategy,
+            )
+            await self.post(update, f'[{name}] strategy stopped: {strategy}')
             return
 
         name = self._parse_args(context)
@@ -397,3 +443,8 @@ class TelegramBot:
     def get_flags(self, account_name: str):
         '''========== Get status flags of an account =========='''
         return stop_flags[account_name], pause_flags[account_name]
+
+    def is_strategy_stopped(self, account_name: str, strategy: str) -> bool:
+        """Whether a strategy has been stopped without stopping its account."""
+        flag = strategy_stop_flags.get(account_name, {}).get(strategy)
+        return bool(flag and flag.is_set())
