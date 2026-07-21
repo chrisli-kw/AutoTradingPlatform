@@ -30,30 +30,40 @@ class CallbackHandler:
         return msg
 
     @staticmethod
-    def fut_symbol(msg: dict):
-        symbol = msg['contract']['code'] + msg['contract']['delivery_month']
-        if symbol not in TradeData.Quotes.NowTargets:
-            for k in TradeData.Quotes.NowTargets:
-                if symbol in k:
-                    symbol = k
+    def _futures_symbol(msg: dict):
+        """Build the internal symbol from either an order or deal callback."""
+        contract = msg.get('contract', msg)
+        symbol = contract['code'] + contract['delivery_month']
+        is_option = (
+            contract.get('security_type') == 'OPT' or
+            contract.get('option_right') not in [None, '', 'Future']
+        )
+        if is_option:
+            option_right = str(contract.get('option_right', ''))
+            option = 'C' if 'Call' in option_right else 'P'
+            strike = float(contract.get('strike_price', 0) or 0)
+            strike = int(strike) if strike.is_integer() else strike
+            symbol = f'{symbol}{strike}{option}'
+
         return symbol
 
     @staticmethod
-    def fut_deal_symbol(msg: dict):
-        symbol = msg['code'] + msg['delivery_month']
-        is_option = (
-            msg.get('security_type') == 'OPT' or
-            msg.get('option_right') not in [None, '', 'Future']
-        )
-        if is_option:
-            option = msg.get('option_right', '')[6:7]
-            symbol = f'{symbol}{int(msg.get("strike_price", 0))}{option}'
+    def _match_monitored_symbol(symbol: str):
+        if symbol in TradeData.Quotes.NowTargets:
+            return symbol
 
-        if symbol not in TradeData.Quotes.NowTargets:
-            for k in TradeData.Quotes.NowTargets:
-                if symbol in k:
-                    return k
+        for target in TradeData.Quotes.NowTargets:
+            if symbol in target:
+                return target
         return symbol
+
+    @classmethod
+    def fut_symbol(cls, msg: dict):
+        return cls._match_monitored_symbol(cls._futures_symbol(msg))
+
+    @classmethod
+    def fut_deal_symbol(cls, msg: dict):
+        return cls._match_monitored_symbol(cls._futures_symbol(msg))
 
     @staticmethod
     def events(resp_code: int, event_code: int, info: str, event: str, env):

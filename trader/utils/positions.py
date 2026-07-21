@@ -120,6 +120,10 @@ class WatchListTool:
         )
         max_qty = conf.max_qty.get(target, 1) if conf else 1
         position = int(100*strategy_quantity/max_qty) if max_qty > 0 else 0
+        strategy = TradeData.Securities.Strategy.get(target)
+        if not strategy and not df.empty:
+            strategy = df.iloc[0].get('strategy')
+        strategy = strategy or 'unknown'
 
         condition = self.match_target(target, combo_tag=combo_tag)
         if new_quantity == 0:
@@ -144,7 +148,7 @@ class WatchListTool:
                 order_cond=order.get('order_cond', 'Cash'),
                 timestamp=datetime.now(),
                 position=position,
-                strategy=TradeData.Securities.Strategy.get(target, 'unknown')
+                strategy=strategy
             )
             if is_open and trade_id:
                 security_data['trade_id'] = trade_id
@@ -167,6 +171,91 @@ class WatchListTool:
             db.update(SecurityInfo, update_data, condition)
         return new_quantity
 
+    def _sync_unmanaged_position(
+            self,
+            target: str,
+            broker_quantity: int,
+            price: float,
+            trade_id: str = '',
+            combo_tag: str = '',
+            reason: str = 'deal callback sync'
+    ):
+        """Reconcile a derivative fill when the originating strategy is off.
+
+        Manual closes still need to remove inventory persisted by a strategy
+        that is no longer enabled.  The broker's post-fill quantity is the
+        source of truth in this path.
+        """
+        condition = (
+            PositionTable.mode == TradeData.Account.Mode,
+            PositionTable.account == self.account_name,
+            PositionTable.name == target,
+        )
+        if combo_tag:
+            condition += (PositionTable.combo_tag == combo_tag,)
+
+        entries = db.query(
+            PositionTable,
+            *condition,
+            orderBy='asc',
+            orderTarget=PositionTable.timestamp
+        )
+        desired_quantity = abs(int(broker_quantity or 0))
+        current_quantity = (
+            int(entries.quantity.sum()) if not entries.empty else 0)
+        remaining = current_quantity - desired_quantity
+
+        if remaining > 0:
+            for entry in entries.to_dict('records'):
+                if remaining <= 0:
+                    break
+                entry_quantity = int(entry.get('quantity', 0) or 0)
+                closed_quantity = min(entry_quantity, remaining)
+                entry_condition = (
+                    PositionTable.mode == TradeData.Account.Mode,
+                    PositionTable.account == self.account_name,
+                    PositionTable.strategy == entry['strategy'],
+                    PositionTable.name == target,
+                    PositionTable.timestamp == entry['timestamp'],
+                )
+                if entry.get('combo_tag'):
+                    entry_condition += (
+                        PositionTable.combo_tag == entry['combo_tag'],)
+                if entry.get('trade_id'):
+                    entry_condition += (
+                        PositionTable.trade_id == entry['trade_id'],)
+
+                if closed_quantity == entry_quantity:
+                    db.delete(PositionTable, *entry_condition)
+                else:
+                    db.update(
+                        PositionTable,
+                        {'quantity': entry_quantity - closed_quantity},
+                        *entry_condition
+                    )
+                remaining -= closed_quantity
+        elif remaining < 0:
+            security = self.get_match_info(target, combo_tag=combo_tag)
+            strategy = (
+                security.iloc[0].get('strategy')
+                if not security.empty else 'unknown'
+            ) or 'unknown'
+            inputs = {
+                'mode': TradeData.Account.Mode,
+                'account': self.account_name,
+                'strategy': strategy,
+                'name': target,
+                'timestamp': datetime.now(),
+                'price': price,
+                'quantity': abs(remaining),
+                'reason': reason,
+            }
+            if trade_id:
+                inputs['trade_id'] = trade_id
+            if combo_tag:
+                inputs['combo_tag'] = combo_tag
+            db.add_data(PositionTable, **inputs)
+
     def update_monitor(
             self,
             oc_type: str,
@@ -185,11 +274,25 @@ class WatchListTool:
             target = data['contract']['code']
         conf = TradeDataHandler.getStrategyConfig(target)
 
-        if conf is None:
-            return
-
         combo_tag = data.get('combo_tag') or data.get('order', {}).get('combo_tag')
         df = self.get_match_info(target, combo_tag=combo_tag)
+        if conf is None:
+            contract = data.get('contract', {})
+            if contract and contract.get('security_type') not in ['FUT', 'OPT']:
+                return
+            broker_quantity = self._update_futures_monitor(
+                target, data, conf, df, oc_type=oc_type)
+            if sync_position:
+                order = data.get('order', data)
+                self._sync_unmanaged_position(
+                    target,
+                    broker_quantity,
+                    float(order.get('price', 0) or 0),
+                    trade_id=data.get('trade_id') or order.get('trade_id', ''),
+                    combo_tag=combo_tag or '',
+                )
+            return
+
         if conf.market == 'Futures':
             broker_quantity = self._update_futures_monitor(
                 target, data, conf, df, oc_type=oc_type)

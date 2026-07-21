@@ -372,7 +372,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
         )
 
     def monitor_targets(self, target: str):
-        strategy = TradeData.Securities.Strategy[target]
+        strategy = TradeData.Securities.Strategy.get(target)
         if target in TradeData.Quotes.NowTargets and strategy:
             conf = TradeDataHandler.getStrategyConfig(target)
             inputs = TradeDataHandler.getQuotesNow(target).copy()
