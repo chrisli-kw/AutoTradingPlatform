@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import re
 from typing import Optional
 
 from ..config import API
@@ -29,6 +30,14 @@ def iter_option_contracts(api=None):
     for group in api.Contracts.Options:
         for contract in group:
             yield contract
+
+
+def is_option_symbol(target: str):
+    """Return whether target uses Shioaji's option symbol format."""
+    return bool(re.fullmatch(
+        r'[A-Z0-9]{3}\d{6}\d+(?:\.\d+)?[CP]',
+        str(target).strip().upper()
+    ))
 
 
 def _contract_option_type(contract):
@@ -105,12 +114,30 @@ def get_option_contract(
 
 
 def find_option_contract(target: str, api=None):
-    target = str(target)
+    if api is None:
+        api = API
+
+    target = str(target).strip().upper()
+    if not is_option_symbol(target):
+        raise KeyError(target)
+
+    # Option symbols such as TXY20260744450P belong to the TXY group.
+    # Querying that group directly is both more reliable and cheaper than
+    # walking every option product.
+    group = api.Contracts.Options.get(target[:3])
+    if group is not None:
+        contract = group.get(target)
+        if contract is not None:
+            return contract
+
+    # Keep a full scan as a compatibility fallback for contract containers
+    # whose group key differs from the first three characters of the symbol.
     for contract in iter_option_contracts(api):
-        if target in [
-            getattr(contract, 'symbol', None),
-            getattr(contract, 'code', None),
-        ]:
+        identifiers = [
+            str(getattr(contract, field, '')).upper()
+            for field in ('symbol', 'code')
+        ]
+        if target in identifiers:
             return contract
     raise KeyError(target)
 

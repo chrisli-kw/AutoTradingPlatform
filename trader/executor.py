@@ -265,9 +265,28 @@ class StrategyExecutor(AccountHandler, Subscriber):
         # 新增歷史K棒資料
         all_targets = list(TradeData.Securities.Monitor)
         all_targets = self.StrategySet.append_monitor_list_(all_targets)
+        contracts = {}
+        unavailable_targets = []
+        for code in all_targets:
+            try:
+                contracts[code] = get_contract(code)
+            except KeyError as exc:
+                unavailable_targets.append(code)
+                logging.error(
+                    f'[Monitor List]Contract unavailable|{code}|{exc}'
+                )
+
+        if unavailable_targets:
+            unavailable = set(unavailable_targets)
+            all_targets = [
+                code for code in all_targets if code not in unavailable
+            ]
+            for code in unavailable_targets:
+                TradeData.Securities.Monitor.pop(code, None)
+                TradeData.Securities.Strategy.pop(code, None)
+
         self.history_kbars(['TSE001', 'OTC101'] + all_targets)
-        TradeData.Contracts.update({
-            code: get_contract(code) for code in all_targets})
+        TradeData.Contracts.update(contracts)
 
         # 交易風險控制
         buy_condition = (info.action == 'Buy') & (info.market == 'Stocks')

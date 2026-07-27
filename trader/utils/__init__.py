@@ -102,11 +102,12 @@ def get_contract(
     elif api.Contracts.Options.get(c_type):
         return api.Contracts.Options.get(c_type)[target]
 
-    from .options import find_option_contract
+    from .options import find_option_contract, is_option_symbol
     try:
         return find_option_contract(target, api=api)
     except KeyError:
-        pass
+        if is_option_symbol(target):
+            raise KeyError(f'Option contract not found: {target}') from None
 
     return api.Contracts.Stocks[target]
 

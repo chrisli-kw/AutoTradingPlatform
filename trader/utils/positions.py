@@ -273,6 +273,10 @@ class WatchListTool:
         except KeyError:
             target = data['contract']['code']
         conf = TradeDataHandler.getStrategyConfig(target)
+        is_strategy_target = target in TradeData.Securities.Strategy
+        is_monitored_target = target in TradeData.Securities.Monitor
+        if not is_strategy_target and not is_monitored_target:
+            return
 
         combo_tag = data.get('combo_tag') or data.get('order', {}).get('combo_tag')
         df = self.get_match_info(target, combo_tag=combo_tag)
