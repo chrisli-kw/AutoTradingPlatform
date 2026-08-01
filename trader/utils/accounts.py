@@ -3,6 +3,7 @@ import logging
 import numpy as np
 import pandas as pd
 import shioaji as sj
+from tqdm import tqdm
 from datetime import datetime
 from collections.abc import Iterable
 
@@ -479,9 +480,10 @@ class AccountInfo:
         if market == 'Stocks':
             profitloss_detail = profitloss
         else:
-            for pls in profitloss:
+            for pls in tqdm(profitloss):
                 pl_detail = API.list_profit_loss_detail(account, pls.id)
                 profitloss_detail += pl_detail
+                time.sleep(0.2)  # 避免API回傳資料不完整，暫停0.2秒再查詢下一筆
 
         if not len(profitloss_detail):
             return TradeData.Futures.SettleDefault
