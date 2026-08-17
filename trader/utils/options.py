@@ -71,6 +71,19 @@ def _week_score(contract, week: Optional[str]):
     return 0 if category.endswith(str(week)) else 100
 
 
+def _matches_expiration_series(contract, underlying: str, week: Optional[str]):
+    """Distinguish monthly options from weekly options in the same month."""
+    category = str(getattr(contract, 'category', '')).upper()
+    if week is not None:
+        return category.endswith(str(week))
+
+    # TAIFEX monthly index options use the *O category (for example TXO),
+    # while weekly contracts use TX1, TX2, TX4, TX5, etc.  Without this
+    # filter an expiration such as 202608 could resolve to TX4 simply because
+    # it appears first in Shioaji's contract collection.
+    return category == f'{str(underlying).upper()}O'
+
+
 def get_option_contract(
         expiration: str,
         strike: float,
@@ -96,10 +109,8 @@ def get_option_contract(
         if _contract_option_type(contract) != option_type:
             continue
 
-        if week is not None:
-            category = str(getattr(contract, 'category', '')).upper()
-            if not category.endswith(str(week)):
-                continue
+        if not _matches_expiration_series(contract, underlying, week):
+            continue
 
         matches.append(contract)
 
