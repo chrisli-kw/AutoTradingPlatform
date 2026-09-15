@@ -594,6 +594,16 @@ class StrategyExecutor(AccountHandler, Subscriber):
         filter_outs = self._get_filter_out()
 
         pools = {}
+        local_options = db.query(
+            SecurityInfo,
+            SecurityInfo.mode == TradeData.Account.Mode,
+            SecurityInfo.account == self.account_name
+        )
+        option_strategies = {
+            row['code']: row.get('strategy')
+            for row in local_options.to_dict('records')
+            if row['code'].startswith('TXO')
+        }
         for strategy, conf in StrategyList.Config.items():
             targets = getattr(conf, 'Targets', [])
 
@@ -604,6 +614,7 @@ class StrategyExecutor(AccountHandler, Subscriber):
                     for target in target_set or []:
                         if (
                             target.startswith('TXO') and
+                            option_strategies.get(target) == strategy and
                             'TXO' not in getattr(conf, 'FILTER_OUT', []) and
                             target not in getattr(conf, 'FILTER_OUT', [])
                         ):

@@ -661,6 +661,13 @@ class TradeDataHandler:
 
             df = db.query(SecurityInfo, *condition_info)
 
+            # Option ownership must already have been persisted by a fill
+            # callback; a configured target alone is not proof of ownership.
+            if code.startswith('TXO') and (
+                df.empty or not df['strategy'].eq(strategy).all()
+            ):
+                continue
+
             monitor_data = TradeData.Securities.Monitor.get(code)
             existing_combo_rows = (
                 not df.empty and

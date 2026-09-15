@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from typing import Union
 from threading import Lock
+from datetime import timedelta
 
 from . import get_contract
 from .kbar import KBarTool
@@ -193,6 +194,23 @@ class Subscriber(KBarTool):
             target.get('code')
         )
         return get_contract(target_code)
+
+    def previous_session_close(self, target, session_start):
+        """Last traded minute before the current session, not settlement."""
+        contract = self._snapshot_contract(target)
+        bars = API.kbars(
+            contract,
+            start=(session_start - timedelta(days=10)).strftime('%Y-%m-%d'),
+            end=session_start.strftime('%Y-%m-%d'),
+        )
+        frame = pd.DataFrame(dict(bars))
+        if frame.empty:
+            return 0
+        times = pd.to_datetime(frame['ts'])
+        frame = frame[(times < session_start) & (frame['Volume'] > 0)]
+        if frame.empty:
+            return 0
+        return float(frame.sort_values('ts').iloc[-1]['Close'])
 
     def snapshot_targets(
             self,
