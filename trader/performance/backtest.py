@@ -1199,11 +1199,19 @@ class FuturesBackTester:
         trades = self.simulate_trades(config, mode)
 
         if trades.empty:
+            trades['drawdown'] = pd.Series(index=trades.index, dtype=float)
             return {'Summary': {}, 'Records': trades}
 
+        trades = trades.sort_values('close_time', kind='stable').copy()
         trades['duration'] = (
             trades.close_time - trades.open_time).dt.total_seconds()/60
         trades['balance'] = trades.profit.cumsum()
+
+        cumulative_return = (
+            100 * trades.profit / trades.entry_price / trades.qty
+        ).cumsum()
+        peak = cumulative_return.cummax().clip(lower=0)
+        trades['drawdown'] = cumulative_return - peak
         trades['trade_type'] = config.mode
         trades = trades.rename(
             columns={'open_time': 'open_Time', 'close_time': 'close_Time'})
