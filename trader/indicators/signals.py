@@ -46,6 +46,28 @@ class ChipAnalysis:
 
 class TechnicalSignals:
     @staticmethod
+    def VWAP(data: pd.DataFrame, window_size: int = 5, shift: int = 0):
+        '''Rolling volume-weighted average of (High + Low + Close) / 3.
+
+        Windows contain window_size rows per name (when present). A full
+        window is required; zero total volume returns NaN.
+        '''
+        typical_price = (data.High + data.Low + data.Close)/3
+        price_volume = typical_price * data.Volume
+
+        def rolling_sum(values):
+            return values.shift(shift).rolling(window_size).sum()
+
+        if 'name' in data.columns:
+            weighted_sum = price_volume.groupby(data['name']).transform(rolling_sum)
+            volume_sum = data.Volume.groupby(data['name']).transform(rolling_sum)
+        else:
+            weighted_sum = rolling_sum(price_volume)
+            volume_sum = rolling_sum(data.Volume)
+
+        return weighted_sum/volume_sum.replace(0, np.nan)
+
+    @staticmethod
     def SMA(data: pd.DataFrame, col: str, n=7, shift=0):
 
         def SMA_(x):
