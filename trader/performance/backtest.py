@@ -1109,7 +1109,8 @@ class FuturesBackTester:
         self.created_feature_key = feature_key
 
     def simulate_trades(self, config, mode):
-        config = config(self.account_name, config.name)
+        started = time.perf_counter()
+        config = config(self.account_name, config.name, backtest=True)
         position = Position(self.account_name, config.name, backtest=True)
 
         if not (
@@ -1126,7 +1127,9 @@ class FuturesBackTester:
         use_kwargs = bool(kbar_context)
 
         for i, trade in enumerate(tqdm(trades)):
-            trade_kwargs = kbar_context[i] if use_kwargs else {}
+            trade_kwargs = dict(kbar_context[i]) if use_kwargs else {}
+            # Shared only within this bar; never retained after a position change.
+            trade_kwargs['_position_stats'] = {}
             name = trade['name']
             price = trade['tOpen']
 
