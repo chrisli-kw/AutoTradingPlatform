@@ -73,15 +73,19 @@ while not stop_flag.is_set():
 
 | 指令                                                      | 功能                 | 範例                                                |
 | --------------------------------------------------------- | -------------------- | --------------------------------------------------- |
+| `/help`                                                   | 顯示所有指令與用法   | `/help`                                             |
 | `/pause <account>`                                        | 暫停該帳號監控       | `/pause account`                                    |
 | `/resume <account>`                                       | 恢復該帳號監控       | `/resume account`                                   |
 | `/stop <account>`                                         | 停止該帳號監控       | `/stop account`                                     |
+| `/stop <account>-<strategy>`                              | 僅停止指定策略       | `/stop account-LongStrategy`                        |
 | `/status <account>`                                       | 查詢監控狀態         | `/status account`                                   |
 | `/position <account>`                                     | 查詢持倉彙總         | `/position account`                                 |
 | `/check_max_qty <account>-<strategy>-<target>`            | 查詢策略商品最大口數 | `/check_max_qty account-LongStrategy-TMF202507`     |
 | `/update_max_qty <account>-<strategy>-<target>-<max_qty>` | 更新策略商品最大口數 | `/update_max_qty account-LongStrategy-TMF202507-10` |
 
 `/update-max-qty ...` 也會被導到更新 `max_qty` 的處理流程。
+
+`/help` 會列出所有指令、參數格式與此 bot 綁定的帳號。`/pause`、`/resume`、`/status`、`/position` 可省略帳號，預設使用此 bot 綁定的帳號。
 
 ---
 

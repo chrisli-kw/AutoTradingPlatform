@@ -85,6 +85,7 @@ class TelegramBot:
             )
 
             # 指令
+            self.app.add_handler(CommandHandler("help", self.cmd_help))
             self.app.add_handler(CommandHandler("pause", self.cmd_pause))
             self.app.add_handler(CommandHandler("resume", self.cmd_resume))
             self.app.add_handler(CommandHandler("stop", self.cmd_stop))
@@ -273,6 +274,29 @@ class TelegramBot:
         return None
 
     # ========== Command Response (async) ==========
+
+    async def cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not self._check_permission(update):
+            return
+
+        await self.post(update, "\n".join([
+            "可用指令（[] 表示可省略的參數）：",
+            "/help — 顯示所有指令與用法",
+            "/pause [account] — 暫停帳號監控",
+            "/resume [account] — 恢復帳號監控",
+            "/stop account — 停止整個帳號的監控程式",
+            "/stop account-strategy — 僅停止指定策略",
+            "/status [account] — 查詢監控狀態",
+            "/position [account] — 查詢帳號持倉彙總",
+            "/check_max_qty account-strategy-target — 查詢策略商品最大口數",
+            "/update_max_qty account-strategy-target-max_qty — 更新策略商品最大口數",
+            "/update-max-qty account-strategy-target-max_qty — 同 /update_max_qty",
+            "",
+            "account：帳號名稱；strategy：策略名稱；target：商品代碼。",
+            "max_qty 必須是大於或等於 0 的整數。",
+            "省略 account 時，使用此 bot 綁定的帳號。",
+            f"此 bot 綁定帳號：{', '.join(self.account_names)}",
+        ]))
 
     async def cmd_pause(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._check_permission(update):
