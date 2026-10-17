@@ -1145,7 +1145,7 @@ class FuturesBackTester:
                 if config.examineOpen(trade, **trade_kwargs):
                     data.update({
                         'quantity': config.open_qty,
-                        'reason': f'建倉 - {config.open_reason}'
+                        'reason': f'建倉 - {config.reasons.open}'
                     })
                     config.avg_cost = position.open(data)
                     continue
@@ -1164,7 +1164,7 @@ class FuturesBackTester:
                     if raise_qty:
                         data.update({
                             'quantity': raise_qty,
-                            'reason': f'加碼 - {config.raise_reason}'
+                            'reason': f'加碼 - {config.reasons.raise_position}'
                         })
                         config.avg_cost = position.open(data)
                         continue
@@ -1173,13 +1173,13 @@ class FuturesBackTester:
                 if config.stop_loss(trade, position.entries, **trade_kwargs):
                     data.update({
                         'quantity': config.stop_loss_qty,
-                        'reason': f'停損 - {config.stop_loss_reason}'
+                        'reason': f'停損 - {config.reasons.stop_loss}'
                     })
                     config.avg_cost = position.close(data)
                 elif config.stop_profit(trade, position.entries, **trade_kwargs):
                     data.update({
                         'quantity': config.stop_profit_qty,
-                        'reason': f'停利 - {config.stop_profit_reason}'
+                        'reason': f'停利 - {config.reasons.stop_profit}'
                     })
                     config.avg_cost = position.close(data)
 
