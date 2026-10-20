@@ -620,7 +620,7 @@ class CrawlFromHTML:
         '''取得交易當日全額交割股清單'''
 
         try:
-            df = pd.read_html(self.url_cash_settle)
+            df = pd.read_html(self.url_cash_settle, encoding='utf-8')
             return df[0]
         except:
             logging.warning('查無全額交割股清單')
