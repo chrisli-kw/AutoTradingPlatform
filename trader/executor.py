@@ -624,7 +624,8 @@ class StrategyExecutor(AccountHandler, Subscriber):
 
             # 排除不交易的股票
             # --- 全額交割股不買
-            df = df[~df.code.isin(day_filter_out.股票代碼.values)]
+            if '股票代碼' in day_filter_out.columns:
+                df = df[~df.code.isin(day_filter_out.股票代碼.values)]
 
             # --- 排除高價股
             df = df[df.Close <= getattr(conf, 'PRICE_THRESHOLD', 0)]
